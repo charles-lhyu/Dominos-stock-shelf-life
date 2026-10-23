@@ -70,7 +70,7 @@ function PickerShell({
       ) : null}
       <div
         className={cn(
-          "flex min-w-0 items-stretch overflow-hidden bg-gradient-to-b from-white/[0.08] to-black/40 ring-1 ring-white/12 transition-all duration-200 focus-within:ring-2 focus-within:ring-red-400/55",
+          "flex min-w-0 items-stretch overflow-hidden bg-gradient-to-b from-white/[0.08] to-black/40 ring-1 ring-white/12 transition-all duration-200 focus-within:ring-white/25",
           dense ? "min-h-10 rounded-xl" : "min-h-12 rounded-2xl",
         )}
       >

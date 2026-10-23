@@ -130,11 +130,17 @@ export function StockDesk() {
   const [preferredLife, setPreferredLife] = useState<LifeKind | null>(null);
   const [placeholder, setPlaceholder] = useState("Pepperoni, Chorizo, Nduja Sausage…");
   const [today, setToday] = useState<Date | null>(null);
-  /** Title tucked away once the list has scrolled a little. */
+  /** Title tucked away once the collapse gesture finishes. */
   const [headerCollapsed, setHeaderCollapsed] = useState(false);
+  /** List only scrolls when collapsed and the header transition has settled. */
+  const [listScrollable, setListScrollable] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const shellRef = useRef<HTMLDivElement>(null);
   const mainRef = useRef<HTMLElement>(null);
+  const headerCollapsedRef = useRef(false);
+  const listScrollableRef = useRef(false);
+  const animatingRef = useRef(false);
   const { pack, deliveryDate, imported } = desk;
   const { chart, footnotes, rules } = pack;
   const categories = categoriesInPack(pack);
@@ -152,33 +158,125 @@ export function StockDesk() {
   }, []);
 
   useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
-
-  useEffect(() => {
+    const shell = shellRef.current;
     const scroller = mainRef.current;
-    if (!scroller) return;
+    if (!shell || !scroller) return;
 
-    // Buffer before collapsing; stay collapsed until near the top again.
+    // Gesture distance before flipping expand/collapse (list stays still).
     const COLLAPSE_AT = 96;
-    const EXPAND_AT = 12;
+    const EXPAND_AT = 72;
+    const SETTLE_MS = 320;
 
-    const onScroll = () => {
-      const top = scroller.scrollTop;
-      setHeaderCollapsed((was) => {
-        if (!was && top >= COLLAPSE_AT) {
-          // Keep the collapsed search narrow until the user taps it.
-          if (!query.trim()) inputRef.current?.blur();
-          return true;
+    let progress = 0;
+    let touchY = 0;
+    let touchX = 0;
+    let touchActive = false;
+    let touchIgnored = false;
+    let fromChipStrip = false;
+    let settleTimer = 0;
+
+    function setCollapsed(next: boolean) {
+      if (headerCollapsedRef.current === next || animatingRef.current) return;
+      headerCollapsedRef.current = next;
+      progress = 0;
+      animatingRef.current = true;
+      listScrollableRef.current = false;
+      setListScrollable(false);
+      setHeaderCollapsed(next);
+      if (next && !query.trim()) inputRef.current?.blur();
+
+      window.clearTimeout(settleTimer);
+      settleTimer = window.setTimeout(() => {
+        animatingRef.current = false;
+        const canScroll = next;
+        listScrollableRef.current = canScroll;
+        setListScrollable(canScroll);
+      }, SETTLE_MS);
+    }
+
+    function applyDelta(deltaY: number) {
+      // deltaY > 0 → scroll down / collapse; < 0 → scroll up / expand
+      if (animatingRef.current) return true;
+
+      if (!headerCollapsedRef.current) {
+        if (deltaY > 0) {
+          progress += deltaY;
+          if (progress >= COLLAPSE_AT) setCollapsed(true);
+        } else {
+          progress = Math.max(0, progress + deltaY);
         }
-        if (was && top <= EXPAND_AT) return false;
-        return was;
-      });
+        return true; // list locked while expanded
+      }
+
+      if (scroller.scrollTop <= 0 && deltaY < 0) {
+        progress += -deltaY;
+        if (progress >= EXPAND_AT) setCollapsed(false);
+        return true;
+      }
+
+      progress = 0;
+      return false;
+    }
+
+    const onWheel = (event: WheelEvent) => {
+      if (applyDelta(event.deltaY)) {
+        event.preventDefault();
+      }
     };
 
-    scroller.addEventListener("scroll", onScroll, { passive: true });
-    onScroll();
-    return () => scroller.removeEventListener("scroll", onScroll);
+    const onTouchStart = (event: TouchEvent) => {
+      if (event.touches.length !== 1) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, select")) {
+        touchActive = false;
+        return;
+      }
+      touchActive = true;
+      touchIgnored = false;
+      fromChipStrip = Boolean(target?.closest("[data-drag-scroll]"));
+      touchX = event.touches[0].clientX;
+      touchY = event.touches[0].clientY;
+    };
+
+    const onTouchMove = (event: TouchEvent) => {
+      if (!touchActive || touchIgnored || event.touches.length !== 1) return;
+
+      const x = event.touches[0].clientX;
+      const y = event.touches[0].clientY;
+      const dx = x - touchX;
+      const dy = touchY - y; // finger up → positive
+      touchX = x;
+      touchY = y;
+
+      if (fromChipStrip && Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 6) {
+        touchIgnored = true;
+        return;
+      }
+
+      if (applyDelta(dy)) {
+        event.preventDefault();
+      }
+    };
+
+    const onTouchEnd = () => {
+      touchActive = false;
+      touchIgnored = false;
+    };
+
+    shell.addEventListener("wheel", onWheel, { passive: false });
+    shell.addEventListener("touchstart", onTouchStart, { passive: true });
+    shell.addEventListener("touchmove", onTouchMove, { passive: false });
+    shell.addEventListener("touchend", onTouchEnd);
+    shell.addEventListener("touchcancel", onTouchEnd);
+
+    return () => {
+      window.clearTimeout(settleTimer);
+      shell.removeEventListener("wheel", onWheel);
+      shell.removeEventListener("touchstart", onTouchStart);
+      shell.removeEventListener("touchmove", onTouchMove);
+      shell.removeEventListener("touchend", onTouchEnd);
+      shell.removeEventListener("touchcancel", onTouchEnd);
+    };
   }, [query]);
 
   useEffect(() => {
@@ -250,7 +348,10 @@ export function StockDesk() {
     !headerCollapsed || searchFocused || Boolean(query.trim());
 
   return (
-    <div className="mx-auto flex h-dvh w-full max-w-md min-w-0 flex-col overflow-hidden overscroll-none">
+    <div
+      ref={shellRef}
+      className="mx-auto flex h-dvh w-full max-w-md min-w-0 flex-col overflow-hidden overscroll-none"
+    >
       <header className="shrink-0 border-b border-red-500/30 bg-[#0f1624] text-white">
         <div
           className={cn(
@@ -587,7 +688,10 @@ export function StockDesk() {
 
       <main
         ref={mainRef}
-        className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] [-webkit-overflow-scrolling:touch]"
+        className={cn(
+          "min-h-0 flex-1 overscroll-y-contain px-4 py-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] [-webkit-overflow-scrolling:touch]",
+          listScrollable ? "overflow-y-auto" : "overflow-y-hidden",
+        )}
       >
         {query.trim() && hits.length === 0 ? (
           <p className="mt-5 rounded-2xl border border-dashed border-white/20 bg-card/80 px-5 py-8 text-center">
