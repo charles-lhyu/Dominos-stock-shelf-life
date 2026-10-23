@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Search, X } from "lucide-react";
 import { ChartList } from "@/components/chart-list";
 import { LifeCard } from "@/components/life-card";
@@ -9,23 +9,20 @@ import { Input } from "@/components/ui/input";
 import { CHART, FOOTNOTES, RULES, SECTIONS } from "@/lib/chart";
 import { formatLongDate } from "@/lib/dates";
 import { rulesForName, searchNames, shouldExpand } from "@/lib/search";
-import { getServerToday, getTodayIso, subscribeToday } from "@/lib/today";
 import type { SectionId } from "@/lib/types";
 import { cn } from "cn";
 
 const EXAMPLES = ["Pepperoni", "Dough", "Wings", "Mozzarella", "Fries"];
 
 export function StockDesk() {
-  const todayIso = useSyncExternalStore(subscribeToday, getTodayIso, getServerToday);
   const [query, setQuery] = useState("");
   const [picked, setPicked] = useState<string | null>(null);
   const [section, setSection] = useState<SectionId | "all">("all");
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (!todayIso) return;
     inputRef.current?.focus();
-  }, [todayIso]);
+  }, []);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -39,17 +36,6 @@ export function StockDesk() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  if (!todayIso) {
-    return (
-      <main className="mx-auto w-full max-w-6xl px-4 py-16">
-        <div className="h-10 w-56 animate-pulse rounded-lg bg-stone-200" />
-        <div className="mt-6 h-16 animate-pulse rounded-2xl bg-stone-200" />
-        <div className="mt-4 h-40 animate-pulse rounded-2xl bg-stone-200" />
-      </main>
-    );
-  }
-
-  const chartLapsed = todayIso > CHART.validUntil;
   const hits = searchNames(query);
   const pickedName = picked && hits.some((hit) => hit.name === picked) ? picked : null;
   const expanded = pickedName ?? (shouldExpand(hits) ? hits[0]?.name ?? null : null);
@@ -78,17 +64,8 @@ export function StockDesk() {
         </div>
       </header>
       <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
-        <p
-          className={cn(
-            "rounded-xl px-4 py-3 text-sm",
-            chartLapsed
-              ? "bg-red-700 text-white"
-              : "bg-white text-stone-800 ring-1 ring-stone-200",
-          )}
-        >
-          {chartLapsed
-            ? `This chart was valid until ${formatLongDate(CHART.validUntil)}. Check that Campaign 5 is still the current chart.`
-            : `Valid until ${formatLongDate(CHART.validUntil)}. Today on this screen is ${formatLongDate(todayIso)}.`}
+        <p className="rounded-xl bg-white px-4 py-3 text-sm text-stone-800 ring-1 ring-stone-200">
+          Valid until {formatLongDate(CHART.validUntil)}.
         </p>
 
         <form
@@ -166,7 +143,7 @@ export function StockDesk() {
         {rules.length > 0 ? (
           <div className="mt-5 space-y-4" aria-live="polite">
             {rules.map((rule) => (
-              <LifeCard key={rule.id} rule={rule} todayIso={todayIso} />
+              <LifeCard key={rule.id} rule={rule} />
             ))}
           </div>
         ) : null}

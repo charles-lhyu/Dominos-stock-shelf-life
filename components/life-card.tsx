@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { sectionById } from "@/lib/chart";
-import { parseIsoDate, toIsoDate } from "@/lib/dates";
+import { toIsoDate } from "@/lib/dates";
 import { capAdvice, clocksFor, projectClock, type ClockResult } from "@/lib/life";
 import type { ShelfRule, StockStatus } from "@/lib/types";
 import { cn } from "cn";
@@ -29,15 +29,16 @@ function nowLocal() {
   return `${toIsoDate(now)}T${hours}:${minutes}`;
 }
 
-export function LifeCard({ rule, todayIso }: { rule: ShelfRule; todayIso: string }) {
+export function LifeCard({ rule }: { rule: ShelfRule }) {
   const clocks = clocksFor(rule);
   const section = sectionById(rule.sectionId);
   const [values, setValues] = useState<Record<string, string>>({});
   const [checkedAt, setCheckedAt] = useState<Date | null>(null);
-  const today = checkedAt ?? parseIsoDate(todayIso);
-  const results = clocks
-    .map((clock) => projectClock(clock, values[clock.id] ?? "", today))
-    .filter((result): result is ClockResult => result != null);
+  const results = checkedAt
+    ? clocks
+        .map((clock) => projectClock(clock, values[clock.id] ?? "", checkedAt))
+        .filter((result): result is ClockResult => result != null)
+    : [];
   const advice = capAdvice(results);
 
   function setClock(id: string, value: string) {
@@ -86,7 +87,7 @@ export function LifeCard({ rule, todayIso }: { rule: ShelfRule; todayIso: string
                         type="button"
                         className="h-11 shrink-0 rounded-lg bg-stone-950 px-3 text-sm font-medium text-white"
                         onClick={() =>
-                          setClock(clock.id, clock.mode === "datetime" ? nowLocal() : todayIso)
+                          setClock(clock.id, clock.mode === "datetime" ? nowLocal() : toIsoDate(new Date()))
                         }
                       >
                         {clock.mode === "datetime" ? "Now" : "Today"}
