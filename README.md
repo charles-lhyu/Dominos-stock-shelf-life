@@ -1,8 +1,8 @@
-# Stock dates
+# Shelf life
 
-A makeline checker for Domino's stock. Import the latest expire datasheet, then scan a barcode or type an item code. The use-by date is shown straight away, with expired and due-soon stock called out.
+A checker for the Domino's Campaign 5 shelf life chart (all stores, version 1, issued 7 September 2026, valid to 17 November 2026). Type a product from the chart. The life is shown immediately. Enter the delivery, prep, or pack date and the use-by date is worked out.
 
-Dates stay in this browser. Nothing is uploaded to a server.
+The chart is built in. Dates stay in the browser.
 
 ## Run it
 
@@ -18,23 +18,13 @@ npm test
 npm run lint
 ```
 
-## Use it
+## How a date is counted
 
-1. The first visit loads a sample makeline sheet so a scan can be tried immediately. `DOUGH14`, `CHICK`, and barcode `5010000000201` are on that sheet.
-2. Choose **Import sheet** and drop a `.csv` or `.xlsx` file. The app looks for an item code (or barcode) and a use-by column. Rename the mapping if the sheet uses different headings.
-3. Click **Replace stock**. That becomes the sheet used for every search until you import a newer one.
-4. Scan or type in the search box. A scanner works like a keyboard: it types the code and presses Enter. The next scan replaces the previous code.
+The chart prints a life, not a calendar date. This screen adds that life to the date you enter.
 
-Day/month/year is the default. `23/10/2026`, `23 Oct 2026`, `2026-10-23`, and Excel date cells are all read. A value such as `10/23/2026` is read as 23 October because 23 cannot be a month.
+- 12 days from a delivery on 1 Oct 2026 is 13 Oct 2026.
+- Dough is the date on the tray plus 1 day.
+- Hours, including the 48-hour mac and cheese prep and the 15-hour ambient sauces, are added to the time you enter.
+- Where the row says "Date on pack", that printed date is the unopened use-by. If the prepped life runs past it, follow the pack date. Opened and prepped dates must not go past the date on the original packaging.
 
-## Sheet columns
-
-| Column | Required | Headings it recognises |
-| --- | --- | --- |
-| Item code | One of code or barcode | Item code, SKU, PLU, product code |
-| Barcode | One of code or barcode | Barcode, EAN, UPC, GTIN |
-| Use-by date | Yes | Use by, expiry, best before, BBD |
-| Item name | No | Item name, description, product |
-| Quantity, unit, location, batch, category | No | Qty, unit, location, batch, category |
-
-An example file is at [`public/example-expire-sheet.csv`](public/example-expire-sheet.csv). **Download** writes the current sheet back to CSV.
+Both pepperoni rows are kept: 12 days from delivery when it is defrosted from frozen, and date-on-pack plus 12 days prepped when it is a chilled item.

@@ -19,9 +19,9 @@ const display = Fraunces({
 });
 
 export const metadata: Metadata = {
-  title: "Stock dates",
+  title: "Shelf life",
   description:
-    "Import a Domino's stock expire datasheet, then scan or type an item code to see the use-by date.",
+    "Campaign 5 shelf life chart. Type a product, then enter the delivery or pack date to see the use-by date.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

@@ -190,6 +190,30 @@ export function formatLongDate(iso: string): string {
   return `${WEEKDAY[date.getDay()]} ${date.getDate()} ${MONTH_SHORT[date.getMonth()]} ${date.getFullYear()}`;
 }
 
+export function formatDateTime(date: Date): string {
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${formatLongDate(toIsoDate(date))} at ${hours}:${minutes}`;
+}
+
+export function addDaysToIso(iso: string, days: number): string {
+  const date = parseIsoDate(iso);
+  return toIsoDate(new Date(date.getFullYear(), date.getMonth(), date.getDate() + days));
+}
+
+export function addHoursToLocal(value: string, hours: number): Date {
+  const [datePart, timePart] = value.split("T");
+  const [year, month, day] = datePart.split("-").map(Number);
+  const [hour, minute] = (timePart ?? "00:00").split(":").map(Number);
+  const start = new Date(year, (month || 1) - 1, day || 1, hour || 0, minute || 0, 0, 0);
+  return new Date(start.getTime() + hours * 3_600_000);
+}
+
+export function endOfIsoDay(iso: string): Date {
+  const date = parseIsoDate(iso);
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 0);
+}
+
 export function formatSheetDate(iso: string): string {
   const date = parseIsoDate(iso);
   const day = String(date.getDate()).padStart(2, "0");

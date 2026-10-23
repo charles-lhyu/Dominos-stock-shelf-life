@@ -1,134 +1,70 @@
-import { readExpiry } from "./dates";
-import type { BoardFilter, StockLine, StockStatus } from "./types";
+import { RULES } from "./chart";
+import type { ShelfRule } from "./types";
 
-export function cleanScan(raw: string): string {
-  let value = raw.trim();
-  value = value.replace(/^\][A-Za-z0-9]{2}/, "");
-  value = value.replace(/^\*+|\*+$/g, "");
-  return value.trim();
+export function fold(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
 }
 
-export function normalizeCode(value: string): string {
-  return cleanScan(value).toUpperCase().replace(/[\s-]/g, "");
-}
+export type NameHit = {
+  name: string;
+  score: number;
+};
 
-export function compareByExpiry(a: StockLine, b: StockLine): number {
-  if (a.expiry && b.expiry) return a.expiry.localeCompare(b.expiry);
-  if (a.expiry) return -1;
-  if (b.expiry) return 1;
-  return a.name.localeCompare(b.name);
-}
-
-function rankLine(line: StockLine, query: string): number {
-  const needle = normalizeCode(query);
-  const folded = cleanScan(query).toLowerCase();
-  const codes = [normalizeCode(line.code), normalizeCode(line.altCode)].filter(
-    Boolean,
-  );
-  const name = line.name.toLowerCase();
-  const batch = normalizeCode(line.batch);
-
-  if (needle && codes.some((code) => code === needle)) return 0;
-  if (needle && batch && batch === needle) return 1;
-  if (needle && codes.some((code) => code.startsWith(needle))) return 2;
-  if (needle.length >= 4 && codes.some((code) => code.includes(needle))) return 3;
-  if (folded.length >= 2 && name === folded) return 4;
-  if (folded.length >= 2 && name.startsWith(folded)) return 5;
-  if (folded.length >= 3 && name.includes(folded)) return 6;
-  if (folded.length >= 2 && line.category.toLowerCase().includes(folded)) return 7;
+function scoreName(rule: ShelfRule, query: string): number {
+  const name = fold(rule.name);
+  const aliases = rule.aliases.map(fold);
+  const words = query.split(" ").filter(Boolean);
+  if (name === query) return 0;
+  if (aliases.some((alias) => alias === query)) return 1;
+  if (query.length >= 2 && (name.startsWith(query) || aliases.some((alias) => alias.startsWith(query)))) {
+    return 2;
+  }
+  const haystack = `${name} ${aliases.join(" ")}`;
+  if (words.length > 0 && words.every((word) => haystack.split(" ").includes(word) || haystack.includes(word))) {
+    if (words.every((word) => name.includes(word) || aliases.some((alias) => alias.includes(word)))) {
+      return 3;
+    }
+  }
+  if (query.length >= 3 && (name.includes(query) || aliases.some((alias) => alias.includes(query)))) {
+    return 4;
+  }
+  if (fold(rule.category) === query) return 5;
   return -1;
 }
 
-export function searchLines(lines: StockLine[], query: string): StockLine[] {
-  const trimmed = cleanScan(query);
-  if (!trimmed) return [];
+export function searchNames(query: string): NameHit[] {
+  const folded = fold(query);
+  if (folded.length < 2) return [];
 
-  return lines
-    .map((line) => ({ line, rank: rankLine(line, trimmed) }))
-    .filter((hit) => hit.rank >= 0)
-    .sort(
-      (a, b) => a.rank - b.rank || compareByExpiry(a.line, b.line),
-    )
-    .map((hit) => hit.line);
-}
-
-export type ProductGroup = {
-  key: string;
-  code: string;
-  altCode: string;
-  name: string;
-  category: string;
-  lines: StockLine[];
-};
-
-export function groupHits(hits: StockLine[]): ProductGroup[] {
-  const order: string[] = [];
-  const groups = new Map<string, StockLine[]>();
-
-  for (const line of hits) {
-    const key = normalizeCode(line.code) || line.name.toLowerCase();
-    const existing = groups.get(key);
-    if (existing) {
-      existing.push(line);
-      continue;
-    }
-    groups.set(key, [line]);
-    order.push(key);
+  const best = new Map<string, number>();
+  for (const rule of RULES) {
+    const score = scoreName(rule, folded);
+    if (score < 0) continue;
+    const key = fold(rule.name);
+    const current = best.get(key);
+    if (current == null || score < current) best.set(key, score);
   }
 
-  return order.map((key) => {
-    const lines = groups.get(key)!.slice().sort(compareByExpiry);
-    const first = lines[0];
-    return {
-      key,
-      code: first.code,
-      altCode: first.altCode,
-      name: first.name,
-      category: first.category,
-      lines,
-    };
-  });
+  return [...best.entries()]
+    .map(([nameKey, score]) => {
+      const rule = RULES.find((item) => fold(item.name) === nameKey);
+      return { name: rule?.name ?? nameKey, score };
+    })
+    .sort((a, b) => a.score - b.score || a.name.localeCompare(b.name));
 }
 
-export function hasExactCode(lines: StockLine[], query: string): boolean {
-  const needle = normalizeCode(query);
-  if (!needle) return false;
-  return lines.some((line) => {
-    const codes = [normalizeCode(line.code), normalizeCode(line.altCode)];
-    return codes.includes(needle) || normalizeCode(line.batch) === needle;
-  });
+export function shouldExpand(hits: NameHit[]): boolean {
+  if (hits.length === 0) return false;
+  if (hits.length === 1) return true;
+  return hits[0].score <= 1 && (hits[1]?.score ?? 99) > 1;
 }
 
-export function lineMatchesFilter(
-  line: StockLine,
-  filter: BoardFilter,
-  today: Date,
-): boolean {
-  if (filter === "all") return true;
-  const readout = readExpiry(line.expiry, today);
-  if (filter === "expired") return readout.status === "expired";
-  if (filter === "missing") return readout.status === "missing";
-  if (filter === "week") {
-    return readout.days != null && readout.days >= 0 && readout.days <= 7;
-  }
-  return readout.days != null && readout.days >= 0 && readout.days <= 14;
-}
-
-export function countByStatus(
-  lines: StockLine[],
-  today: Date,
-): Record<StockStatus, number> {
-  const counts: Record<StockStatus, number> = {
-    expired: 0,
-    today: 0,
-    critical: 0,
-    soon: 0,
-    watch: 0,
-    ok: 0,
-    missing: 0,
-  };
-  for (const line of lines) {
-    counts[readExpiry(line.expiry, today).status] += 1;
-  }
-  return counts;
+export function rulesForName(name: string): ShelfRule[] {
+  const folded = fold(name);
+  return RULES.filter((rule) => fold(rule.name) === folded);
 }
