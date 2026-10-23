@@ -92,8 +92,10 @@ function PickerShell({
           </span>
           <span
             className={cn(
-              "min-w-0 flex-1 truncate leading-tight transition-all duration-200",
-              dense ? "text-sm" : "text-[0.95rem]",
+              "leading-tight",
+              dense
+                ? "shrink-0 whitespace-nowrap text-sm"
+                : "min-w-0 flex-1 truncate text-[0.95rem]",
               empty ? "text-stone-500" : "font-medium text-white",
             )}
           >
@@ -125,6 +127,8 @@ export function DateField({
   onToday,
   className,
   dense,
+  iconOnly,
+  onIconActivate,
 }: {
   label?: string;
   value: string;
@@ -132,6 +136,9 @@ export function DateField({
   onToday?: () => void;
   className?: string;
   dense?: boolean;
+  iconOnly?: boolean;
+  /** Called before opening when the icon-only control is used (e.g. restore search width). */
+  onIconActivate?: () => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const empty = !/^\d{4}-\d{2}-\d{2}$/.test(value);
@@ -140,21 +147,48 @@ export function DateField({
     getCompactDateFormat,
     getCompactDateFormat,
   );
+  const display = empty
+    ? "Choose a date"
+    : compact
+      ? formatCompactDate(value)
+      : formatLongDate(value);
 
+  function open() {
+    openNativePicker(inputRef.current);
+  }
+
+  // Keep one stable <input> across icon/full so showPicker survives the layout swap.
   return (
-    <PickerShell
-      label={label}
-      icon="date"
-      display={
-        empty ? "Choose a date" : compact ? formatCompactDate(value) : formatLongDate(value)
-      }
-      empty={empty}
-      actionLabel={onToday ? "Today" : undefined}
-      onAction={onToday}
-      className={className}
-      dense={dense}
-      onOpen={() => openNativePicker(inputRef.current)}
-    >
+    <div className={cn("relative min-w-0", iconOnly && "size-10 shrink-0", className)}>
+      {iconOnly ? (
+        <button
+          type="button"
+          onPointerDown={(event) => {
+            if (event.button !== 0) return;
+            event.preventDefault();
+            onIconActivate?.();
+            open();
+          }}
+          aria-label={display}
+          title={display}
+          className="flex size-10 items-center justify-center rounded-xl bg-amber-400/15 text-amber-200 ring-1 ring-white/12 transition-colors hover:bg-amber-400/25 active:bg-amber-400/30"
+        >
+          <CalendarDays className="size-4" strokeWidth={2.25} />
+        </button>
+      ) : (
+        <PickerShell
+          label={label}
+          icon="date"
+          display={display}
+          empty={empty}
+          actionLabel={onToday ? "Today" : undefined}
+          onAction={onToday}
+          dense={dense}
+          onOpen={open}
+        >
+          {null}
+        </PickerShell>
+      )}
       <input
         ref={inputRef}
         type="date"
@@ -164,7 +198,7 @@ export function DateField({
         tabIndex={-1}
         aria-label={label ?? "Date"}
       />
-    </PickerShell>
+    </div>
   );
 }
 

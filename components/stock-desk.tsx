@@ -132,6 +132,7 @@ export function StockDesk() {
   const [today, setToday] = useState<Date | null>(null);
   /** Title tucked away once the list has scrolled a little. */
   const [headerCollapsed, setHeaderCollapsed] = useState(false);
+  const [searchFocused, setSearchFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const mainRef = useRef<HTMLElement>(null);
   const { pack, deliveryDate, imported } = desk;
@@ -165,7 +166,11 @@ export function StockDesk() {
     const onScroll = () => {
       const top = scroller.scrollTop;
       setHeaderCollapsed((was) => {
-        if (!was && top >= COLLAPSE_AT) return true;
+        if (!was && top >= COLLAPSE_AT) {
+          // Keep the collapsed search narrow until the user taps it.
+          if (!query.trim()) inputRef.current?.blur();
+          return true;
+        }
         if (was && top <= EXPAND_AT) return false;
         return was;
       });
@@ -174,7 +179,7 @@ export function StockDesk() {
     scroller.addEventListener("scroll", onScroll, { passive: true });
     onScroll();
     return () => scroller.removeEventListener("scroll", onScroll);
-  }, []);
+  }, [query]);
 
   useEffect(() => {
     setPlaceholder(randomCategoryPlaceholder(rules));
@@ -239,204 +244,342 @@ export function StockDesk() {
     requestAnimationFrame(() => inputRef.current?.select());
   }
 
-  const titleGone = headerCollapsed;
-  const controlsDense = headerCollapsed;
+  const browsing = !query.trim();
+  /** Collapsed idle: narrow search + full date. Focus/query: wide search + date icon. */
+  const searchExpanded =
+    !headerCollapsed || searchFocused || Boolean(query.trim());
 
   return (
     <div className="mx-auto flex h-dvh w-full max-w-md min-w-0 flex-col overflow-hidden overscroll-none">
       <header className="shrink-0 border-b border-red-500/30 bg-[#0f1624] text-white">
         <div
           className={cn(
-            "min-w-0 px-4 pt-[max(0.85rem,env(safe-area-inset-top))] transition-[padding,gap] duration-200",
-            controlsDense ? "space-y-2 pb-2" : "space-y-3 pb-3",
+            "min-w-0 space-y-2 px-4 pt-[max(0.85rem,env(safe-area-inset-top))] transition-[padding] duration-300",
+            headerCollapsed ? "pb-2" : "pb-3",
           )}
         >
           <div
             className={cn(
-              "origin-top overflow-hidden transition-[max-height,opacity,transform,margin] duration-200 ease-out",
-              titleGone
-                ? "pointer-events-none mb-0 max-h-0 scale-95 opacity-0"
-                : "mb-0 max-h-28 scale-100 opacity-100",
+              "grid transition-[grid-template-rows,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+              headerCollapsed
+                ? "pointer-events-none grid-rows-[0fr] opacity-0"
+                : "grid-rows-[1fr] opacity-100",
             )}
-            aria-hidden={titleGone}
+            aria-hidden={headerCollapsed}
           >
-            <div className="flex items-start gap-3">
-              <div className="min-w-0 flex-1">
-                <h1 className="font-display text-xl leading-tight text-balance">
-                  {chart.title}
-                </h1>
-                <p className="mt-1.5 text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-red-300">
-                  {chart.audience} · {chart.version}
-                  {chart.issued
-                    ? ` · Issued ${
-                        compactDates
-                          ? formatCompactDate(chart.issued)
-                          : formatShortDate(chart.issued)
-                      }`
-                    : ""}
-                  {imported ? " · imported" : ""}
-                </p>
-                {chart.validUntil ? (
-                  <p className="mt-1 text-sm font-medium text-amber-200">
-                    Valid until{" "}
-                    <button
-                      type="button"
-                      onClick={toggleCompactDateFormat}
-                      className="underline-offset-2 hover:underline"
-                      aria-label={compactDates ? "Show full dates" : "Show short dates"}
-                      tabIndex={titleGone ? -1 : undefined}
-                    >
-                      {compactDates
-                        ? formatCompactDate(chart.validUntil)
-                        : formatShortDate(chart.validUntil)}
-                    </button>
+            <div className="min-h-0 overflow-hidden">
+              <div
+                className={cn(
+                  "flex origin-top items-start gap-3 pb-1 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                  headerCollapsed ? "scale-[0.96]" : "scale-100",
+                )}
+              >
+                <div className="min-w-0 flex-1">
+                  <h1 className="font-display text-xl leading-tight text-balance">
+                    {chart.title}
+                  </h1>
+                  <p className="mt-1.5 text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-red-300">
+                    {chart.audience} · {chart.version}
+                    {chart.issued
+                      ? ` · Issued ${
+                          compactDates
+                            ? formatCompactDate(chart.issued)
+                            : formatShortDate(chart.issued)
+                        }`
+                      : ""}
+                    {imported ? " · imported" : ""}
                   </p>
-                ) : null}
+                  {chart.validUntil ? (
+                    <p className="mt-1 text-sm font-medium text-amber-200">
+                      Valid until{" "}
+                      <button
+                        type="button"
+                        onClick={toggleCompactDateFormat}
+                        className="underline-offset-2 hover:underline"
+                        aria-label={compactDates ? "Show full dates" : "Show short dates"}
+                        tabIndex={headerCollapsed ? -1 : undefined}
+                      >
+                        {compactDates
+                          ? formatCompactDate(chart.validUntil)
+                          : formatShortDate(chart.validUntil)}
+                      </button>
+                    </p>
+                  ) : null}
+                </div>
+                <ImportChartButton desk={desk} />
               </div>
-              <ImportChartButton desk={desk} />
             </div>
           </div>
 
-          <DateField
-            label="Delivery date"
-            value={deliveryDate}
-            onChange={setDeliveryDate}
-            onToday={() => setDeliveryDate(toIsoDate(new Date()))}
-            dense={controlsDense}
-          />
-        </div>
-
-        <div
-          className={cn(
-            "space-y-2 border-t border-white/10 px-4 transition-[padding] duration-200",
-            controlsDense ? "pt-2 pb-2" : "pt-3 pb-3",
-          )}
-        >
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (hits[0]) choose(hits[0].name);
-              requestAnimationFrame(() => inputRef.current?.select());
-            }}
+          <div
+            className={cn(
+              "grid transition-[grid-template-rows,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+              headerCollapsed
+                ? "pointer-events-none grid-rows-[0fr] opacity-0"
+                : "grid-rows-[1fr] opacity-100",
+            )}
+            aria-hidden={headerCollapsed}
           >
-            <div className="flex gap-2">
-              <label
-                htmlFor="product-search"
-                className={cn(
-                  "relative flex min-w-0 flex-1 items-center border border-white/10 bg-card shadow-[4px_4px_0_0_rgba(0,0,0,0.35)] transition-all duration-200 focus-within:border-white/25 focus-within:ring-3 focus-within:ring-white/15",
-                  controlsDense ? "h-10 rounded-xl" : "h-14 rounded-2xl",
-                )}
-              >
-                <span
-                  className={cn(
-                    "pointer-events-none flex items-center text-stone-400 transition-all duration-200",
-                    controlsDense ? "gap-1.5 pl-2.5" : "gap-2.5 pl-3.5",
-                  )}
-                  aria-hidden
-                >
-                  <Search className={cn("shrink-0 transition-all duration-200", controlsDense ? "size-3.5" : "size-4")} />
-                  <span className={cn("w-px bg-white/20", controlsDense ? "h-4" : "h-5")} />
-                </span>
-                <Input
-                  id="product-search"
-                  ref={inputRef}
-                  value={query}
-                  autoComplete="off"
-                  autoCapitalize="none"
-                  spellCheck={false}
-                  enterKeyHint="search"
-                  aria-label="Search products"
-                  placeholder={placeholder}
-                  className={cn(
-                    "flex-1 border-0 bg-transparent text-white shadow-none placeholder:text-stone-500 focus-visible:border-0 focus-visible:ring-0 transition-all duration-200",
-                    controlsDense
-                      ? "h-10 rounded-xl px-2 text-sm"
-                      : "h-14 rounded-2xl px-3 text-base",
-                  )}
-                  onChange={(event) => {
-                    setQuery(event.target.value);
-                    setPicked(null);
-                  }}
-                />
-              </label>
-              {query ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className={cn(
-                    "shrink-0 border-white/10 bg-card px-0 text-white transition-all duration-200",
-                    controlsDense ? "h-10 w-10 rounded-xl" : "h-14 w-14 rounded-2xl",
-                  )}
-                  aria-label="Clear search"
-                  onClick={() => {
-                    setQuery("");
-                    setPicked(null);
-                    inputRef.current?.focus();
-                  }}
-                >
-                  <X className={controlsDense ? "size-4" : undefined} />
-                </Button>
-              ) : null}
+            <div className="min-h-0 overflow-hidden">
+              <DateField
+                label="Delivery date"
+                value={deliveryDate}
+                onChange={setDeliveryDate}
+                onToday={() => setDeliveryDate(toIsoDate(new Date()))}
+              />
             </div>
-          </form>
+          </div>
 
-          {!query.trim() ? (
-            <div className="space-y-2">
-              <DragScroll role="group" aria-label="Product categories">
-                <FilterChip selected={category === "all"} onClick={() => setCategory("all")}>
-                  All <ChipCount value={categoryTotal} />
-                </FilterChip>
-                {categories.map((item) => (
-                  <FilterChip
-                    key={item}
-                    selected={category === item}
-                    onClick={() => setCategory(item)}
-                  >
-                    {item} <ChipCount value={categoryCounts[item] ?? 0} />
-                  </FilterChip>
-                ))}
-              </DragScroll>
-              <DragScroll role="group" aria-label="Storage filters">
-                <FilterChip
-                  selected={sectionFilter === "all"}
-                  onClick={() => setSectionFilter("all")}
+          <div
+            className={cn(
+              "flex items-stretch gap-2 border-white/10 transition-[padding,border-color] duration-300",
+              headerCollapsed ? "border-t-0 pt-0" : "border-t pt-3",
+            )}
+          >
+            <form
+              className="min-w-0 flex-1"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (hits[0]) choose(hits[0].name);
+                requestAnimationFrame(() => inputRef.current?.select());
+              }}
+            >
+              <div className="flex gap-2">
+                <label
+                  htmlFor="product-search"
+                  className={cn(
+                    "relative flex min-w-0 flex-1 items-center border border-white/10 bg-card shadow-[4px_4px_0_0_rgba(0,0,0,0.35)] transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] focus-within:border-white/25 focus-within:ring-3 focus-within:ring-white/15",
+                    headerCollapsed ? "h-10 rounded-xl" : "h-14 rounded-2xl",
+                  )}
                 >
-                  Any <ChipCount value={storageCounts.all} />
-                </FilterChip>
-                {FILTER_SECTIONS.map((id) => {
-                  const count = storageCounts.bySection[id] ?? 0;
-                  if (count === 0) return null;
-                  return (
-                    <FilterChip
-                      key={id}
-                      selected={sectionFilter === id}
-                      onClick={() => {
-                        setSectionFilter(id);
-                        rememberSection(id);
-                      }}
-                    >
-                      {SECTION_TAG[id]} <ChipCount value={count} />
-                    </FilterChip>
-                  );
-                })}
-              </DragScroll>
-              <DragScroll role="group" aria-label="Life date filters">
-                <FilterChip selected={lifeFilter === "all"} onClick={() => setLifeFilter("all")}>
-                  Any
-                </FilterChip>
-                {LIFE_KINDS.map((kind) => (
-                  <FilterChip
-                    key={kind}
-                    selected={lifeFilter === kind}
+                  <span
+                    className={cn(
+                      "pointer-events-none flex items-center text-stone-400 transition-all duration-300",
+                      headerCollapsed ? "gap-1.5 pl-2.5" : "gap-2.5 pl-3.5",
+                    )}
+                    aria-hidden
+                  >
+                    <Search
+                      className={cn(
+                        "shrink-0 transition-all duration-300",
+                        headerCollapsed ? "size-3.5" : "size-4",
+                      )}
+                    />
+                    <span
+                      className={cn(
+                        "w-px bg-white/20 transition-all duration-300",
+                        headerCollapsed ? "h-4" : "h-5",
+                      )}
+                    />
+                  </span>
+                  <Input
+                    id="product-search"
+                    ref={inputRef}
+                    value={query}
+                    autoComplete="off"
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    enterKeyHint="search"
+                    aria-label="Search products"
+                    placeholder={
+                      headerCollapsed && !searchExpanded ? "Search…" : placeholder
+                    }
+                    className={cn(
+                      "flex-1 border-0 bg-transparent text-white shadow-none placeholder:text-stone-500 focus-visible:border-0 focus-visible:ring-0 transition-all duration-300",
+                      headerCollapsed
+                        ? "h-10 rounded-xl px-2 text-sm"
+                        : "h-14 rounded-2xl px-3 text-base",
+                    )}
+                    onFocus={() => setSearchFocused(true)}
+                    onBlur={() => setSearchFocused(false)}
+                    onChange={(event) => {
+                      setQuery(event.target.value);
+                      setPicked(null);
+                    }}
+                  />
+                </label>
+                {query ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className={cn(
+                      "shrink-0 border-white/10 bg-card px-0 text-white transition-all duration-300",
+                      headerCollapsed ? "h-10 w-10 rounded-xl" : "h-14 w-14 rounded-2xl",
+                    )}
+                    aria-label="Clear search"
                     onClick={() => {
-                      setLifeFilter(kind);
-                      rememberLife(kind);
+                      setQuery("");
+                      setPicked(null);
+                      inputRef.current?.focus();
                     }}
                   >
-                    {LIFE_KIND_META[kind].filter}
-                  </FilterChip>
-                ))}
-              </DragScroll>
+                    <X className={headerCollapsed ? "size-4" : undefined} />
+                  </Button>
+                ) : null}
+              </div>
+            </form>
+
+            <div
+              className={cn(
+                "shrink-0 self-stretch transition-[max-width,opacity,margin] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                !headerCollapsed
+                  ? "pointer-events-none max-w-0 overflow-hidden opacity-0"
+                  : "max-w-[16rem] opacity-100",
+              )}
+              aria-hidden={!headerCollapsed}
+            >
+              <DateField
+                value={deliveryDate}
+                onChange={setDeliveryDate}
+                dense
+                iconOnly={headerCollapsed && searchExpanded}
+                className={headerCollapsed && searchExpanded ? undefined : "w-max"}
+                onIconActivate={() => {
+                  setSearchFocused(false);
+                  inputRef.current?.blur();
+                }}
+              />
+            </div>
+          </div>
+
+          {browsing ? (
+            <div className="relative">
+              <div
+                className={cn(
+                  "grid transition-[grid-template-rows,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                  headerCollapsed
+                    ? "pointer-events-none grid-rows-[0fr] opacity-0"
+                    : "grid-rows-[1fr] opacity-100",
+                )}
+                aria-hidden={headerCollapsed}
+              >
+                <div className="min-h-0 space-y-2 overflow-hidden">
+                  <DragScroll role="group" aria-label="Product categories">
+                    <FilterChip
+                      selected={category === "all"}
+                      onClick={() => setCategory("all")}
+                    >
+                      All <ChipCount value={categoryTotal} />
+                    </FilterChip>
+                    {categories.map((item) => (
+                      <FilterChip
+                        key={item}
+                        selected={category === item}
+                        onClick={() => setCategory(item)}
+                      >
+                        {item} <ChipCount value={categoryCounts[item] ?? 0} />
+                      </FilterChip>
+                    ))}
+                  </DragScroll>
+                  <DragScroll role="group" aria-label="Storage filters">
+                    <FilterChip
+                      selected={sectionFilter === "all"}
+                      onClick={() => setSectionFilter("all")}
+                    >
+                      Any <ChipCount value={storageCounts.all} />
+                    </FilterChip>
+                    {FILTER_SECTIONS.map((id) => {
+                      const count = storageCounts.bySection[id] ?? 0;
+                      if (count === 0) return null;
+                      return (
+                        <FilterChip
+                          key={id}
+                          selected={sectionFilter === id}
+                          onClick={() => {
+                            setSectionFilter(id);
+                            rememberSection(id);
+                          }}
+                        >
+                          {SECTION_TAG[id]} <ChipCount value={count} />
+                        </FilterChip>
+                      );
+                    })}
+                  </DragScroll>
+                  <DragScroll role="group" aria-label="Life date filters">
+                    <FilterChip
+                      selected={lifeFilter === "all"}
+                      onClick={() => setLifeFilter("all")}
+                    >
+                      Any
+                    </FilterChip>
+                    {LIFE_KINDS.map((kind) => (
+                      <FilterChip
+                        key={kind}
+                        selected={lifeFilter === kind}
+                        onClick={() => {
+                          setLifeFilter(kind);
+                          rememberLife(kind);
+                        }}
+                      >
+                        {LIFE_KIND_META[kind].filter}
+                      </FilterChip>
+                    ))}
+                  </DragScroll>
+                </div>
+              </div>
+
+              <div
+                className={cn(
+                  "grid transition-[grid-template-rows,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                  headerCollapsed
+                    ? "grid-rows-[1fr] opacity-100 delay-75"
+                    : "pointer-events-none grid-rows-[0fr] opacity-0",
+                )}
+                aria-hidden={!headerCollapsed}
+              >
+                <div className="min-h-0 overflow-hidden">
+                  <div className="grid grid-cols-3 gap-1.5">
+                    <FilterSelect
+                      aria-label="Product category"
+                      value={category}
+                      onChange={(value) => setCategory(value as string | "all")}
+                    >
+                      <option value="all">All ({categoryTotal})</option>
+                      {categories.map((item) => (
+                        <option key={item} value={item}>
+                          {item} ({categoryCounts[item] ?? 0})
+                        </option>
+                      ))}
+                    </FilterSelect>
+                    <FilterSelect
+                      aria-label="Storage"
+                      value={sectionFilter}
+                      onChange={(value) => {
+                        const next = value as SectionId | "all";
+                        setSectionFilter(next);
+                        if (next !== "all") rememberSection(next);
+                      }}
+                    >
+                      <option value="all">Any ({storageCounts.all})</option>
+                      {FILTER_SECTIONS.map((id) => {
+                        const count = storageCounts.bySection[id] ?? 0;
+                        if (count === 0) return null;
+                        return (
+                          <option key={id} value={id}>
+                            {SECTION_TAG[id]} ({count})
+                          </option>
+                        );
+                      })}
+                    </FilterSelect>
+                    <FilterSelect
+                      aria-label="Life date"
+                      value={lifeFilter}
+                      onChange={(value) => {
+                        const next = value as LifeKind | "all";
+                        setLifeFilter(next);
+                        if (next !== "all") rememberLife(next);
+                      }}
+                    >
+                      <option value="all">Any</option>
+                      {LIFE_KINDS.map((kind) => (
+                        <option key={kind} value={kind}>
+                          {LIFE_KIND_META[kind].filter}
+                        </option>
+                      ))}
+                    </FilterSelect>
+                  </div>
+                </div>
+              </div>
             </div>
           ) : null}
         </div>
@@ -576,6 +719,39 @@ function ChipCount({ value }: { value: number }) {
     <span className="inline-flex items-center text-[0.7em] font-normal leading-none opacity-70">
       ({value})
     </span>
+  );
+}
+
+function FilterSelect({
+  value,
+  onChange,
+  children,
+  "aria-label": ariaLabel,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  children: ReactNode;
+  "aria-label": string;
+}) {
+  return (
+    <label className="relative min-w-0">
+      <select
+        aria-label={ariaLabel}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-9 w-full appearance-none truncate rounded-xl border border-white/10 bg-card py-0 pr-7 pl-2 text-xs font-medium text-white outline-none focus-visible:border-white/25 focus-visible:ring-2 focus-visible:ring-white/15"
+      >
+        {children}
+      </select>
+      <span
+        className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-stone-400"
+        aria-hidden
+      >
+        <svg viewBox="0 0 12 12" className="size-3 fill-current">
+          <path d="M2.2 4.2a.75.75 0 0 1 1.06 0L6 6.94l2.74-2.74a.75.75 0 1 1 1.06 1.06l-3.27 3.27a.75.75 0 0 1-1.06 0L2.2 5.26a.75.75 0 0 1 0-1.06Z" />
+        </svg>
+      </span>
+    </label>
   );
 }
 
