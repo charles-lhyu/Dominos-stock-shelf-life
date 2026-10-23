@@ -29,3 +29,25 @@ export type ShelfRule = {
   also?: ShelfAlso;
   note?: string;
 };
+
+export type ChartMeta = {
+  title: string;
+  audience: string;
+  version: string;
+  issued: string;
+  validUntil: string;
+};
+
+export type ChartSection = {
+  id: SectionId;
+  title: string;
+  short: string;
+  note: string;
+};
+
+export type ChartPack = {
+  chart: ChartMeta;
+  sections: ChartSection[];
+  footnotes: string[];
+  rules: ShelfRule[];
+};

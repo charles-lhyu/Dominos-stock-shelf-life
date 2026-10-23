@@ -20,10 +20,10 @@ npm run lint
 
 ## How a date is counted
 
-The chart prints a life, not a calendar date. This screen adds that life to the date you enter.
+The chart prints a life, not a calendar date. Day counts treat the date you enter as day 1.
 
-- 12 days from a delivery on 1 Oct 2026 is 13 Oct 2026.
-- Dough is the date on the tray plus 1 day.
+- 12 days from a delivery on 1 Oct 2026 ends on 12 Oct 2026.
+- Dough is still the date on the tray plus 1 calendar day.
 - Hours, including the 48-hour mac and cheese prep and the 15-hour ambient sauces, are added to the time you enter.
 - Where the row says "Date on pack", that printed date is the unopened use-by. If the prepped life runs past it, follow the pack date. Opened and prepped dates must not go past the date on the original packaging.
 

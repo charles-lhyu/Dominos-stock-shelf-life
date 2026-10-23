@@ -15,8 +15,12 @@ export type Clock = {
   prompt: string;
   mode: "date" | "datetime" | "display";
   addDays?: number;
+  /** When true, the start date counts as day 1 (12 days from 1 Oct ends 12 Oct). */
+  inclusiveDays?: boolean;
   addHours?: number;
   cap?: boolean;
+  /** Prepped/in-use life that applies while the product stays chilled. */
+  chilled?: boolean;
 };
 
 export type ClockResult = {
@@ -41,49 +45,74 @@ function promptFor(label: string, kind: "date" | "time") {
   return "Start date";
 }
 
-function clockFromValue(id: string, label: string, value: string): Clock {
-  const trimmed = value.trim();
+function stripChilledWords(value: string) {
+  return value
+    .replace(/\(\s*chilled\s*\)/gi, "")
+    .replace(/\bchilled\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function withChilledDisplay(core: string) {
+  return `${core} (Chilled)`;
+}
+
+function clockFromValue(
+  id: string,
+  label: string,
+  value: string,
+  options: { chilled?: boolean } = {},
+): Clock {
+  const raw = value.trim();
+  const chilled = Boolean(options.chilled) || /\bchilled\b/i.test(raw);
+  const trimmed = stripChilledWords(raw) || raw;
+  const display = (core: string) => (chilled ? withChilledDisplay(core) : core);
+
   if (/^n\/a$/i.test(trimmed)) {
-    return { id, label, value: trimmed, prompt: "", mode: "display" };
+    return { id, label, value: trimmed, prompt: "", mode: "display", chilled };
   }
   if (/bb date on tray \+\s*1 day/i.test(trimmed)) {
     return {
       id,
       label,
-      value: trimmed,
+      value: display(trimmed),
       prompt: "Date on the tray",
       mode: "date",
       addDays: 1,
+      chilled,
     };
   }
   if (/bb date on pack/i.test(trimmed)) {
     return {
       id,
       label,
-      value: trimmed,
+      value: display(trimmed),
       prompt: "BB date on the pack",
       mode: "date",
       cap: true,
+      chilled,
     };
   }
   if (/date on pack/i.test(trimmed)) {
     return {
       id,
       label,
-      value: trimmed,
+      value: display(trimmed),
       prompt: "Date on the pack",
       mode: "date",
       cap: true,
+      chilled,
     };
   }
   if (/date on tray/i.test(trimmed)) {
     return {
       id,
       label,
-      value: trimmed,
+      value: display(trimmed),
       prompt: "Date on the tray",
       mode: "date",
       cap: true,
+      chilled,
     };
   }
 
@@ -93,23 +122,27 @@ function clockFromValue(id: string, label: string, value: string): Clock {
     return {
       id,
       label,
-      value: trimmed,
+      value: display(`${days[1]} days`),
       prompt: promptFor(label, "date"),
       mode: "date",
       addDays: Number(days[1]),
+      inclusiveDays: true,
+      chilled,
     };
   }
   if (hours && !days) {
+    const n = Number(hours[1]);
     return {
       id,
       label,
-      value: trimmed,
+      value: display(`${n} hours`),
       prompt: promptFor(label, "time"),
       mode: "datetime",
-      addHours: Number(hours[1]),
+      addHours: n,
+      chilled,
     };
   }
-  return { id, label, value: trimmed, prompt: "", mode: "display" };
+  return { id, label, value: display(trimmed), prompt: "", mode: "display", chilled };
 }
 
 export function clocksFor(rule: ShelfRule): Clock[] {
@@ -133,7 +166,11 @@ export function clocksFor(rule: ShelfRule): Clock[] {
 
   return fields
     .filter((field): field is [string, string, string] => Boolean(field[2]))
-    .map(([id, label, value]) => clockFromValue(id, label, value));
+    .map(([id, label, value]) => {
+      const chilledPrep =
+        rule.sectionId === "chilled" && (id === "prepped" || id === "use");
+      return clockFromValue(id, label, value, { chilled: chilledPrep });
+    });
 }
 
 export function projectClock(clock: Clock, raw: string, today: Date): ClockResult | null {
@@ -142,17 +179,26 @@ export function projectClock(clock: Clock, raw: string, today: Date): ClockResul
 
   if (clock.mode === "date") {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
-    const iso = clock.addDays ? addDaysToIso(value, clock.addDays) : value;
+    const shift =
+      clock.addDays == null
+        ? 0
+        : clock.inclusiveDays
+          ? Math.max(0, clock.addDays - 1)
+          : clock.addDays;
+    const iso = clock.addDays != null ? addDaysToIso(value, shift) : value;
     const readout = readExpiry(iso, today);
     const from = clock.addDays
       ? `From ${formatLongDate(value)}. ${readout.detail}.`
       : readout.detail;
+    const at = endOfIsoDay(iso);
+    const preppedDay = clock.id === "prepped" || clock.id === "use";
     return {
       id: clock.id,
-      when: formatLongDate(iso),
+      // Day-based prepped / in-use life ends at 23:59 on the use-by day.
+      when: preppedDay ? formatDateTime(at) : formatLongDate(iso),
       detail: from,
       tone: readout.status,
-      at: clock.cap ? endOfIsoDay(iso) : endOfIsoDay(iso),
+      at,
       caps: clock.cap === true,
     };
   }

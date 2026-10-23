@@ -1,25 +1,28 @@
 "use client";
 
-import { useState } from "react";
-import { sectionById } from "@/lib/chart";
+import { useEffect, useState } from "react";
+import { DateField, TimeField } from "@/components/date-field";
+import { WhenDate } from "@/components/when-date";
+import { sectionFromPack } from "@/lib/chart-pack";
 import { toIsoDate } from "@/lib/dates";
-import { capAdvice, clocksFor, projectClock, type ClockResult } from "@/lib/life";
-import type { ShelfRule, StockStatus } from "@/lib/types";
+import { capAdvice, clocksFor, projectClock, type Clock, type ClockResult } from "@/lib/life";
+import { isPrintedPackDate, LIFE_KIND_META, type LifeKind } from "@/lib/preview";
+import type { ChartPack, ShelfRule, StockStatus } from "@/lib/types";
 import { cn } from "cn";
 
 const SECTION_TONE: Record<ShelfRule["sectionId"], string> = {
-  frozen: "bg-sky-100 text-sky-950",
-  chilled: "bg-teal-100 text-teal-950",
-  ready: "bg-amber-100 text-amber-950",
-  ambient: "bg-orange-100 text-orange-950",
-  pack: "bg-stone-200 text-stone-800",
+  frozen: "bg-sky-500/20 text-sky-200",
+  chilled: "bg-teal-500/20 text-teal-200",
+  ready: "bg-amber-500/20 text-amber-200",
+  ambient: "bg-orange-500/20 text-orange-200",
+  pack: "bg-stone-500/25 text-stone-200",
 };
 
 function toneClass(tone: StockStatus) {
-  if (tone === "expired") return "text-red-700";
-  if (tone === "today" || tone === "critical") return "text-orange-700";
-  if (tone === "soon" || tone === "watch") return "text-amber-800";
-  return "text-emerald-800";
+  if (tone === "expired") return "text-red-400";
+  if (tone === "today" || tone === "critical") return "text-orange-300";
+  if (tone === "soon" || tone === "watch") return "text-amber-300";
+  return "text-emerald-300";
 }
 
 function nowLocal() {
@@ -29,11 +32,84 @@ function nowLocal() {
   return `${toIsoDate(now)}T${hours}:${minutes}`;
 }
 
-export function LifeCard({ rule }: { rule: ShelfRule }) {
+function initialValues(rule: ShelfRule, deliveryDate: string): Record<string, string> {
+  if (!deliveryDate) return {};
+  const values: Record<string, string> = {};
+  for (const clock of clocksFor(rule)) {
+    if (isPrintedPackDate(clock)) continue;
+    if (clock.mode === "date") values[clock.id] = deliveryDate;
+    if (clock.mode === "datetime") values[clock.id] = `${deliveryDate}T00:00`;
+  }
+  return values;
+}
+
+function kindForClockId(id: string): LifeKind | null {
+  for (const [kind, meta] of Object.entries(LIFE_KIND_META) as [LifeKind, (typeof LIFE_KIND_META)[LifeKind]][]) {
+    if (meta.clockIds.includes(id)) return kind;
+  }
+  return null;
+}
+
+/** Prepped/in-use and ambient use are shown as a left/right pair. */
+function clockRows(clocks: Clock[]): Clock[][] {
+  const prepped = clocks.find((clock) => clock.id === "prepped" || clock.id === "use");
+  const ambient = clocks.find((clock) => clock.id === "ambient");
+  const paired = new Set<string>();
+  const rows: Clock[][] = [];
+
+  if (prepped && ambient) {
+    rows.push([prepped, ambient]);
+    paired.add(prepped.id);
+    paired.add(ambient.id);
+  }
+
+  for (const clock of clocks) {
+    if (paired.has(clock.id)) continue;
+    rows.push([clock]);
+  }
+  return rows;
+}
+
+export function LifeCard({
+  rule,
+  pack,
+  deliveryDate = "",
+  focusKind = null,
+}: {
+  rule: ShelfRule;
+  pack: ChartPack;
+  deliveryDate?: string;
+  focusKind?: LifeKind | null;
+}) {
   const clocks = clocksFor(rule);
-  const section = sectionById(rule.sectionId);
+  const focusIds = new Set(
+    focusKind === "prepped"
+      ? clocks.filter((clock) => {
+          const kind = kindForClockId(clock.id);
+          return kind === "prepped" || kind === "ambient";
+        }).map((clock) => clock.id)
+      : focusKind
+        ? clocks.filter((clock) => kindForClockId(clock.id) === focusKind).map((clock) => clock.id)
+        : [],
+  );
+  const ordered =
+    focusIds.size > 0
+      ? [
+          ...clocks.filter((clock) => focusIds.has(clock.id)),
+          ...clocks.filter((clock) => !focusIds.has(clock.id)),
+        ]
+      : clocks;
+  const rows = clockRows(ordered);
+  const section = sectionFromPack(pack, rule.sectionId);
   const [values, setValues] = useState<Record<string, string>>({});
   const [checkedAt, setCheckedAt] = useState<Date | null>(null);
+
+  useEffect(() => {
+    const seeded = initialValues(rule, deliveryDate);
+    setValues(seeded);
+    setCheckedAt(Object.keys(seeded).length > 0 ? new Date() : null);
+  }, [rule.id, deliveryDate]);
+
   const results = checkedAt
     ? clocks
         .map((clock) => projectClock(clock, values[clock.id] ?? "", checkedAt))
@@ -46,76 +122,145 @@ export function LifeCard({ rule }: { rule: ShelfRule }) {
     setCheckedAt(new Date());
   }
 
+  function renderClock(clock: Clock) {
+    const result = results.find((item) => item.id === clock.id);
+    const focused = focusIds.size > 0 ? focusIds.has(clock.id) : false;
+    const datetime = clock.mode === "datetime";
+    const raw = values[clock.id] ?? "";
+    const datePart = datetime ? raw.slice(0, 10) : raw;
+    const timePart = datetime && raw.includes("T") ? raw.slice(11, 16) : "00:00";
+
+    return (
+      <div
+        key={clock.id}
+        className={cn(
+          "min-w-0 max-w-full overflow-hidden rounded-xl bg-black/25 px-3 py-3 ring-1 sm:px-4",
+          focused ? "ring-violet-300/60" : "ring-white/10",
+        )}
+      >
+        <p className="text-xs font-semibold uppercase tracking-wider text-stone-400">
+          {clock.id === "ambient"
+            ? "Ambient use"
+            : clock.id === "prepped" || clock.id === "use"
+              ? clock.chilled
+                ? "Prepped (Chilled)"
+                : "Prepped"
+              : clock.label}
+        </p>
+        <p className="font-display text-3xl leading-none break-words text-white">{clock.value}</p>
+        {clock.mode !== "display" && !isPrintedPackDate(clock) ? (
+          <div className="mt-3 min-w-0 space-y-2">
+            {datetime ? (
+              <>
+                <div className="grid min-w-0 grid-cols-2 gap-2">
+                  <DateField
+                    label={
+                      clock.id === "ambient"
+                        ? "Ambient date"
+                        : clock.id === "prepped" || clock.id === "use"
+                          ? "Prepped on"
+                          : clock.prompt
+                    }
+                    value={datePart}
+                    onChange={(next) => setClock(clock.id, `${next}T${timePart || "00:00"}`)}
+                  />
+                  <TimeField
+                    label="Time"
+                    value={timePart}
+                    onChange={(next) =>
+                      setClock(clock.id, `${datePart || toIsoDate(new Date())}T${next}`)
+                    }
+                  />
+                </div>
+                <button
+                  type="button"
+                  className="h-11 w-full rounded-2xl bg-white text-sm font-semibold text-stone-950 transition-transform active:scale-[0.99]"
+                  onClick={() => setClock(clock.id, nowLocal())}
+                >
+                  Use now
+                </button>
+              </>
+            ) : (
+              <DateField
+                label={
+                  clock.id === "ambient"
+                    ? "Ambient from"
+                    : clock.id === "prepped" || clock.id === "use"
+                      ? "Prepped on"
+                      : clock.prompt
+                }
+                value={raw}
+                onChange={(next) => setClock(clock.id, next)}
+                onToday={() => setClock(clock.id, toIsoDate(new Date()))}
+              />
+            )}
+          </div>
+        ) : null}
+        {result ? (
+          <div className={cn("mt-3 min-w-0", toneClass(result.tone))}>
+            <WhenDate
+              when={result.when}
+              at={result.at}
+              className="font-display text-2xl leading-none break-words"
+            />
+            <span className="mt-1 block font-sans text-sm font-medium text-stone-300">
+              {result.detail}
+            </span>
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
   return (
-    <article className="ticket-in overflow-hidden rounded-2xl bg-white shadow-[6px_6px_0_0_rgba(28,25,23,0.12)] ring-1 ring-stone-200">
-      <div className="flex flex-wrap items-center gap-2 px-5 pt-5 sm:px-7">
+    <article className="ticket-in max-w-full min-w-0 overflow-hidden rounded-2xl bg-card shadow-[6px_6px_0_0_rgba(0,0,0,0.35)] ring-1 ring-white/10">
+      <div className="flex flex-wrap items-center gap-2 px-4 pt-4">
         <span className={cn("rounded-full px-2.5 py-1 text-xs font-semibold uppercase tracking-wide", SECTION_TONE[rule.sectionId])}>
-          {section.title}
+          {section.short}
         </span>
-        <span className="text-xs font-semibold uppercase tracking-wide text-stone-500">
+        <span className="text-xs font-semibold uppercase tracking-wide text-stone-400">
           {rule.category}
         </span>
+        {focusKind ? (
+          <span className="rounded-full bg-violet-500/20 px-2.5 py-1 text-xs font-semibold tracking-wide text-violet-100">
+            {LIFE_KIND_META[focusKind].tag}
+          </span>
+        ) : null}
       </div>
-      <div className="px-5 pt-3 pb-6 sm:px-7">
-        <h2 className="font-display text-4xl leading-tight text-stone-950">{rule.name}</h2>
+      <div className="min-w-0 px-4 pt-3 pb-5">
+        <h2 className="font-display text-3xl leading-tight text-white">{rule.name}</h2>
         {rule.sameAs.length > 0 ? (
-          <p className="mt-2 text-sm text-stone-600">
-            Same life on this chart row: {rule.sameAs.join(", ")}.
+          <p className="mt-2 text-sm text-stone-400">
+            Same life: {rule.sameAs.join(", ")}.
           </p>
         ) : null}
-        {section.note ? <p className="mt-3 text-sm text-sky-950">{section.note}</p> : null}
-        <div className="mt-5 grid gap-4 sm:grid-cols-2">
-          {clocks.map((clock) => {
-            const result = results.find((item) => item.id === clock.id);
-            return (
-              <div key={clock.id} className="rounded-xl bg-stone-50 px-4 py-3 ring-1 ring-stone-200">
-                <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">
-                  {clock.label}
-                </p>
-                <p className="font-display text-4xl leading-none text-stone-950">{clock.value}</p>
-                {clock.mode !== "display" ? (
-                  <label className="mt-3 block text-sm text-stone-700">
-                    {clock.prompt}
-                    <span className="mt-1 flex gap-2">
-                      <input
-                        type={clock.mode === "datetime" ? "datetime-local" : "date"}
-                        value={values[clock.id] ?? ""}
-                        onChange={(event) => setClock(clock.id, event.target.value)}
-                        className="h-11 min-w-0 flex-1 rounded-lg border border-stone-300 bg-white px-3"
-                      />
-                      <button
-                        type="button"
-                        className="h-11 shrink-0 rounded-lg bg-stone-950 px-3 text-sm font-medium text-white"
-                        onClick={() =>
-                          setClock(clock.id, clock.mode === "datetime" ? nowLocal() : toIsoDate(new Date()))
-                        }
-                      >
-                        {clock.mode === "datetime" ? "Now" : "Today"}
-                      </button>
-                    </span>
-                  </label>
-                ) : null}
-                {result ? (
-                  <p className={cn("mt-3 font-display text-3xl leading-none", toneClass(result.tone))}>
-                    {result.when}
-                    <span className="mt-1 block font-sans text-sm font-medium">{result.detail}</span>
-                  </p>
-                ) : null}
-              </div>
-            );
+        {section.note ? <p className="mt-3 text-sm text-sky-200">{section.note}</p> : null}
+        <div className="mt-4 grid min-w-0 gap-3">
+          {rows.map((row) => {
+            if (row.length === 2) {
+              return (
+                <div
+                  key={row.map((clock) => clock.id).join("-")}
+                  className="grid min-w-0 grid-cols-1 gap-3"
+                >
+                  {row.map((clock) => renderClock(clock))}
+                </div>
+              );
+            }
+            return renderClock(row[0]!);
           })}
         </div>
         {advice ? (
-          <p className="mt-4 rounded-xl bg-amber-100 px-3 py-2 text-sm font-medium text-amber-950">
+          <p className="mt-4 rounded-xl bg-amber-500/15 px-3 py-2 text-sm font-medium text-amber-100">
             {advice}
           </p>
         ) : null}
         {rule.note ? (
-          <p className="mt-4 rounded-xl bg-stone-100 px-3 py-2 text-sm text-stone-800">{rule.note}</p>
+          <p className="mt-4 rounded-xl bg-white/5 px-3 py-2 text-sm text-stone-200">{rule.note}</p>
         ) : null}
         {clocks.some((clock) => clock.addDays) ? (
           <p className="mt-4 text-xs text-stone-500">
-            The use-by date is the date you enter plus the life on the chart. 1 Oct plus 12 days is 13 Oct.
+            The date you enter is day 1. 12 days from 1 Oct ends on 12 Oct.
           </p>
         ) : null}
       </div>

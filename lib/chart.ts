@@ -1,7 +1,7 @@
 import type { SectionId, ShelfRule } from "./types";
 
 export const CHART = {
-  title: "Campaign 5 shelf life chart",
+  title: "Campaign 5 Shelf Life",
   audience: "All stores",
   version: "Version 1",
   issued: "2026-09-07",
@@ -200,7 +200,7 @@ export const RULES: ShelfRule[] = [
   ...group("chilled", "Sauces", ["Garlic Butter"], {
     unopened: "Date on pack",
     prepped: "10 days",
-    also: { label: "12 hours", value: "12 hours" },
+    ambientUse: "12 hours",
   }, { "Garlic Butter": ["garlic butter"] }),
   ...group("chilled", "Sauces", ["Liquid Cheese"], {
     unopened: "Date on pack",
@@ -209,10 +209,10 @@ export const RULES: ShelfRule[] = [
   ...group("chilled", "Bases", ["Prepared Double Decadence bases"], {
     unopened: "N/A",
     prepped: "12 hours chilled",
-    also: { label: "At ambient", value: "4 hours at ambient" },
+    ambientUse: "4 hours",
     note: "12 hours includes 4 hours at ambient, i.e. 8 hours chilled + 4 hours ambient. Do not return the product to the chill after 4 hours — discard what is left.",
   }, { "Prepared Double Decadence bases": ["decadence", "double decadence"] }),
-  ...group("chilled", "Dough", ["Standard Dough (All sizes)"], {
+  ...group("chilled", "Bases", ["Standard Dough (All sizes)"], {
     unopened: "Date on tray",
     prepped: "BB date on tray +1 day",
     note: "Follow the dough proofing chart. Day 6 dough must be in good condition for use.",
@@ -297,7 +297,7 @@ export const RULES: ShelfRule[] = [
     unopened: "Date on pack",
     prepped: "30 days",
   }, { "NEW Biscoff Crumb": ["biscoff", "lotus"] }),
-  ...group("ambient", "Cornmeal", ["Cornmeal"], {
+  ...group("ambient", "Other", ["Cornmeal"], {
     unopened: "Date on pack",
     prepped: "BB date on pack",
     note: "Date the cornmeal tub with the BB date from the original packaging.",

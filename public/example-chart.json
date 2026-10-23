@@ -1,0 +1,40 @@
+{
+  "chart": {
+    "title": "Example imported chart",
+    "audience": "All stores",
+    "version": "Demo",
+    "issued": "2026-10-01",
+    "validUntil": "2026-12-31"
+  },
+  "sections": [
+    {
+      "id": "frozen",
+      "title": "Chilled (defrosted / frozen before use)",
+      "short": "Frozen before use",
+      "note": "Store in the walk-in or on the makeline. Do not use until fully defrosted."
+    }
+  ],
+  "footnotes": [
+    "This is a demo import file for testing Settings → Import chart."
+  ],
+  "rules": [
+    {
+      "id": "frozen:pepperoni",
+      "sectionId": "frozen",
+      "category": "Toppings",
+      "name": "Pepperoni",
+      "aliases": [],
+      "sameAs": ["Chorizo"],
+      "fromDelivery": "12 days"
+    },
+    {
+      "id": "frozen:chorizo",
+      "sectionId": "frozen",
+      "category": "Toppings",
+      "name": "Chorizo",
+      "aliases": [],
+      "sameAs": ["Pepperoni"],
+      "fromDelivery": "12 days"
+    }
+  ]
+}

@@ -37,12 +37,12 @@ function scoreName(rule: ShelfRule, query: string): number {
   return -1;
 }
 
-export function searchNames(query: string): NameHit[] {
+export function searchNames(query: string, rules: ShelfRule[] = RULES): NameHit[] {
   const folded = fold(query);
   if (folded.length < 2) return [];
 
   const best = new Map<string, number>();
-  for (const rule of RULES) {
+  for (const rule of rules) {
     const score = scoreName(rule, folded);
     if (score < 0) continue;
     const key = fold(rule.name);
@@ -52,7 +52,7 @@ export function searchNames(query: string): NameHit[] {
 
   return [...best.entries()]
     .map(([nameKey, score]) => {
-      const rule = RULES.find((item) => fold(item.name) === nameKey);
+      const rule = rules.find((item) => fold(item.name) === nameKey);
       return { name: rule?.name ?? nameKey, score };
     })
     .sort((a, b) => a.score - b.score || a.name.localeCompare(b.name));
@@ -64,7 +64,7 @@ export function shouldExpand(hits: NameHit[]): boolean {
   return hits[0].score <= 1 && (hits[1]?.score ?? 99) > 1;
 }
 
-export function rulesForName(name: string): ShelfRule[] {
+export function rulesForName(name: string, rules: ShelfRule[] = RULES): ShelfRule[] {
   const folded = fold(name);
-  return RULES.filter((rule) => fold(rule.name) === folded);
+  return rules.filter((rule) => fold(rule.name) === folded);
 }

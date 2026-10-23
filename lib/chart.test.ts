@@ -25,7 +25,7 @@ describe("Campaign 5 chart", () => {
     assert.equal(rule("Ham", "chilled").prepped, "6 days");
     assert.equal(rule("Mushrooms", "chilled").prepped, "48 hours");
     assert.equal(rule("Garlic Butter", "chilled").prepped, "10 days");
-    assert.equal(rule("Garlic Butter", "chilled").also?.value, "12 hours");
+    assert.equal(rule("Garlic Butter", "chilled").ambientUse, "12 hours");
     assert.equal(rule("Standard Dough (All sizes)", "chilled").prepped, "BB date on tray +1 day");
     assert.equal(rule("BBQ sauce", "ready").ambientUse, "15 hours");
     assert.equal(rule("Sundried Tomato and Garlic", "ready").ambientUse, "12 hours");

@@ -190,10 +190,32 @@ export function formatLongDate(iso: string): string {
   return `${WEEKDAY[date.getDay()]} ${date.getDate()} ${MONTH_SHORT[date.getMonth()]} ${date.getFullYear()}`;
 }
 
+/** Day + month + year, no weekday — e.g. 7 Sep 2026 */
+export function formatShortDate(iso: string): string {
+  const date = parseIsoDate(iso);
+  return `${date.getDate()} ${MONTH_SHORT[date.getMonth()]} ${date.getFullYear()}`;
+}
+
 export function formatDateTime(date: Date): string {
   const hours = String(date.getHours()).padStart(2, "0");
   const minutes = String(date.getMinutes()).padStart(2, "0");
-  return `${formatLongDate(toIsoDate(date))} at ${hours}:${minutes}`;
+  return `${formatLongDate(toIsoDate(date))} | ${hours}:${minutes}`;
+}
+
+/** Compact date: DD/MM/YY */
+export function formatCompactDate(date: Date | string): string {
+  const value = typeof date === "string" ? parseIsoDate(date) : date;
+  const day = String(value.getDate()).padStart(2, "0");
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const year = String(value.getFullYear()).slice(-2);
+  return `${day}/${month}/${year}`;
+}
+
+/** Compact toggle format: DD/MM/YY | HH:MM */
+export function formatCompactDateTime(date: Date): string {
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${formatCompactDate(date)} | ${hours}:${minutes}`;
 }
 
 export function addDaysToIso(iso: string, days: number): string {
