@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { Search, X } from "lucide-react";
+import { ArrowUp, Search, X } from "lucide-react";
 import { ChartList } from "@/components/chart-list";
 import { DateField } from "@/components/date-field";
 import { DragScroll } from "@/components/drag-scroll";
@@ -134,6 +134,7 @@ export function StockDesk() {
   const [headerCollapsed, setHeaderCollapsed] = useState(false);
   /** List only scrolls when collapsed and the header transition has settled. */
   const [listScrollable, setListScrollable] = useState(false);
+  const [showGoTop, setShowGoTop] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const shellRef = useRef<HTMLDivElement>(null);
@@ -141,6 +142,12 @@ export function StockDesk() {
   const headerCollapsedRef = useRef(false);
   const listScrollableRef = useRef(false);
   const animatingRef = useRef(false);
+  const collapseProgressRef = useRef(0);
+  const settleTimerRef = useRef(0);
+  const setHeaderModeRef = useRef<(collapsed: boolean) => void>(() => {});
+  /** List place to restore when clearing a product opened from the chart. */
+  const savedListScrollRef = useRef(0);
+  const savedListCollapsedRef = useRef(false);
   const { pack, deliveryDate, imported } = desk;
   const { chart, footnotes, rules } = pack;
   const categories = categoriesInPack(pack);
@@ -168,32 +175,31 @@ export function StockDesk() {
     const EXPAND_AT = 72;
     const SETTLE_MS = 320;
 
-    let progress = 0;
     let touchY = 0;
     let touchX = 0;
     let touchActive = false;
     let touchIgnored = false;
     let fromChipStrip = false;
-    let settleTimer = 0;
 
-    function setCollapsed(next: boolean) {
-      if (headerCollapsedRef.current === next || animatingRef.current) return;
-      headerCollapsedRef.current = next;
-      progress = 0;
+    function setHeaderMode(collapsed: boolean) {
+      window.clearTimeout(settleTimerRef.current);
+      collapseProgressRef.current = 0;
+      headerCollapsedRef.current = collapsed;
       animatingRef.current = true;
       listScrollableRef.current = false;
       setListScrollable(false);
-      setHeaderCollapsed(next);
-      if (next && !query.trim()) inputRef.current?.blur();
+      setHeaderCollapsed(collapsed);
+      if (collapsed && !query.trim()) inputRef.current?.blur();
+      if (!collapsed) setShowGoTop(false);
 
-      window.clearTimeout(settleTimer);
-      settleTimer = window.setTimeout(() => {
+      settleTimerRef.current = window.setTimeout(() => {
         animatingRef.current = false;
-        const canScroll = next;
-        listScrollableRef.current = canScroll;
-        setListScrollable(canScroll);
+        listScrollableRef.current = collapsed;
+        setListScrollable(collapsed);
       }, SETTLE_MS);
     }
+
+    setHeaderModeRef.current = setHeaderMode;
 
     function applyDelta(deltaY: number) {
       // deltaY > 0 → scroll down / collapse; < 0 → scroll up / expand
@@ -201,21 +207,21 @@ export function StockDesk() {
 
       if (!headerCollapsedRef.current) {
         if (deltaY > 0) {
-          progress += deltaY;
-          if (progress >= COLLAPSE_AT) setCollapsed(true);
+          collapseProgressRef.current += deltaY;
+          if (collapseProgressRef.current >= COLLAPSE_AT) setHeaderMode(true);
         } else {
-          progress = Math.max(0, progress + deltaY);
+          collapseProgressRef.current = Math.max(0, collapseProgressRef.current + deltaY);
         }
         return true; // list locked while expanded
       }
 
       if (scroller.scrollTop <= 0 && deltaY < 0) {
-        progress += -deltaY;
-        if (progress >= EXPAND_AT) setCollapsed(false);
+        collapseProgressRef.current += -deltaY;
+        if (collapseProgressRef.current >= EXPAND_AT) setHeaderMode(false);
         return true;
       }
 
-      progress = 0;
+      collapseProgressRef.current = 0;
       return false;
     }
 
@@ -228,7 +234,7 @@ export function StockDesk() {
     const onTouchStart = (event: TouchEvent) => {
       if (event.touches.length !== 1) return;
       const target = event.target as HTMLElement | null;
-      if (target?.closest("input, textarea, select")) {
+      if (target?.closest("input, textarea, select, [data-go-top]")) {
         touchActive = false;
         return;
       }
@@ -271,7 +277,8 @@ export function StockDesk() {
     shell.addEventListener("touchcancel", onTouchEnd);
 
     return () => {
-      window.clearTimeout(settleTimer);
+      window.clearTimeout(settleTimerRef.current);
+      setHeaderModeRef.current = () => {};
       shell.removeEventListener("wheel", onWheel);
       shell.removeEventListener("touchstart", onTouchStart);
       shell.removeEventListener("touchmove", onTouchMove);
@@ -279,6 +286,19 @@ export function StockDesk() {
       shell.removeEventListener("touchcancel", onTouchEnd);
     };
   }, [query]);
+
+  useEffect(() => {
+    const scroller = mainRef.current;
+    if (!scroller) return;
+
+    const syncGoTop = () => {
+      setShowGoTop(headerCollapsedRef.current || scroller.scrollTop > 48);
+    };
+
+    scroller.addEventListener("scroll", syncGoTop, { passive: true });
+    syncGoTop();
+    return () => scroller.removeEventListener("scroll", syncGoTop);
+  }, [headerCollapsed, listScrollable]);
 
   useEffect(() => {
     setPlaceholder(randomCategoryPlaceholder(rules));
@@ -337,10 +357,49 @@ export function StockDesk() {
 
   function choose(name: string, sectionId?: SectionId) {
     if (sectionId) rememberSection(sectionId);
+    // Remember list place before the chart unmounts for this product.
+    savedListScrollRef.current = mainRef.current?.scrollTop ?? 0;
+    savedListCollapsedRef.current = headerCollapsedRef.current;
     setQuery(name);
     setPicked(name);
-    inputRef.current?.focus();
-    requestAnimationFrame(() => inputRef.current?.select());
+    inputRef.current?.blur();
+    setSearchFocused(false);
+  }
+
+  function clearSearch() {
+    setQuery("");
+    setPicked(null);
+    inputRef.current?.blur();
+    setSearchFocused(false);
+
+    const collapsed = savedListCollapsedRef.current;
+    const top = savedListScrollRef.current;
+    window.clearTimeout(settleTimerRef.current);
+    collapseProgressRef.current = 0;
+    animatingRef.current = false;
+    headerCollapsedRef.current = collapsed;
+    listScrollableRef.current = collapsed;
+    setHeaderCollapsed(collapsed);
+    setListScrollable(collapsed);
+    setShowGoTop(collapsed || top > 48);
+
+    // Wait for ChartList to mount, then jump back to the saved spot.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const scroller = mainRef.current;
+        if (scroller) scroller.scrollTop = top;
+      });
+    });
+  }
+
+  function goToTop() {
+    const scroller = mainRef.current;
+    if (scroller) {
+      // Jump instantly so expand isn't fighting a mid-scroll lock.
+      scroller.scrollTop = 0;
+    }
+    // Always unfold the full header (not just the collapsed list top).
+    setHeaderModeRef.current(false);
   }
 
   const browsing = !query.trim();
@@ -351,7 +410,7 @@ export function StockDesk() {
   return (
     <div
       ref={shellRef}
-      className="mx-auto flex h-dvh w-full max-w-md min-w-0 flex-col overflow-hidden overscroll-none"
+      className="relative mx-auto flex h-dvh w-full max-w-md min-w-0 flex-col overflow-hidden overscroll-none"
     >
       <header className="shrink-0 border-b border-red-500/30 bg-[#0f1624] text-white">
         <div
@@ -443,7 +502,6 @@ export function StockDesk() {
               onSubmit={(event) => {
                 event.preventDefault();
                 if (hits[0]) choose(hits[0].name);
-                requestAnimationFrame(() => inputRef.current?.select());
               }}
             >
               <div className="flex gap-2">
@@ -495,7 +553,12 @@ export function StockDesk() {
                     onFocus={() => setSearchFocused(true)}
                     onBlur={() => setSearchFocused(false)}
                     onChange={(event) => {
-                      setQuery(event.target.value);
+                      const next = event.target.value;
+                      if (!query.trim() && next.trim()) {
+                        savedListScrollRef.current = mainRef.current?.scrollTop ?? 0;
+                        savedListCollapsedRef.current = headerCollapsedRef.current;
+                      }
+                      setQuery(next);
                       setPicked(null);
                     }}
                   />
@@ -509,11 +572,7 @@ export function StockDesk() {
                       headerCollapsed ? "h-10 w-10 rounded-xl" : "h-14 w-14 rounded-2xl",
                     )}
                     aria-label="Clear search"
-                    onClick={() => {
-                      setQuery("");
-                      setPicked(null);
-                      inputRef.current?.focus();
-                    }}
+                    onClick={clearSearch}
                   >
                     <X className={headerCollapsed ? "size-4" : undefined} />
                   </Button>
@@ -690,7 +749,7 @@ export function StockDesk() {
       <main
         ref={mainRef}
         className={cn(
-          "min-h-0 flex-1 overscroll-y-contain px-4 py-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] [-webkit-overflow-scrolling:touch]",
+          "min-h-0 flex-1 overscroll-y-contain bg-[#0f1624] px-4 pt-0 pb-[max(1.5rem,env(safe-area-inset-bottom))] [-webkit-overflow-scrolling:touch]",
           listScrollable ? "overflow-y-auto" : "overflow-y-hidden",
         )}
       >
@@ -815,6 +874,23 @@ export function StockDesk() {
           </ul>
         ) : null}
       </main>
+
+      <button
+        type="button"
+        data-go-top=""
+        aria-label="Go to top"
+        onClick={goToTop}
+        className={cn(
+          "absolute right-4 z-20 flex size-11 items-center justify-center rounded-full bg-white/40 text-stone-950 shadow-[0_8px_24px_rgba(0,0,0,0.25)] ring-1 ring-white/20 backdrop-blur-sm transition-all duration-200",
+          "hover:bg-white hover:opacity-100 hover:shadow-[0_8px_24px_rgba(0,0,0,0.45)] focus-visible:bg-white focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 active:bg-white active:opacity-100",
+          "bottom-[max(1rem,env(safe-area-inset-bottom))]",
+          showGoTop
+            ? "translate-y-0 opacity-45"
+            : "pointer-events-none translate-y-3 opacity-0",
+        )}
+      >
+        <ArrowUp className="size-5" strokeWidth={2.5} />
+      </button>
     </div>
   );
 }
