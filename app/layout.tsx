@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Fraunces, Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "next-themes";
+import { RegisterSW } from "@/components/register-sw";
+import { withBasePath } from "@/lib/base-path";
 import "./globals.css";
 
 const sans = Geist({
@@ -19,13 +21,26 @@ const display = Fraunces({
 });
 
 export const metadata: Metadata = {
-  title: "Shelf life",
+  applicationName: "Campaign 5 Shelf Life",
+  title: "Campaign 5 Shelf Life",
   description:
     "Campaign 5 shelf life chart. Type a product, then enter the delivery or pack date to see the use-by date.",
+  // Next does not always prefix metadata asset hrefs with basePath on static export.
+  manifest: withBasePath("/manifest.webmanifest"),
   appleWebApp: {
     capable: true,
     title: "Shelf life",
     statusBarStyle: "black-translucent",
+  },
+  icons: {
+    icon: [
+      {
+        url: withBasePath("/icons/icon-192.png"),
+        sizes: "192x192",
+        type: "image/png",
+      },
+    ],
+    apple: [{ url: withBasePath("/icons/apple-touch-icon.png"), sizes: "180x180" }],
   },
   formatDetection: {
     telephone: false,
@@ -50,6 +65,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="flex h-dvh flex-col overflow-hidden">
         <ThemeProvider forcedTheme="dark" attribute="class" enableSystem={false}>
           {children}
+          <RegisterSW />
         </ThemeProvider>
       </body>
     </html>

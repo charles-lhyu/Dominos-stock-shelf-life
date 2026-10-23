@@ -130,11 +130,9 @@ export function StockDesk() {
   const [preferredLife, setPreferredLife] = useState<LifeKind | null>(null);
   const [placeholder, setPlaceholder] = useState("Pepperoni, Chorizo, Nduja Sausage…");
   const [today, setToday] = useState<Date | null>(null);
-  /** 0 = title fully shown, 1 = title hidden (list may scroll). */
-  const [headerCollapse, setHeaderCollapse] = useState(0);
-  const headerCollapseRef = useRef(0);
+  /** Title tucked away once the list has scrolled a little. */
+  const [headerCollapsed, setHeaderCollapsed] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const shellRef = useRef<HTMLDivElement>(null);
   const mainRef = useRef<HTMLElement>(null);
   const { pack, deliveryDate, imported } = desk;
   const { chart, footnotes, rules } = pack;
@@ -157,190 +155,25 @@ export function StockDesk() {
   }, []);
 
   useEffect(() => {
-    if (!shellRef.current || !mainRef.current) return;
-    const shell: HTMLDivElement = shellRef.current;
-    const scroller: HTMLElement = mainRef.current;
+    const scroller = mainRef.current;
+    if (!scroller) return;
 
-    const COLLAPSE_PX = 108;
-    let frame = 0;
+    // Hysteresis so the title doesn't flicker at the threshold.
+    const COLLAPSE_AT = 28;
+    const EXPAND_AT = 4;
 
-    function publishCollapse(next: number) {
-      const clamped = Math.min(1, Math.max(0, next));
-      headerCollapseRef.current = clamped;
-      // Keep the list locked until the title has finished hiding.
-      scroller.style.overflowY = clamped >= 1 ? "auto" : "hidden";
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => setHeaderCollapse(clamped));
-    }
-
-    scroller.style.overflowY = headerCollapseRef.current >= 1 ? "auto" : "hidden";
-
-    function applyScrollDelta(deltaY: number) {
-      let remaining = deltaY;
-      const collapse = headerCollapseRef.current;
-
-      if (remaining > 0 && collapse < 1) {
-        const room = (1 - collapse) * COLLAPSE_PX;
-        const take = Math.min(room, remaining);
-        publishCollapse(collapse + take / COLLAPSE_PX);
-        remaining -= take;
-      } else if (remaining < 0 && scroller.scrollTop <= 0 && collapse > 0) {
-        const room = collapse * COLLAPSE_PX;
-        const take = Math.min(room, -remaining);
-        publishCollapse(collapse - take / COLLAPSE_PX);
-        remaining += take;
-      }
-
-      if (remaining !== 0 && headerCollapseRef.current >= 1) {
-        scroller.scrollTop += remaining;
-      }
-    }
-
-    const onWheel = (event: WheelEvent) => {
-      const collapse = headerCollapseRef.current;
-      const overHeader = !(event.target as HTMLElement | null)?.closest("main");
-      if (
-        overHeader ||
-        (event.deltaY > 0 && collapse < 1) ||
-        (event.deltaY < 0 && scroller.scrollTop <= 0 && collapse > 0)
-      ) {
-        event.preventDefault();
-        applyScrollDelta(event.deltaY);
-      }
+    const onScroll = () => {
+      const top = scroller.scrollTop;
+      setHeaderCollapsed((was) => {
+        if (!was && top >= COLLAPSE_AT) return true;
+        if (was && top <= EXPAND_AT) return false;
+        return was;
+      });
     };
 
-    const drag = {
-      active: false,
-      moved: false,
-      /** Started on a horizontal chip strip — wait to see axis. */
-      fromChipStrip: false,
-      ignored: false,
-      pointerId: -1,
-      startX: 0,
-      startY: 0,
-      startScroll: 0,
-      startCollapse: 0,
-    };
-    let suppressClick = false;
-
-    const onPointerDown = (event: PointerEvent) => {
-      if (event.button !== 0) return;
-      const target = event.target as HTMLElement | null;
-      // Allow dragging from date/tags (buttons); only skip real text fields.
-      if (target?.closest("input, textarea, [data-no-drag-scroll]")) return;
-
-      const inMain = Boolean(target?.closest("main"));
-      // Touch on the open list: leave native scrolling alone.
-      if (
-        inMain &&
-        event.pointerType !== "mouse" &&
-        headerCollapseRef.current >= 1 &&
-        scroller.scrollTop > 0
-      ) {
-        return;
-      }
-
-      drag.active = true;
-      drag.moved = false;
-      drag.ignored = false;
-      drag.fromChipStrip = Boolean(target?.closest("[data-drag-scroll]"));
-      drag.pointerId = event.pointerId;
-      drag.startX = event.clientX;
-      drag.startY = event.clientY;
-      drag.startScroll = scroller.scrollTop;
-      drag.startCollapse = headerCollapseRef.current;
-    };
-
-    const onPointerMove = (event: PointerEvent) => {
-      if (!drag.active || drag.ignored || event.pointerId !== drag.pointerId) return;
-
-      const dx = event.clientX - drag.startX;
-      const dy = drag.startY - event.clientY; // finger up → positive (scroll down)
-      if (!drag.moved && Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
-
-      // Horizontal chip strips: yield if the gesture is sideways.
-      if (drag.fromChipStrip && !drag.moved) {
-        if (Math.abs(dx) >= Math.abs(dy)) {
-          drag.ignored = true;
-          drag.active = false;
-          return;
-        }
-      }
-
-      const inMainTouchScroll =
-        event.pointerType !== "mouse" &&
-        headerCollapseRef.current >= 1 &&
-        scroller.scrollTop > 0 &&
-        dy > 0 &&
-        (event.target as HTMLElement | null)?.closest("main");
-      if (inMainTouchScroll) {
-        drag.active = false;
-        return;
-      }
-
-      if (!drag.moved) {
-        drag.moved = true;
-        suppressClick = true;
-        shell.setPointerCapture(event.pointerId);
-        shell.classList.add("cursor-grabbing");
-      }
-
-      let collapse = drag.startCollapse;
-      let scroll = drag.startScroll;
-      let remaining = dy;
-
-      if (remaining > 0 && collapse < 1) {
-        const room = (1 - collapse) * COLLAPSE_PX;
-        const take = Math.min(room, remaining);
-        collapse += take / COLLAPSE_PX;
-        remaining -= take;
-      } else if (remaining < 0 && scroll <= 0 && collapse > 0) {
-        const room = collapse * COLLAPSE_PX;
-        const take = Math.min(room, -remaining);
-        collapse -= take / COLLAPSE_PX;
-        remaining += take;
-      }
-
-      publishCollapse(collapse);
-      if (collapse >= 1) {
-        scroller.scrollTop = Math.max(0, scroll + remaining);
-      }
-      event.preventDefault();
-    };
-
-    const endDrag = (event: PointerEvent) => {
-      if ((!drag.active && !drag.ignored) || event.pointerId !== drag.pointerId) return;
-      if (drag.moved && shell.hasPointerCapture(event.pointerId)) {
-        shell.releasePointerCapture(event.pointerId);
-      }
-      drag.active = false;
-      drag.ignored = false;
-      shell.classList.remove("cursor-grabbing");
-    };
-
-    const onClickCapture = (event: MouseEvent) => {
-      if (!suppressClick) return;
-      suppressClick = false;
-      event.preventDefault();
-      event.stopPropagation();
-    };
-
-    shell.addEventListener("wheel", onWheel, { passive: false });
-    shell.addEventListener("pointerdown", onPointerDown);
-    shell.addEventListener("pointermove", onPointerMove);
-    shell.addEventListener("pointerup", endDrag);
-    shell.addEventListener("pointercancel", endDrag);
-    shell.addEventListener("click", onClickCapture, true);
-
-    return () => {
-      cancelAnimationFrame(frame);
-      shell.removeEventListener("wheel", onWheel);
-      shell.removeEventListener("pointerdown", onPointerDown);
-      shell.removeEventListener("pointermove", onPointerMove);
-      shell.removeEventListener("pointerup", endDrag);
-      shell.removeEventListener("pointercancel", endDrag);
-      shell.removeEventListener("click", onClickCapture, true);
-    };
+    scroller.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => scroller.removeEventListener("scroll", onScroll);
   }, []);
 
   useEffect(() => {
@@ -406,19 +239,11 @@ export function StockDesk() {
     requestAnimationFrame(() => inputRef.current?.select());
   }
 
-  // Shrink title first, then fade it out — list only scrolls after collapse ≈ 1.
-  const titleShrink = Math.min(1, headerCollapse / 0.55);
-  const titleFade = headerCollapse <= 0.55 ? 0 : (headerCollapse - 0.55) / 0.45;
-  const titleScale = 1 - titleShrink * 0.42;
-  const titleOpacity = 1 - titleFade;
-  const titleGone = headerCollapse >= 0.98;
-  const controlsDense = headerCollapse > 0.35;
+  const titleGone = headerCollapsed;
+  const controlsDense = headerCollapsed;
 
   return (
-    <div
-      ref={shellRef}
-      className="mx-auto flex h-dvh w-full max-w-md min-w-0 flex-col overflow-hidden overscroll-none"
-    >
+    <div className="mx-auto flex h-dvh w-full max-w-md min-w-0 flex-col overflow-hidden overscroll-none">
       <header className="shrink-0 border-b border-red-500/30 bg-[#0f1624] text-white">
         <div
           className={cn(
@@ -427,21 +252,15 @@ export function StockDesk() {
           )}
         >
           <div
-            className="overflow-hidden transition-[max-height,margin] duration-200 ease-out"
-            style={{
-              maxHeight: titleGone ? 0 : `${Math.round(96 * titleScale * titleOpacity + 4)}px`,
-              marginBottom: titleGone ? 0 : undefined,
-              opacity: titleOpacity,
-            }}
+            className={cn(
+              "origin-top overflow-hidden transition-[max-height,opacity,transform,margin] duration-200 ease-out",
+              titleGone
+                ? "pointer-events-none mb-0 max-h-0 scale-95 opacity-0"
+                : "mb-0 max-h-28 scale-100 opacity-100",
+            )}
             aria-hidden={titleGone}
           >
-            <div
-              className="flex origin-top-left items-start gap-3 will-change-transform"
-              style={{
-                transform: `scale(${titleScale})`,
-                transformOrigin: "top left",
-              }}
-            >
+            <div className="flex items-start gap-3">
               <div className="min-w-0 flex-1">
                 <h1 className="font-display text-xl leading-tight text-balance">
                   {chart.title}
@@ -625,8 +444,7 @@ export function StockDesk() {
 
       <main
         ref={mainRef}
-        className="min-h-0 flex-1 cursor-grab overscroll-y-contain px-4 py-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] [-webkit-overflow-scrolling:touch] select-none"
-        style={{ overflowY: headerCollapse >= 1 ? "auto" : "hidden" }}
+        className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] [-webkit-overflow-scrolling:touch]"
       >
         {query.trim() && hits.length === 0 ? (
           <p className="mt-5 rounded-2xl border border-dashed border-white/20 bg-card/80 px-5 py-8 text-center">

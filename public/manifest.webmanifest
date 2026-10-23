@@ -1,0 +1,31 @@
+{
+  "name": "Campaign 5 Shelf Life",
+  "short_name": "Shelf life",
+  "description": "Campaign 5 shelf life chart. Type a product, then enter the delivery or pack date to see the use-by date.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0f1624",
+  "theme_color": "#0f1624",
+  "icons": [
+    {
+      "src": "./icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
