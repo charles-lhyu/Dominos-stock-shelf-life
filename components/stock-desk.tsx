@@ -159,8 +159,9 @@ export function StockDesk() {
 
   useEffect(() => {
     const shell = shellRef.current;
-    const scroller = mainRef.current;
-    if (!shell || !scroller) return;
+    const list = mainRef.current;
+    if (!shell || !list) return;
+    const scroller: HTMLElement = list;
 
     // Gesture distance before flipping expand/collapse (list stays still).
     const COLLAPSE_AT = 96;
