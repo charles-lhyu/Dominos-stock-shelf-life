@@ -159,9 +159,9 @@ export function StockDesk() {
     const scroller = mainRef.current;
     if (!scroller) return;
 
-    // Hysteresis so the title doesn't flicker at the threshold.
-    const COLLAPSE_AT = 28;
-    const EXPAND_AT = 4;
+    // Buffer before collapsing; stay collapsed until near the top again.
+    const COLLAPSE_AT = 96;
+    const EXPAND_AT = 12;
 
     const onScroll = () => {
       const top = scroller.scrollTop;
