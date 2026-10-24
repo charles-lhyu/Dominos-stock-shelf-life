@@ -413,7 +413,7 @@ export function StockDesk() {
   return (
     <div
       ref={shellRef}
-      className="relative mx-auto flex h-dvh w-full max-w-md min-w-0 flex-col overflow-hidden overscroll-none"
+      className="relative mx-auto flex h-full min-h-0 w-full max-w-md min-w-0 flex-col overflow-hidden overscroll-none"
     >
       <header className="relative z-20 shrink-0 bg-[#0f1624] text-white after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-2 after:border-t after:border-red-500/30 after:bg-[#0f1624]">
         <div

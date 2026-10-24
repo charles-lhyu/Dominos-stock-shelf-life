@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Fraunces, Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "next-themes";
+import { LockPortrait } from "@/components/lock-portrait";
 import { RegisterSW } from "@/components/register-sw";
 import { withBasePath } from "@/lib/base-path";
 import "./globals.css";
@@ -74,7 +75,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="flex h-dvh flex-col overflow-hidden">
         <ThemeProvider forcedTheme="dark" attribute="class" enableSystem={false}>
-          {children}
+          <LockPortrait>{children}</LockPortrait>
           <RegisterSW />
         </ThemeProvider>
       </body>
