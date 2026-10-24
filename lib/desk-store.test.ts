@@ -47,11 +47,11 @@ describe("stored chart repair", () => {
     assert.equal(repaired[1]?.prepped, "8 days");
   });
 
-  it("puts a saved mac and cheese row back under Desserts when it was filed as a side", () => {
+  it("puts a saved mac and cheese row under Sides when it was filed as a dessert", () => {
     const saved: ShelfRule = {
       id: "frozen:mac-n-cheese",
       sectionId: "frozen",
-      category: "Sides",
+      category: "Desserts",
       name: "Mac n Cheese",
       aliases: [],
       sameAs: [],
@@ -59,23 +59,23 @@ describe("stored chart repair", () => {
       inUse: "48 hours prepped",
     };
     const [repaired] = repairStoredRules([saved]);
-    assert.equal(repaired?.category, "Desserts");
+    assert.equal(repaired?.category, "Sides");
     assert.equal(repaired?.fromDelivery, "6 days");
     assert.equal(repaired?.inUse, "48 hours prepped");
   });
 
-  it("puts pack-dated products back under Other when they were refiled", () => {
+  it("puts pack-dated butter whirl under Desserts when it was dumped in Other", () => {
     const saved: ShelfRule = {
       id: "pack:butter-whirl",
       sectionId: "pack",
-      category: "Desserts",
+      category: "Other",
       name: "Butter Whirl",
       aliases: [],
       sameAs: [],
       unopened: "Date on pack",
     };
     const [repaired] = repairStoredRules([saved]);
-    assert.equal(repaired?.category, "Other");
+    assert.equal(repaired?.category, "Desserts");
     assert.equal(repaired?.unopened, "Date on pack");
   });
 

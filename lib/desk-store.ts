@@ -38,8 +38,9 @@ const DEFAULT_STATE: DeskState = {
  * Older imports copied the previous row's life onto the next product.
  * Pineapple and Olives are 10 days. Pepperdew is 25 days. Sliced gherkins are 16 days.
  * Leave every other stored life alone.
- * Categories follow the Campaign 5 chart. A saved pack that was refiled into
- * menu categories is put back to the chart headings.
+ * Categories follow the Campaign 5 product-type headings (Sides, Desserts, Other,
+ * and so on). Pack-dated storage still uses those headings — it is not one Other
+ * dump. A saved pack with the old dump is put back on load.
  */
 function withChartCategory(rule: ShelfRule): ShelfRule {
   const bundled = BUNDLED_PACK.rules.find(

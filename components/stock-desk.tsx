@@ -578,7 +578,7 @@ export function StockDesk() {
                     />
                   </div>
                   <span className="font-mono text-sm tracking-wide text-stone-500">
-                    v{process.env.NEXT_PUBLIC_APP_VERSION ?? "1.4.8"}
+                    v{process.env.NEXT_PUBLIC_APP_VERSION ?? "1.4.9"}
                   </span>
                 </div>
               </div>
