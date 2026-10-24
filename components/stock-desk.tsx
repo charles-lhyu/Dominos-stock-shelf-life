@@ -470,7 +470,10 @@ export function StockDesk() {
                     </p>
                   ) : null}
                 </div>
-                <ImportChartButton desk={desk} />
+                {/* Inset so the round ring isn’t clipped by the collapse overflow. */}
+                <div className="shrink-0 p-0.5">
+                  <ImportChartButton desk={desk} />
+                </div>
               </div>
             </div>
           </div>
