@@ -1,4 +1,4 @@
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { NextConfig } from "next";
 
@@ -6,11 +6,18 @@ const isGithubPages = process.env.GITHUB_PAGES === "true";
 const repoName = "Dominos-stock-shelf-life";
 const basePath = isGithubPages ? `/${repoName}` : "";
 
-// Numeric app version: 1.<GitHub run> on Pages, 1.0 locally.
-const runNumber = process.env.GITHUB_RUN_NUMBER;
+/**
+ * Semver from package.json (MAJOR.MINOR.PATCH):
+ * - PATCH — bug fixes
+ * - MINOR — small features
+ * - MAJOR — big / breaking updates only
+ * Bump package.json before shipping; Update app compares this value.
+ */
+const packageJson = JSON.parse(
+  readFileSync(join(process.cwd(), "package.json"), "utf8"),
+) as { version?: string };
 const appVersion =
-  process.env.NEXT_PUBLIC_APP_VERSION ??
-  (runNumber && /^\d+$/.test(runNumber) ? `1.${runNumber}` : "1.0");
+  process.env.NEXT_PUBLIC_APP_VERSION ?? packageJson.version ?? "1.0.0";
 
 // Static file the Update button fetches to see if a newer deploy is live.
 writeFileSync(
@@ -38,7 +45,6 @@ const nextConfig: NextConfig = {
       }),
   env: {
     NEXT_PUBLIC_BASE_PATH: basePath,
-    // GitHub Actions sets GITHUB_RUN_NUMBER — used for Update checks + UI.
     NEXT_PUBLIC_APP_VERSION: appVersion,
   },
   turbopack: {

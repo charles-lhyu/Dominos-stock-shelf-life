@@ -44,8 +44,18 @@ declare global {
   }
 }
 
-export function ImportChartButton({ desk }: { desk: DeskState }) {
-  const [open, setOpen] = useState(false);
+export function ImportChartButton({
+  desk,
+  open: openProp,
+  onOpenChange,
+}: {
+  desk: DeskState;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}) {
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const open = openProp ?? uncontrolledOpen;
+  const setOpen = onOpenChange ?? setUncontrolledOpen;
   const [url, setUrl] = useState(desk.sourceUrl);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -349,12 +359,12 @@ export function ImportChartButton({ desk }: { desk: DeskState }) {
               onClick={() => {
                 clearImportedPack();
                 setUrl("");
-                setMessage("Back to the built-in Campaign 5 chart.");
+                setMessage("Chart cleared.");
                 setError(null);
               }}
             >
               <RotateCcw className="size-4" />
-              Use built-in chart
+              Clear chart
             </Button>
           ) : null}
 

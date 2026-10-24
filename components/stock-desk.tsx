@@ -136,6 +136,7 @@ export function StockDesk() {
   const [listScrollable, setListScrollable] = useState(false);
   const [showGoTop, setShowGoTop] = useState(false);
   const [compactList, setCompactList] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const shellRef = useRef<HTMLDivElement>(null);
@@ -405,7 +406,8 @@ export function StockDesk() {
     setHeaderModeRef.current(false);
   }
 
-  const browsing = !query.trim();
+  const hasChart = rules.length > 0;
+  const browsing = hasChart && !query.trim();
   /** Collapsed idle: narrow search + full date. Focus/query: wide search + date icon. */
   const searchExpanded =
     !headerCollapsed || searchFocused || Boolean(query.trim());
@@ -442,17 +444,28 @@ export function StockDesk() {
                   <h1 className="font-display text-xl leading-tight text-balance">
                     {chart.title}
                   </h1>
-                  <p className="mt-1.5 text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-red-300">
-                    {chart.audience} · {chart.version}
-                    {chart.issued
-                      ? ` · Issued ${
-                          compactDates
-                            ? formatCompactDate(chart.issued)
-                            : formatShortDate(chart.issued)
-                        }`
-                      : ""}
-                    {imported ? " · imported" : ""}
-                  </p>
+                  {chart.audience || chart.version || chart.issued || imported ? (
+                    <p className="mt-1.5 text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-red-300">
+                      {[
+                        chart.audience,
+                        chart.version,
+                        chart.issued
+                          ? `Issued ${
+                              compactDates
+                                ? formatCompactDate(chart.issued)
+                                : formatShortDate(chart.issued)
+                            }`
+                          : "",
+                        imported ? "imported" : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </p>
+                  ) : (
+                    <p className="mt-1.5 text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-stone-500">
+                      Upload a chart to get started
+                    </p>
+                  )}
                   {chart.validUntil ? (
                     <p className="mt-1 text-sm font-medium text-amber-200">
                       Valid until{" "}
@@ -472,9 +485,13 @@ export function StockDesk() {
                 </div>
                 {/* Inset so the round ring isn’t clipped by the collapse overflow. */}
                 <div className="flex shrink-0 flex-col items-center gap-1 p-0.5">
-                  <ImportChartButton desk={desk} />
+                  <ImportChartButton
+                    desk={desk}
+                    open={uploadOpen}
+                    onOpenChange={setUploadOpen}
+                  />
                   <span className="font-mono text-sm tracking-wide text-stone-500">
-                    v{process.env.NEXT_PUBLIC_APP_VERSION ?? "1.0"}
+                    v{process.env.NEXT_PUBLIC_APP_VERSION ?? "1.1.0"}
                   </span>
                 </div>
               </div>
@@ -773,11 +790,24 @@ export function StockDesk() {
       <main
         ref={mainRef}
         className={cn(
-          "min-h-0 flex-1 overscroll-y-contain bg-[#0f1624] px-4 pt-0 pb-[max(1.5rem,env(safe-area-inset-bottom))] [-webkit-overflow-scrolling:touch]",
+          "flex min-h-0 flex-1 flex-col overscroll-y-contain bg-[#0f1624] px-4 pt-0 pb-[max(1.5rem,env(safe-area-inset-bottom))] [-webkit-overflow-scrolling:touch]",
           listScrollable ? "overflow-y-auto" : "overflow-y-hidden",
         )}
       >
-        {query.trim() && hits.length === 0 ? (
+        {!hasChart ? (
+          <button
+            type="button"
+            onClick={() => setUploadOpen(true)}
+            className="my-3 flex min-h-0 w-full flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-white/20 bg-card/80 px-5 py-10 text-center active:bg-white/[0.06]"
+          >
+            <span className="font-display text-2xl text-white">No chart loaded</span>
+            <span className="mt-2 block text-sm text-stone-400">
+              Tap here to upload a shelf-life PDF or Drive link.
+            </span>
+          </button>
+        ) : null}
+
+        {hasChart && query.trim() && hits.length === 0 ? (
           <p className="mt-5 rounded-2xl border border-dashed border-white/20 bg-card/80 px-5 py-8 text-center">
             <span className="font-display text-2xl text-white">Not on this chart</span>
             <span className="mt-2 block text-sm text-stone-400">
@@ -874,7 +904,7 @@ export function StockDesk() {
           </div>
         ) : null}
 
-        {!query.trim() ? (
+        {hasChart && !query.trim() ? (
           <ChartList
             pack={pack}
             category={category}
@@ -904,7 +934,7 @@ export function StockDesk() {
         ) : null}
       </main>
 
-      {!query.trim() ? (
+      {hasChart && !query.trim() ? (
         <button
           type="button"
           data-go-top=""

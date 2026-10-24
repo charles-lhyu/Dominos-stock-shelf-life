@@ -1,4 +1,4 @@
-import { BUNDLED_PACK, parseChartPack } from "./chart-pack";
+import { EMPTY_PACK, parseChartPack } from "./chart-pack";
 import { toIsoDate } from "./dates";
 import type { ChartPack } from "./types";
 
@@ -13,7 +13,7 @@ export type DeskState = {
 
 const DEFAULT_STATE: DeskState = {
   deliveryDate: "",
-  pack: BUNDLED_PACK,
+  pack: EMPTY_PACK,
   imported: false,
   sourceUrl: "",
 };
@@ -120,7 +120,7 @@ export function setImportedPack(pack: ChartPack, sourceUrl: string) {
 export function clearImportedPack() {
   state = {
     ...state,
-    pack: BUNDLED_PACK,
+    pack: EMPTY_PACK,
     imported: false,
     sourceUrl: "",
   };

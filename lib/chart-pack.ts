@@ -10,6 +10,20 @@ export const BUNDLED_PACK: ChartPack = {
   rules: RULES.map((rule) => ({ ...rule, aliases: [...rule.aliases], sameAs: [...rule.sameAs] })),
 };
 
+/** App starts empty — chart data only appears after import. */
+export const EMPTY_PACK: ChartPack = {
+  chart: {
+    title: "Domino's Stock Shelf Life",
+    audience: "",
+    version: "",
+    issued: "",
+    validUntil: "",
+  },
+  sections: [],
+  footnotes: [],
+  rules: [],
+};
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value != null && !Array.isArray(value);
 }
