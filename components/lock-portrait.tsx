@@ -2,11 +2,16 @@
 
 import { useEffect, useRef, type ReactNode } from "react";
 
+type OrientationWithLock = ScreenOrientation & {
+  lock?: (orientation: string) => Promise<void>;
+};
+
 async function tryLockPortrait() {
-  const orientation = screen.orientation;
-  if (!orientation || typeof orientation.lock !== "function") return;
+  const orientation = screen.orientation as OrientationWithLock | undefined;
+  const lock = orientation?.lock;
+  if (typeof lock !== "function") return;
   try {
-    await orientation.lock("portrait");
+    await lock.call(orientation, "portrait");
   } catch {
     // Many browsers only allow this when installed / fullscreen.
   }
