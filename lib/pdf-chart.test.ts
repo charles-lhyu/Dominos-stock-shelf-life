@@ -36,6 +36,14 @@ describe("PDF shelf life parsing", () => {
     assert.equal(prepped(text, "Olives"), "10 days");
   });
 
+  it("does not give sliced gherkins the previous sauce's 8 days", () => {
+    const text =
+      "Cheese Sauce Date on pack 8 days 15 hours Sliced Gherkins Date on pack 16 days N/A Sweetcorn Date on pack 11 days N/A";
+    assert.equal(prepped(text, "Cheese Sauce"), "8 days");
+    assert.equal(prepped(text, "Sliced Gherkins"), "16 days");
+    assert.equal(prepped(text, "Sweetcorn"), "11 days");
+  });
+
   it("assigns a life column one count per name instead of the first count", () => {
     const columns =
       "Pepperdew Piquante Peppers Pineapple Olives 25 days 10 days 10 days";

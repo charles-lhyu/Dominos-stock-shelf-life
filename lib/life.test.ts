@@ -83,6 +83,17 @@ describe("shelf life dates", () => {
     }
   });
 
+  it("adds sliced gherkins' 16-day life to the prep date", () => {
+    const item = RULES.find((rule) => rule.name === "Sliced Gherkins");
+    assert.ok(item);
+    const prepped = clocksFor(item).find((clock) => clock.id === "prepped");
+    assert.ok(prepped);
+    assert.equal(prepped.value, "16 days");
+    assert.equal(prepped.addDays, 16);
+    const result = projectClock(prepped, "2026-10-24", today);
+    assert.equal(result?.when, "Mon 9 Nov 2026 | 23:59");
+  });
+
   it("adds pepperdew's 25-day life to the prep date", () => {
     const item = RULES.find((rule) => rule.name === "Pepperdew Piquante Peppers");
     assert.ok(item);

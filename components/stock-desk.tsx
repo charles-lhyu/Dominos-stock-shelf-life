@@ -29,6 +29,7 @@ import {
 } from "@/lib/desk-store";
 import { reloadAppToLatest, subscribeAppUpdateAvailable } from "@/lib/reload-app";
 import {
+  calculatedLifeKind,
   categoriesInPack,
   LIFE_KIND_META,
   LIFE_KINDS,
@@ -364,7 +365,8 @@ export function StockDesk() {
   const expandedKinds = activeVariant ? lifeKindsForRule(activeVariant.rule) : [];
   const activeLife = pickLifeKind(
     expandedKinds,
-    lifeFilter !== "all" ? lifeFilter : preferredLife,
+    (lifeFilter !== "all" ? lifeFilter : preferredLife) ??
+      (activeVariant ? calculatedLifeKind(activeVariant.rule) : null),
   );
   const others = expanded ? hits.filter((hit) => hit.name !== expanded) : hits;
 
@@ -576,7 +578,7 @@ export function StockDesk() {
                     />
                   </div>
                   <span className="font-mono text-sm tracking-wide text-stone-500">
-                    v{process.env.NEXT_PUBLIC_APP_VERSION ?? "1.4.3"}
+                    v{process.env.NEXT_PUBLIC_APP_VERSION ?? "1.4.4"}
                   </span>
                 </div>
               </div>

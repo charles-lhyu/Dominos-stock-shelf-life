@@ -5,6 +5,7 @@ import { ChevronDown } from "lucide-react";
 import { WhenDate } from "@/components/when-date";
 import {
   categoriesInPack,
+  calculatedLifeKind,
   datePreview,
   LIFE_KIND_META,
   LIFE_KINDS,
@@ -133,7 +134,10 @@ export function ChartList({
 
       const kinds = lifeKindsForRule(active.rule);
       const lifePreference = lifeFilter !== "all" ? lifeFilter : preferredLife;
-      const activeLife = pickLifeKind(kinds, lifePreference);
+      const activeLife = pickLifeKind(
+        kinds,
+        lifePreference ?? calculatedLifeKind(active.rule),
+      );
       const preview = datePreview(active.rule, deliveryDate, activeLife, today);
 
       return [{ name, variants, active, kinds, activeLife, preview }];

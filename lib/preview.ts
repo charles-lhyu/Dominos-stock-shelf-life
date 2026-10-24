@@ -89,6 +89,19 @@ export function pickLifeKind(kinds: LifeKind[], preferred: LifeKind | null): Lif
   return kinds[0] ?? null;
 }
 
+/**
+ * Life to show before the user picks Delivery, Prepped, or Ambient.
+ * "Date on pack" is not a use-by you can work out from the prep date, so
+ * gherkins and the other ready toppings show their prepped life instead.
+ */
+export function calculatedLifeKind(rule: ShelfRule): LifeKind | null {
+  for (const kind of LIFE_KINDS) {
+    const clocks = clocksForLifeKind(rule, kind);
+    if (clocks.some((clock) => clock.addDays != null || clock.addHours != null)) return kind;
+  }
+  return lifeKindsForRule(rule)[0] ?? null;
+}
+
 export function categoriesInPack(pack: ChartPack): string[] {
   const seen = new Set<string>();
   const order: string[] = [];

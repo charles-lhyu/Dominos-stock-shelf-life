@@ -36,7 +36,7 @@ const DEFAULT_STATE: DeskState = {
 
 /**
  * Older imports copied the previous row's life onto the next product.
- * Pineapple and Olives are 10 days. Pepperdew is 25 days.
+ * Pineapple and Olives are 10 days. Pepperdew is 25 days. Sliced gherkins are 16 days.
  * Leave every other stored life alone.
  */
 export function repairStoredRules(rules: ShelfRule[]): ShelfRule[] {
@@ -51,6 +51,13 @@ export function repairStoredRules(rules: ShelfRule[]): ShelfRule[] {
       rule.prepped !== "25 days"
     ) {
       return { ...rule, prepped: "25 days" };
+    }
+    if (
+      rule.name === "Sliced Gherkins" &&
+      /^\d+ days$/.test(rule.prepped) &&
+      rule.prepped !== "16 days"
+    ) {
+      return { ...rule, prepped: "16 days" };
     }
     return rule;
   });
