@@ -144,7 +144,7 @@ export const RULES: ShelfRule[] = [
     fromDelivery: "14 days",
   }, { "Dominos Cookies with Creme Egg": ["creme egg", "cream egg"] }),
   ...group("frozen", "Desserts", ["Cookies"], { fromDelivery: "17 days" }),
-  ...group("frozen", "Sides", ["Cheese String - Garlic & Herb"], {
+  ...group("frozen", "Cheese", ["Cheese String - Garlic & Herb"], {
     fromDelivery: "7 days",
     note: "Keep stored in a clean, sanitised and lidded container.",
   }, { "Cheese String - Garlic & Herb": ["cheese string", "garlic herb"] }),
@@ -202,7 +202,7 @@ export const RULES: ShelfRule[] = [
     prepped: "10 days",
     ambientUse: "12 hours",
   }, { "Garlic Butter": ["garlic butter"] }),
-  ...group("chilled", "Cheese", ["Liquid Cheese"], {
+  ...group("chilled", "Sauces", ["Liquid Cheese"], {
     unopened: "Date on pack",
     prepped: "6 days",
   }),
@@ -212,7 +212,7 @@ export const RULES: ShelfRule[] = [
     ambientUse: "4 hours",
     note: "12 hours includes 4 hours at ambient, i.e. 8 hours chilled + 4 hours ambient. Do not return the product to the chill after 4 hours — discard what is left.",
   }, { "Prepared Double Decadence bases": ["decadence", "double decadence"] }),
-  ...group("chilled", "Bases", ["Standard Dough (All sizes)"], {
+  ...group("chilled", "Dough", ["Standard Dough (All sizes)"], {
     unopened: "Date on tray",
     prepped: "BB date on tray +1 day",
     note: "Follow the dough proofing chart. Day 6 dough must be in good condition for use.",
@@ -293,7 +293,7 @@ export const RULES: ShelfRule[] = [
     prepped: "35 days",
     note: "Keep ambient.",
   }, { "Habanero Hot Honey": ["hot honey", "habanero"] }),
-  ...group("ambient", "Desserts", ["NEW Biscoff Crumb"], {
+  ...group("ambient", "Toppings", ["NEW Biscoff Crumb"], {
     unopened: "Date on pack",
     prepped: "30 days",
   }, { "NEW Biscoff Crumb": ["biscoff", "lotus"] }),
@@ -303,41 +303,39 @@ export const RULES: ShelfRule[] = [
     note: "Date the cornmeal tub with the BB date from the original packaging.",
   }),
 
-  // Pack-dated storage keeps product-type headings from the chart (not one "Other" dump).
+  // Chart section: OTHER ITEMS — dated on the original packaging.
   ...group(
     "pack",
-    "Sauces",
-    ["Franks Hot Sauce", "Dips Pots", "Chick'N'Dip Dip Pots (inc. NEW Ranch Dip)"],
+    "Other",
+    [
+      "Franks Hot Sauce",
+      "Butter Whirl",
+      "Coleslaw",
+      "Salt Sachets",
+      "Ketchup Sachets",
+      "Dips Pots",
+      "Chick'N'Dip Dip Pots (inc. NEW Ranch Dip)",
+      "Herbs",
+      "Dr Schar Gluten Free Pizza Base",
+      "Drinks",
+      "Ice Cream",
+      "Milk",
+      "Chocolate Disc",
+      "NEW White Chocolate Disc",
+      "Cinnamon Sugar",
+      "Tortilla Chips (Nachos)",
+    ],
     { unopened: "Date on pack" },
     {
       "Franks Hot Sauce": ["franks", "frank's"],
       "Chick'N'Dip Dip Pots (inc. NEW Ranch Dip)": ["chick n dip", "ranch dip", "ranch"],
-    },
-  ),
-  ...group("pack", "Sides", ["Coleslaw", "Tortilla Chips (Nachos)"], { unopened: "Date on pack" }, {
-    "Tortilla Chips (Nachos)": ["nachos", "tortilla"],
-  }),
-  ...group("pack", "Toppings", ["Herbs"], { unopened: "Date on pack" }),
-  ...group("pack", "Bases", ["Dr Schar Gluten Free Pizza Base"], { unopened: "Date on pack" }, {
-    "Dr Schar Gluten Free Pizza Base": ["gluten free", "gluten-free", "schar"],
-  }),
-  ...group(
-    "pack",
-    "Desserts",
-    ["Ice Cream", "Chocolate Disc", "NEW White Chocolate Disc", "Cinnamon Sugar", "Butter Whirl"],
-    { unopened: "Date on pack" },
-    {
+      "Dr Schar Gluten Free Pizza Base": ["gluten free", "gluten-free", "schar"],
       "NEW White Chocolate Disc": ["white chocolate", "chocoate"],
       "Chocolate Disc": ["chocolate disc"],
+      "Tortilla Chips (Nachos)": ["nachos", "tortilla"],
       "Ice Cream": ["ice cream"],
       "Cinnamon Sugar": ["cinnamon"],
     },
-  ),
-  ...group(
-    "pack",
-    "Other",
-    ["Salt Sachets", "Ketchup Sachets", "Drinks", "Milk"],
-    { unopened: "Date on pack" },
   ),
 ];
 

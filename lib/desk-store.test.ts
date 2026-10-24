@@ -64,19 +64,34 @@ describe("stored chart repair", () => {
     assert.equal(repaired?.inUse, "48 hours prepped");
   });
 
-  it("puts pack-dated butter whirl under Desserts when it was dumped in Other", () => {
+  it("puts pack-dated butter whirl back under Other when it was refiled as a dessert", () => {
     const saved: ShelfRule = {
       id: "pack:butter-whirl",
       sectionId: "pack",
-      category: "Other",
+      category: "Desserts",
       name: "Butter Whirl",
       aliases: [],
       sameAs: [],
       unopened: "Date on pack",
     };
     const [repaired] = repairStoredRules([saved]);
-    assert.equal(repaired?.category, "Desserts");
+    assert.equal(repaired?.category, "Other");
     assert.equal(repaired?.unopened, "Date on pack");
+  });
+
+  it("puts dough back under Dough when it was filed as Bases", () => {
+    const saved: ShelfRule = {
+      id: "chilled:standard-dough-all-sizes",
+      sectionId: "chilled",
+      category: "Bases",
+      name: "Standard Dough (All sizes)",
+      aliases: [],
+      sameAs: [],
+      unopened: "Date on tray",
+      prepped: "BB date on tray +1 day",
+    };
+    const [repaired] = repairStoredRules([saved]);
+    assert.equal(repaired?.category, "Dough");
   });
 
   it("leaves a saved 10-day life unchanged", () => {
