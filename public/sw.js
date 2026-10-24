@@ -1,5 +1,5 @@
 /* Minimal service worker so Chromium can offer "Install app". */
-/* v=20261024i — bump to nudge clients after the text conversion table. */
+/* v=20261024j — bump to nudge clients after category corrections. */
 self.addEventListener("install", (event) => {
   self.skipWaiting();
   event.waitUntil(Promise.resolve());

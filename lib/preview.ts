@@ -136,7 +136,7 @@ export type ToppingGroup = "meats" | "veg" | "other";
 const MEAT_NAME =
   /pepperoni|chorizo|nduja|bacon|\bham\b|chicken|beef|sausage|meatball|hot\s*dogs?|tuna|pork|turkey|salami|anchov/i;
 const VEG_NAME =
-  /chill(?:i|y|ies)|mushrooms?|\bonions?\b|peppers?\b|tomatoes?|gherkins?|sweet\s*corn|jalape?[nñ]os?|pineapple|olives?|pepperdew|spinach|rocket|\bcorn\b|cucumber|pickles?/i;
+  /chill(?:i|y|ies)|mushrooms?|\bonions?\b|peppers?\b|tomatoes?|gherkins?|sweet\s*corn|jalape?[nñ]os?|pineapple|olives?|pepperdew|spinach|rocket|\bcorn\b|cucumber|pickles?|\bherbs?\b/i;
 
 export function toppingGroup(name: string): ToppingGroup {
   if (MEAT_NAME.test(name)) return "meats";

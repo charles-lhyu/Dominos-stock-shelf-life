@@ -19,7 +19,7 @@ const JUST_UPDATED_KEY = "app-just-updated";
 const AUTO_CLOSE_MS = 3000;
 
 function currentVersion() {
-  return process.env.NEXT_PUBLIC_APP_VERSION ?? "1.4.5";
+  return process.env.NEXT_PUBLIC_APP_VERSION ?? "1.4.6";
 }
 
 function versionLabel() {

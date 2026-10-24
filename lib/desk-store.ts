@@ -38,28 +38,39 @@ const DEFAULT_STATE: DeskState = {
  * Older imports copied the previous row's life onto the next product.
  * Pineapple and Olives are 10 days. Pepperdew is 25 days. Sliced gherkins are 16 days.
  * Leave every other stored life alone.
+ * Category corrections (mac and cheese as a side, biscoff as a dessert, and the
+ * pack-dated items that were all filed under Other) follow the bundled chart.
  */
+function withChartCategory(rule: ShelfRule): ShelfRule {
+  const bundled = BUNDLED_PACK.rules.find(
+    (item) => item.name === rule.name && item.sectionId === rule.sectionId,
+  );
+  if (!bundled || bundled.category === rule.category) return rule;
+  return { ...rule, category: bundled.category };
+}
+
 export function repairStoredRules(rules: ShelfRule[]): ShelfRule[] {
   return rules.map((rule) => {
-    if (rule.sectionId !== "ready" || !rule.prepped) return rule;
-    if ((rule.name === "Pineapple" || rule.name === "Olives") && rule.prepped === "25 days") {
-      return { ...rule, prepped: "10 days" };
+    const current = withChartCategory(rule);
+    if (current.sectionId !== "ready" || !current.prepped) return current;
+    if ((current.name === "Pineapple" || current.name === "Olives") && current.prepped === "25 days") {
+      return { ...current, prepped: "10 days" };
     }
     if (
-      rule.name === "Pepperdew Piquante Peppers" &&
-      /^\d+ days$/.test(rule.prepped) &&
-      rule.prepped !== "25 days"
+      current.name === "Pepperdew Piquante Peppers" &&
+      /^\d+ days$/.test(current.prepped) &&
+      current.prepped !== "25 days"
     ) {
-      return { ...rule, prepped: "25 days" };
+      return { ...current, prepped: "25 days" };
     }
     if (
-      rule.name === "Sliced Gherkins" &&
-      /^\d+ days$/.test(rule.prepped) &&
-      rule.prepped !== "16 days"
+      current.name === "Sliced Gherkins" &&
+      /^\d+ days$/.test(current.prepped) &&
+      current.prepped !== "16 days"
     ) {
-      return { ...rule, prepped: "16 days" };
+      return { ...current, prepped: "16 days" };
     }
-    return rule;
+    return current;
   });
 }
 
