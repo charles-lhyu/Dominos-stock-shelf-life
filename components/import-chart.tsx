@@ -1,7 +1,17 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Camera, FileText, ImageUp, Link2, QrCode, RotateCcw, Upload, X } from "lucide-react";
+import {
+  Camera,
+  FileText,
+  ImageUp,
+  Link2,
+  QrCode,
+  RefreshCw,
+  RotateCcw,
+  Upload,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -19,6 +29,7 @@ import {
   type DeskState,
 } from "@/lib/desk-store";
 import { parsePdfChartFile } from "@/lib/pdf-chart";
+import { reloadAppToLatest } from "@/lib/reload-app";
 import { fetchRemoteChart } from "@/lib/remote-chart";
 
 type BarcodeDetectorLike = {
@@ -346,6 +357,22 @@ export function ImportChartButton({ desk }: { desk: DeskState }) {
               Use built-in chart
             </Button>
           ) : null}
+
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-11 w-full rounded-xl text-stone-300"
+            disabled={busy}
+            onClick={() => {
+              setBusy(true);
+              setMessage("Updating…");
+              setError(null);
+              void reloadAppToLatest();
+            }}
+          >
+            <RefreshCw className="size-4" />
+            Update app
+          </Button>
 
           {error ? <p className="text-sm text-red-400">{error}</p> : null}
           {message ? (

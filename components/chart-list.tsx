@@ -211,49 +211,89 @@ export function ChartList({
   );
 }
 
+type ListActions = {
+  onOpen: (name: string, sectionId: SectionId) => void;
+  onPreferredSection: (section: SectionId) => void;
+  onPreferredLife: (kind: LifeKind) => void;
+  compact: boolean;
+};
+
+/**
+ * Toppings sticky title row only (pt-1 + text-lg). Subgroup labels stick at this
+ * offset so they sit in the reserved merge slot under the title.
+ */
+const TOPPINGS_TITLE_TOP = "1.75rem";
+/** mt-1 + 11px/leading-5 label + pb-1.5 — matches the reserved slot under Toppings. */
+const TOPPINGS_SUB_SLOT = "2.125rem";
+
 function renderCoverStack(
   blocks: StickyBlock[],
   index: number,
-  actions: {
-    onOpen: (name: string, sectionId: SectionId) => void;
-    onPreferredSection: (section: SectionId) => void;
-    onPreferredLife: (kind: LifeKind) => void;
-    compact: boolean;
-  },
+  actions: ListActions,
 ): ReactNode {
   const block = blocks[index];
   if (!block) return null;
 
-  const sectionTitle = block.label
-    ? `${block.category}, ${block.label}`
-    : block.category;
+  // Consecutive Toppings subgroups share one sticky “Toppings” title with a
+  // reserved sub-slot; Meats / Veg / Other merge into that slot when stuck.
+  if (block.category === "Toppings" && block.label) {
+    let end = index;
+    while (
+      end < blocks.length &&
+      blocks[end]?.category === "Toppings" &&
+      blocks[end]?.label
+    ) {
+      end += 1;
+    }
+    const groups = blocks.slice(index, end);
+    const zBase = 10 + index;
+
+    return (
+      <div key="toppings">
+        <button
+          type="button"
+          aria-label="Go to Toppings"
+          onClick={(event) => {
+            const section = event.currentTarget.parentElement;
+            if (section instanceof HTMLElement) scrollSectionToTop(section);
+          }}
+          className={cn(
+            "sticky top-0 -mx-4 block w-[calc(100%+2rem)] border-b border-white/10 bg-[#0f1624] px-4 pt-1 pb-1.5 text-left",
+            actions.compact && "pr-[11.5rem]",
+          )}
+          style={{ zIndex: zBase }}
+        >
+          <h2 className="font-display text-lg leading-tight text-white">Toppings</h2>
+          {/* Invisible slot — subgroup stickies overlay this when merged. */}
+          <p
+            className="mt-1 h-5 text-[11px] leading-5 font-semibold uppercase tracking-wider invisible"
+            aria-hidden
+          >
+            Meats
+          </p>
+        </button>
+        {renderToppingGroupStack(groups, 0, actions, zBase)}
+        {renderCoverStack(blocks, end, actions)}
+      </div>
+    );
+  }
 
   return (
     <div key={block.key}>
       <button
         type="button"
-        aria-label={`Go to ${sectionTitle}`}
+        aria-label={`Go to ${block.category}`}
         onClick={(event) => {
           const section = event.currentTarget.parentElement;
           if (section instanceof HTMLElement) scrollSectionToTop(section);
         }}
         className={cn(
-          // No border-t — the header’s red rule + opaque hang seals the filter gap above.
           "sticky top-0 -mx-4 block w-[calc(100%+2rem)] border-b border-white/10 bg-[#0f1624] px-4 pt-1 pb-1.5 text-left",
           actions.compact && "pr-[11.5rem]",
         )}
         style={{ zIndex: 10 + index }}
       >
         <h2 className="font-display text-lg leading-tight text-white">{block.category}</h2>
-        <p
-          className={cn(
-            "mt-1 text-[11px] font-semibold uppercase tracking-wider",
-            block.label ? "text-stone-400" : "invisible",
-          )}
-          aria-hidden={block.label ? undefined : true}
-        >
-          {block.label ?? "Meats"}
-        </p>
       </button>
       <ul className="divide-y divide-white/10">
         {block.rows.map((row) => (
@@ -268,6 +308,53 @@ function renderCoverStack(
         ))}
       </ul>
       {renderCoverStack(blocks, index + 1, actions)}
+    </div>
+  );
+}
+
+function renderToppingGroupStack(
+  groups: StickyBlock[],
+  index: number,
+  actions: ListActions,
+  zBase: number,
+): ReactNode {
+  const group = groups[index];
+  if (!group) return null;
+
+  return (
+    <div key={group.key}>
+      <button
+        type="button"
+        aria-label={`Go to Toppings, ${group.label}`}
+        onClick={(event) => {
+          const section = event.currentTarget.parentElement;
+          if (section instanceof HTMLElement) scrollSectionToTop(section);
+        }}
+        className="sticky -mx-4 block w-[calc(100%+2rem)] border-b border-white/10 bg-[#0f1624] px-4 pb-1.5 text-left"
+        style={{
+          top: TOPPINGS_TITLE_TOP,
+          zIndex: zBase + 1 + index,
+          // First group pulls up into the reserved slot so the list isn’t doubled.
+          ...(index === 0 ? { marginTop: `calc(-1 * ${TOPPINGS_SUB_SLOT})` } : {}),
+        }}
+      >
+        <p className="mt-1 h-5 text-[11px] leading-5 font-semibold uppercase tracking-wider text-stone-400">
+          {group.label}
+        </p>
+      </button>
+      <ul className="divide-y divide-white/10">
+        {group.rows.map((row) => (
+          <ProductRow
+            key={`${group.key}:${row.name}`}
+            row={row}
+            compact={actions.compact}
+            onOpen={actions.onOpen}
+            onPreferredSection={actions.onPreferredSection}
+            onPreferredLife={actions.onPreferredLife}
+          />
+        ))}
+      </ul>
+      {renderToppingGroupStack(groups, index + 1, actions, zBase)}
     </div>
   );
 }
