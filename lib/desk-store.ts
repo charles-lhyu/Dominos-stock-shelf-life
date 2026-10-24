@@ -1,6 +1,6 @@
 import { BUNDLED_PACK, EMPTY_PACK, parseChartPack } from "./chart-pack";
 import { addDaysIso, toIsoDate } from "./dates";
-import type { ChartPack } from "./types";
+import type { ChartPack, ShelfRule } from "./types";
 
 const STORAGE_KEY = "shelf-life-desk-v1";
 
@@ -33,6 +33,29 @@ const DEFAULT_STATE: DeskState = {
   imported: false,
   sourceUrl: "",
 };
+
+/**
+ * Older imports copied Pepperdew's 25-day life onto Pineapple and Olives.
+ * Those ready toppings are 10 days. Leave every other stored life alone.
+ */
+export function repairStoredRules(rules: ShelfRule[]): ShelfRule[] {
+  return rules.map((rule) => {
+    if (
+      rule.sectionId === "ready" &&
+      (rule.name === "Pineapple" || rule.name === "Olives") &&
+      rule.prepped === "25 days"
+    ) {
+      return { ...rule, prepped: "10 days" };
+    }
+    return rule;
+  });
+}
+
+function repairPack(pack: ChartPack): ChartPack {
+  const rules = repairStoredRules(pack.rules);
+  if (rules.every((rule, index) => rule === pack.rules[index])) return pack;
+  return { ...pack, rules };
+}
 
 function isPrepTime(value: unknown): value is string {
   return typeof value === "string" && /^\d{2}:\d{2}$/.test(value);
@@ -72,7 +95,7 @@ function readStored(): DeskState {
         return {
           deliveryDate,
           prepTime,
-          pack: parsed.pack,
+          pack: repairPack(parsed.pack),
           imported: true,
           sourceUrl,
         };
@@ -143,7 +166,7 @@ export function setPrepTime(prepTime: string) {
 export function setImportedPack(pack: ChartPack, sourceUrl: string) {
   state = {
     ...state,
-    pack,
+    pack: repairPack(pack),
     imported: true,
     sourceUrl,
   };

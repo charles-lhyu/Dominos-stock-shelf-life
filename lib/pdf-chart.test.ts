@@ -35,4 +35,19 @@ describe("PDF shelf life parsing", () => {
     assert.equal(prepped(text, "Pineapple"), "10 days");
     assert.equal(prepped(text, "Olives"), "10 days");
   });
+
+  it("assigns a life column one count per name instead of the first count", () => {
+    const columns =
+      "Pepperdew Piquante Peppers Pineapple Olives 25 days 10 days 10 days";
+    assert.equal(prepped(columns, "Pepperdew Piquante Peppers"), "25 days");
+    assert.equal(prepped(columns, "Pineapple"), "10 days");
+    assert.equal(prepped(columns, "Olives"), "10 days");
+  });
+
+  it("still shares one life when names are joined with a slash or and", () => {
+    assert.equal(prepped("Pineapple / Olives 9 days", "Pineapple"), "9 days");
+    assert.equal(prepped("Pineapple / Olives 9 days", "Olives"), "9 days");
+    assert.equal(prepped("Pineapple and Olives 9 days", "Pineapple"), "9 days");
+    assert.equal(prepped("Pineapple and Olives 9 days", "Olives"), "9 days");
+  });
 });

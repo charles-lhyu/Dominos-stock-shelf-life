@@ -49,9 +49,55 @@ function findNameSpans(haystack: string): NameSpan[] {
   return spans;
 }
 
-/** Commas, slashes, and "and" between names that share one life cell. */
+/**
+ * Separators between names that share one life cell: `/`, `,`, `&`, `+`, `-`, or "and".
+ * A plain space is the next row. Treating that space as glue joined a whole name
+ * column, so Pepperdew's 25 days was copied onto Pineapple and Olives.
+ */
 function isGlue(gap: string) {
-  return gap.length <= 24 && /^[\s,;/|&+\-]*(?:and)?[\s,;/|&+\-]*$/i.test(gap);
+  const trimmed = gap.trim();
+  if (!trimmed || trimmed.length > 24) return false;
+  return /^(?:and|&|\/|,|\+|-)+$/i.test(trimmed.replace(/\s+/g, ""));
+}
+
+function isWhitespaceGap(gap: string) {
+  return gap.length > 0 && gap.length <= 24 && /^\s+$/.test(gap);
+}
+
+function dayCountsIn(text: string) {
+  return [...text.matchAll(/(\d+)\s*days?/gi)].map((match) => match[1]);
+}
+
+/**
+ * Name column then life column: "Pepperdew Pineapple Olives 25 days 10 days 10 days".
+ * Those counts belong one-per-name. The last name's window would otherwise start
+ * at "25 days" and give Olives Pepperdew's life.
+ */
+function columnDayCounts(spans: NameSpan[], haystack: string) {
+  const assigned = new Map<number, string>();
+  let index = 0;
+  while (index < spans.length) {
+    let end = index;
+    while (
+      end + 1 < spans.length &&
+      isWhitespaceGap(haystack.slice(spans[end].end, spans[end + 1].start))
+    ) {
+      end += 1;
+    }
+    const size = end - index + 1;
+    if (size >= 2) {
+      const from = spans[end].end;
+      const nextStart = end + 1 < spans.length ? spans[end + 1].start : haystack.length;
+      const counts = dayCountsIn(haystack.slice(from, Math.min(nextStart, from + 160)));
+      if (counts.length === size) {
+        for (let offset = 0; offset < size; offset += 1) {
+          assigned.set(index + offset, counts[offset]);
+        }
+      }
+    }
+    index = end + 1;
+  }
+  return assigned;
 }
 
 /**
@@ -167,6 +213,7 @@ export function packFromPdfText(text: string, fileName: string): { ok: true; pac
   const haystack = flat.toLowerCase();
   const spans = findNameSpans(haystack);
   const spanCursor = new Map<string, number>();
+  const columnDays = columnDayCounts(spans, haystack);
 
   for (const base of BUNDLED_PACK.rules) {
     const needle = nameKey(base.name);
@@ -174,7 +221,7 @@ export function packFromPdfText(text: string, fileName: string): { ok: true; pac
     const spanIndex = takeSpan(spans, needle, spanCursor);
     if (spanIndex == null) continue;
     const window = lifeWindow(spans, spanIndex, haystack);
-    const days = window.match(/(\d+)\s*days?/i);
+    const dayCount = columnDays.get(spanIndex) ?? window.match(/(\d+)\s*days?/i)?.[1];
     const hours = window.match(/(\d+)\s*hours?/i);
     const next: ShelfRule = {
       ...base,
@@ -183,9 +230,9 @@ export function packFromPdfText(text: string, fileName: string): { ok: true; pac
       also: base.also ? { ...base.also } : undefined,
     };
 
-    if (days && base.fromDelivery) next.fromDelivery = `${days[1]} days`;
-    if (days && base.prepped && !/date on|bb date/i.test(base.prepped)) {
-      next.prepped = `${days[1]} days`;
+    if (dayCount && base.fromDelivery) next.fromDelivery = `${dayCount} days`;
+    if (dayCount && base.prepped && !/date on|bb date/i.test(base.prepped)) {
+      next.prepped = `${dayCount} days`;
     }
     if (hours && base.inUse && /hour/i.test(base.inUse)) {
       next.inUse = `${hours[1]} hours prepped`;
