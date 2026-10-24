@@ -217,6 +217,12 @@ export function formatCompactDate(date: Date | string): string {
   return `${day}/${month}/${year}`;
 }
 
+/** Short date with weekday: e.g. Fri 24/10/26 */
+export function formatCompactWeekdayDate(date: Date | string): string {
+  const value = typeof date === "string" ? parseIsoDate(date) : date;
+  return `${WEEKDAY[value.getDay()]} ${formatCompactDate(value)}`;
+}
+
 /** Compact toggle format: DD/MM/YY | HH:MM */
 export function formatCompactDateTime(date: Date): string {
   const hours = String(date.getHours()).padStart(2, "0");

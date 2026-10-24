@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { ArrowUp, List, RefreshCw, Search, Tags, Upload, X } from "lucide-react";
 import { ChartList } from "@/components/chart-list";
-import { DateField } from "@/components/date-field";
+import { DateField, PrepTimeClock } from "@/components/date-field";
 import { DragScroll } from "@/components/drag-scroll";
 import { ImportChartButton } from "@/components/import-chart";
 import { LifeCard } from "@/components/life-card";
@@ -24,6 +24,7 @@ import {
   getDeskState,
   hydrateDeskStore,
   setDeliveryDate,
+  setPrepTime,
   subscribeDesk,
 } from "@/lib/desk-store";
 import { reloadAppToLatest, subscribeAppUpdateAvailable } from "@/lib/reload-app";
@@ -160,7 +161,7 @@ export function StockDesk() {
   const savedListCollapsedRef = useRef(false);
   /** Life filter before compact mode — restored when leaving compact. */
   const lifeFilterBeforeCompactRef = useRef<LifeKind | "all">("all");
-  const { pack, deliveryDate, imported } = desk;
+  const { pack, deliveryDate, prepTime, imported } = desk;
   const { chart, footnotes, rules } = pack;
   const categories = categoriesInPack(pack);
   const categoryCounts = Object.fromEntries(
@@ -575,7 +576,7 @@ export function StockDesk() {
                     />
                   </div>
                   <span className="font-mono text-sm tracking-wide text-stone-500">
-                    v{process.env.NEXT_PUBLIC_APP_VERSION ?? "1.3.0"}
+                    v{process.env.NEXT_PUBLIC_APP_VERSION ?? "1.4.0"}
                   </span>
                 </div>
               </div>
@@ -607,12 +608,20 @@ export function StockDesk() {
             aria-hidden={headerCollapsed}
           >
             <div className="min-h-0 overflow-hidden">
-              <DateField
-                label="Delivery date"
-                value={deliveryDate}
-                onChange={setDeliveryDate}
-                onToday={() => setDeliveryDate(toIsoDate(new Date()))}
-              />
+              <div className="min-w-0">
+                <p className="mb-1.5 text-xs font-medium tracking-wide text-stone-400">
+                  Delivery/Prep Date
+                </p>
+                <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-2">
+                  <DateField
+                    value={deliveryDate}
+                    onChange={setDeliveryDate}
+                    onToday={() => setDeliveryDate(toIsoDate(new Date()))}
+                    shortWeekday
+                  />
+                  <PrepTimeClock value={prepTime} onChange={setPrepTime} />
+                </div>
+              </div>
             </div>
           </div>
 
@@ -718,6 +727,7 @@ export function StockDesk() {
                 value={deliveryDate}
                 onChange={setDeliveryDate}
                 dense
+                shortDate
                 iconOnly={headerCollapsed && searchExpanded}
                 className={headerCollapsed && searchExpanded ? undefined : "w-max"}
                 onIconActivate={() => {
@@ -725,6 +735,9 @@ export function StockDesk() {
                   inputRef.current?.blur();
                 }}
               />
+              {headerCollapsed && !searchExpanded ? (
+                <PrepTimeClock compact value={prepTime} onChange={setPrepTime} />
+              ) : null}
               {chartExpired ? (
                 <button
                   type="button"
