@@ -44,6 +44,36 @@ describe("PDF shelf life parsing", () => {
     assert.equal(prepped(text, "Sweetcorn"), "11 days");
   });
 
+  it("stores the cropped PDF row used for each matched product", () => {
+    const text =
+      "Pepperdew Piquante Peppers Date on pack 25 days N/A Pineapple Date on pack 10 days N/A";
+    const result = packFromPdfText(`${HEADER}${text}`, "campaign-5.pdf");
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    const pepperdew = result.pack.rules.find((item) => item.name === "Pepperdew Piquante Peppers");
+    const pineapple = result.pack.rules.find((item) => item.name === "Pineapple");
+    assert.ok(pepperdew?.pdfCrop);
+    assert.match(pepperdew.pdfCrop, /pepperdew/i);
+    assert.match(pepperdew.pdfCrop, /25\s*days/i);
+    assert.ok(pineapple?.pdfCrop);
+    assert.match(pineapple.pdfCrop, /pineapple/i);
+    assert.match(pineapple.pdfCrop, /10\s*days/i);
+  });
+
+  it("keeps Bacon (FROZEN) delivery at 10 days when only the 7-day in-use count follows the name", () => {
+    const text =
+      "Bacon (FROZEN) 7 days You will be notified by Supply Chain NEW Chinese Style Chicken 9 days";
+    const result = packFromPdfText(`${HEADER}${text}`, "campaign-5.pdf");
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    const bacon = result.pack.rules.find(
+      (item) => item.name === "Bacon (FROZEN)" && item.sectionId === "frozen",
+    );
+    assert.ok(bacon);
+    assert.equal(bacon.fromDelivery, "10 days");
+    assert.equal(bacon.inUse, "7 days");
+  });
+
   it("assigns a life column one count per name instead of the first count", () => {
     const columns =
       "Pepperdew Piquante Peppers Pineapple Olives 25 days 10 days 10 days";

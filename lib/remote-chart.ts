@@ -2,7 +2,9 @@ import { parseChartPack } from "./chart-pack";
 import { parsePdfChartBytes } from "./pdf-chart";
 import type { ChartPack } from "./types";
 
-type FetchResult = { ok: true; pack: ChartPack } | { ok: false; error: string };
+type FetchResult =
+  | { ok: true; pack: ChartPack; crops?: Record<string, string> }
+  | { ok: false; error: string };
 
 function looksLikePdf(bytes: Uint8Array, contentType: string, fileName: string) {
   if (fileName.toLowerCase().endsWith(".pdf")) return true;

@@ -48,7 +48,7 @@ export function WhenDate({
       type="button"
       onClick={toggle}
       aria-label={compact ? "Show full dates" : "Show short dates"}
-      className={cn("touch-pan-y text-left", className)}
+      className={cn("touch-pan-y text-left overflow-hidden", className)}
     >
       {compact ? compactLabel : when}
     </button>

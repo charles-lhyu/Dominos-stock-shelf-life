@@ -1,23 +1,28 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { ArrowUp, List, RefreshCw, Search, Tags, Upload, X } from "lucide-react";
+import {
+  ArrowUp,
+  List,
+  RefreshCw,
+  Search,
+  Tags,
+  TriangleAlert,
+  Upload,
+  X,
+} from "lucide-react";
 import { ChartList } from "@/components/chart-list";
-import { DateField, PrepTimeClock } from "@/components/date-field";
+import { CollapsedDateTime } from "@/components/date-field";
 import { DragScroll } from "@/components/drag-scroll";
 import { ImportChartButton } from "@/components/import-chart";
 import { LifeCard } from "@/components/life-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  getCompactDateFormat,
-  subscribeDateFormat,
-  toggleCompactDateFormat,
-} from "@/lib/date-format-store";
-import {
+  daysBetween,
   formatCompactDate,
-  formatShortDate,
   isPastValidUntil,
+  parseIsoDate,
   toIsoDate,
 } from "@/lib/dates";
 import {
@@ -27,7 +32,16 @@ import {
   setPrepTime,
   subscribeDesk,
 } from "@/lib/desk-store";
-import { reloadAppToLatest, subscribeAppUpdateAvailable } from "@/lib/reload-app";
+import {
+  getHiddenNames,
+  getHiddenNamesServer,
+  subscribeHidden,
+} from "@/lib/hidden-store";
+import {
+  appVersionLabel,
+  reloadAppToLatest,
+  subscribeAppUpdateAvailable,
+} from "@/lib/reload-app";
 import {
   calculatedLifeKind,
   categoriesInPack,
@@ -50,6 +64,8 @@ import { cn } from "cn";
 
 const LAST_SECTION_KEY = "shelf-life-last-section";
 const LAST_LIFE_KEY = "shelf-life-last-life";
+/** Warn when delivery/prep is further than this many days from today. */
+const FAR_DATE_DAYS = 14;
 
 function shortHintName(name: string) {
   return name
@@ -124,11 +140,6 @@ function readLastLife(): LifeKind | null {
 
 export function StockDesk() {
   const desk = useSyncExternalStore(subscribeDesk, getDeskState, getDeskState);
-  const compactDates = useSyncExternalStore(
-    subscribeDateFormat,
-    getCompactDateFormat,
-    getCompactDateFormat,
-  );
   const [query, setQuery] = useState("");
   const [picked, setPicked] = useState<string | null>(null);
   const [category, setCategory] = useState<string | "all">("all");
@@ -140,6 +151,7 @@ export function StockDesk() {
   const [today, setToday] = useState<Date | null>(null);
   const [appUpdateAvailable, setAppUpdateAvailable] = useState(false);
   const [updatingApp, setUpdatingApp] = useState(false);
+  const [dateError, setDateError] = useState<"future" | "far" | null>(null);
   /** Title tucked away once the collapse gesture finishes. */
   const [headerCollapsed, setHeaderCollapsed] = useState(false);
   /** List only scrolls when collapsed and the header transition has settled. */
@@ -164,12 +176,24 @@ export function StockDesk() {
   const lifeFilterBeforeCompactRef = useRef<LifeKind | "all">("all");
   const { pack, deliveryDate, prepTime, imported } = desk;
   const { chart, footnotes, rules } = pack;
-  const categories = categoriesInPack(pack);
+  const hiddenNames = useSyncExternalStore(
+    subscribeHidden,
+    getHiddenNames,
+    getHiddenNamesServer,
+  );
+  const hidden = new Set(hiddenNames);
+  const visibleRules = rules.filter((rule) => !hidden.has(rule.name));
+  const categories = categoriesInPack(pack).filter((item) =>
+    visibleRules.some((rule) => rule.category === item),
+  );
   const categoryCounts = Object.fromEntries(
-    categories.map((item) => [item, uniqueNamesInCategory(rules, item).length]),
+    categories.map((item) => [
+      item,
+      uniqueNamesInCategory(visibleRules, item).length,
+    ]),
   ) as Record<string, number>;
-  const categoryTotal = uniqueNamesInCategory(rules, "all").length;
-  const storageCounts = sectionNameCounts(rules, category);
+  const categoryTotal = uniqueNamesInCategory(visibleRules, "all").length;
+  const storageCounts = sectionNameCounts(visibleRules, category);
 
   useEffect(() => {
     hydrateDeskStore();
@@ -179,6 +203,29 @@ export function StockDesk() {
   }, []);
 
   useEffect(() => subscribeAppUpdateAvailable(setAppUpdateAvailable), []);
+
+  function dateErrorFor(iso: string, from: Date): "future" | "far" | null {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return null;
+    const todayIso = toIsoDate(from);
+    if (iso > todayIso) return "future";
+    if (Math.abs(daysBetween(from, parseIsoDate(iso))) > FAR_DATE_DAYS) {
+      return "far";
+    }
+    return null;
+  }
+
+  function onDeliveryDateChange(next: string) {
+    setDeliveryDate(next);
+    setDateError(dateErrorFor(next, today ?? new Date()));
+  }
+
+  useEffect(() => {
+    if (!today || !/^\d{4}-\d{2}-\d{2}$/.test(deliveryDate)) {
+      setDateError(null);
+      return;
+    }
+    setDateError(dateErrorFor(deliveryDate, today));
+  }, [deliveryDate, today]);
 
   // Re-check chart expiry across midnight / long sessions.
   useEffect(() => {
@@ -266,7 +313,7 @@ export function StockDesk() {
     const onTouchStart = (event: TouchEvent) => {
       if (event.touches.length !== 1) return;
       const target = event.target as HTMLElement | null;
-      if (target?.closest("input, textarea, select, [data-go-top]")) {
+      if (target?.closest("input, textarea, select, button, [data-go-top], [data-no-collapse]")) {
         touchActive = false;
         return;
       }
@@ -354,10 +401,10 @@ export function StockDesk() {
     }
   }, [sectionFilter, rules, category]);
 
-  const hits = searchNames(query, rules);
+  const hits = searchNames(query, visibleRules);
   const pickedName = picked && hits.some((hit) => hit.name === picked) ? picked : null;
   const expanded = pickedName ?? (shouldExpand(hits) ? hits[0]?.name ?? null : null);
-  const expandedVariants = expanded ? variantsForName(expanded, rules, pack) : [];
+  const expandedVariants = expanded ? variantsForName(expanded, visibleRules, pack) : [];
   const activeVariant = pickVariant(
     expandedVariants,
     sectionFilter !== "all" ? sectionFilter : preferredSection,
@@ -451,9 +498,33 @@ export function StockDesk() {
       className="relative mx-auto flex h-full min-h-0 w-full max-w-md min-w-0 flex-col overflow-hidden overscroll-none"
     >
       <header className="relative z-20 shrink-0 bg-[#0f1624] text-white after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-2 after:border-t after:border-red-500/30 after:bg-[#0f1624]">
+        {headerCollapsed && appUpdateAvailable ? (
+          <button
+            type="button"
+            disabled={updatingApp}
+            onClick={() => {
+              setUpdatingApp(true);
+              void reloadAppToLatest().finally(() => {
+                setUpdatingApp(false);
+              });
+            }}
+            className="flex w-full items-center justify-center gap-2 bg-orange-500 px-4 pt-[max(0.55rem,env(safe-area-inset-top))] pb-2 text-sm font-semibold text-orange-950 transition-colors hover:bg-orange-400 active:bg-orange-600 disabled:opacity-70"
+            aria-label="Update available — tap to update"
+          >
+            <RefreshCw
+              className={cn("size-3.5 shrink-0", updatingApp && "animate-spin")}
+              aria-hidden
+            />
+            {updatingApp ? "Updating…" : "Update available"}
+          </button>
+        ) : null}
+
         <div
           className={cn(
-            "min-w-0 space-y-2 px-4 pt-[max(0.85rem,env(safe-area-inset-top))] transition-[padding] duration-300",
+            "min-w-0 space-y-2 px-4 transition-[padding] duration-300",
+            headerCollapsed && appUpdateAvailable
+              ? "pt-2"
+              : "pt-[max(0.85rem,env(safe-area-inset-top))]",
             headerCollapsed ? "pb-2" : "pb-3",
           )}
         >
@@ -466,55 +537,42 @@ export function StockDesk() {
             )}
             aria-hidden={headerCollapsed}
           >
-            <div className="min-h-0 overflow-hidden">
+            <div
+              className={cn(
+                "min-h-0",
+                headerCollapsed ? "overflow-hidden" : "overflow-visible",
+              )}
+            >
               <div
                 className={cn(
                   "flex origin-top items-start gap-3 pb-1 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
                   headerCollapsed ? "scale-[0.96]" : "scale-100",
                 )}
               >
-                <div className="min-w-0 flex-1">
-                  <h1 className="font-display text-xl leading-tight text-balance">
+                <div className="min-w-0 flex-1 overflow-visible pt-0.5">
+                  <h1 className="font-display text-xl leading-[1.2] text-balance [overflow-wrap:anywhere]">
                     {chart.title}
                   </h1>
-                  {chart.audience || chart.version || chart.issued || imported ? (
-                    <p className="mt-1.5 text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-red-300">
+                  {chart.audience || chart.version || chart.issued ? (
+                    <p className="mt-1.5 text-[0.65rem] font-semibold uppercase leading-relaxed tracking-[0.14em] text-red-300">
                       {[
                         chart.audience,
                         chart.version,
                         chart.issued
-                          ? `Issued ${
-                              compactDates
-                                ? formatCompactDate(chart.issued)
-                                : formatShortDate(chart.issued)
-                            }`
+                          ? `Issued ${formatCompactDate(chart.issued)}`
                           : "",
-                        imported ? "imported" : "",
                       ]
                         .filter(Boolean)
                         .join(" · ")}
                     </p>
-                  ) : (
+                  ) : !imported ? (
                     <p className="mt-1.5 text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-stone-500">
                       Upload a chart to get started
                     </p>
-                  )}
+                  ) : null}
                   {chart.validUntil && !chartExpired ? (
-                    <p className="mt-1 text-sm font-medium text-amber-200">
-                      Valid until{" "}
-                      <button
-                        type="button"
-                        onClick={toggleCompactDateFormat}
-                        className="underline-offset-2 hover:underline"
-                        aria-label={
-                          compactDates ? "Show full dates" : "Show short dates"
-                        }
-                        tabIndex={headerCollapsed ? -1 : undefined}
-                      >
-                        {compactDates
-                          ? formatCompactDate(chart.validUntil)
-                          : formatShortDate(chart.validUntil)}
-                      </button>
+                    <p className="mt-1 text-sm font-medium leading-snug text-amber-200">
+                      Valid until {formatCompactDate(chart.validUntil)}
                     </p>
                   ) : null}
                   {chartExpired && chart.validUntil ? (
@@ -526,17 +584,13 @@ export function StockDesk() {
                         aria-label="Chart expired — open settings to upload a new chart"
                         tabIndex={headerCollapsed ? -1 : undefined}
                       >
-                        Expired{" "}
-                        {compactDates
-                          ? formatCompactDate(chart.validUntil)
-                          : formatShortDate(chart.validUntil)}{" "}
-                        — upload a new chart
+                        Expired {formatCompactDate(chart.validUntil)} — upload a
+                        new chart
                       </button>
                     </p>
                   ) : null}
                 </div>
-                {/* Extra padding so the update pulse isn’t clipped by collapse overflow. */}
-                <div className="flex shrink-0 flex-col items-center gap-1 p-2">
+                <div className="flex shrink-0 flex-col items-center gap-1 pt-1">
                   <div className="flex items-center gap-2">
                     {chartExpired ? (
                       <button
@@ -578,7 +632,7 @@ export function StockDesk() {
                     />
                   </div>
                   <span className="font-mono text-sm tracking-wide text-stone-500">
-                    v{process.env.NEXT_PUBLIC_APP_VERSION ?? "1.4.9"}
+                    {appVersionLabel()}
                   </span>
                 </div>
               </div>
@@ -592,11 +646,7 @@ export function StockDesk() {
               className="block w-full truncate text-left text-xs font-medium text-amber-300 underline-offset-2 hover:underline"
               aria-label="Chart expired — open settings to upload a new chart"
             >
-              Expired{" "}
-              {compactDates
-                ? formatCompactDate(chart.validUntil)
-                : formatShortDate(chart.validUntil)}{" "}
-              — upload a new chart
+              Expired {formatCompactDate(chart.validUntil)} — upload a new chart
             </button>
           ) : null}
 
@@ -609,20 +659,24 @@ export function StockDesk() {
             )}
             aria-hidden={headerCollapsed}
           >
-            <div className="min-h-0 overflow-hidden">
+            <div
+              className={cn(
+                "min-h-0",
+                headerCollapsed ? "overflow-hidden" : "overflow-visible",
+              )}
+            >
               <div className="min-w-0">
                 <p className="mb-1.5 text-xs font-medium tracking-wide text-stone-400">
                   Delivery/Prep Date
                 </p>
-                <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-2">
-                  <DateField
-                    value={deliveryDate}
-                    onChange={setDeliveryDate}
-                    onToday={() => setDeliveryDate(toIsoDate(new Date()))}
-                    shortWeekday
-                  />
-                  <PrepTimeClock value={prepTime} onChange={setPrepTime} />
-                </div>
+                <CollapsedDateTime
+                  date={deliveryDate}
+                  onDateChange={onDeliveryDateChange}
+                  time={prepTime}
+                  onTimeChange={setPrepTime}
+                  fill
+                  shortWeekday
+                />
               </div>
             </div>
           </div>
@@ -721,25 +775,21 @@ export function StockDesk() {
                 "flex shrink-0 items-center gap-1.5 self-stretch transition-[max-width,opacity,margin] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
                 !headerCollapsed
                   ? "pointer-events-none max-w-0 overflow-hidden opacity-0"
-                  : "max-w-[18rem] opacity-100",
+                  : "max-w-[24rem] opacity-100",
               )}
               aria-hidden={!headerCollapsed}
             >
-              <DateField
-                value={deliveryDate}
-                onChange={setDeliveryDate}
-                dense
-                shortDate
+              <CollapsedDateTime
+                date={deliveryDate}
+                onDateChange={onDeliveryDateChange}
+                time={prepTime}
+                onTimeChange={setPrepTime}
                 iconOnly={headerCollapsed && searchExpanded}
-                className={headerCollapsed && searchExpanded ? undefined : "w-max"}
                 onIconActivate={() => {
                   setSearchFocused(false);
                   inputRef.current?.blur();
                 }}
               />
-              {headerCollapsed && !searchExpanded ? (
-                <PrepTimeClock compact value={prepTime} onChange={setPrepTime} />
-              ) : null}
               {chartExpired ? (
                 <button
                   type="button"
@@ -1000,6 +1050,10 @@ export function StockDesk() {
               deliveryDate={deliveryDate}
               prepTime={prepTime}
               focusKind={activeLife}
+              onHidden={() => {
+                setPicked(null);
+                setQuery("");
+              }}
             />
           </div>
         ) : null}
@@ -1024,7 +1078,7 @@ export function StockDesk() {
                       <span className="text-sm text-stone-400">
                         {preview
                           ? `${preview.short} · ${preview.rule.prepped || preview.rule.fromDelivery || preview.rule.unopened}`
-                          : rulesForName(hit.name, rules)[0]?.prepped}
+                          : rulesForName(hit.name, visibleRules)[0]?.prepped}
                       </span>
                     </button>
                   </li>
@@ -1116,6 +1170,47 @@ export function StockDesk() {
       >
         <ArrowUp className="size-5" strokeWidth={2.5} />
       </button>
+
+      <div
+        role="status"
+        aria-live="polite"
+        className={cn(
+          "pointer-events-none absolute inset-x-0 z-30 flex justify-center px-4 transition-all duration-300",
+          "bottom-[max(1.25rem,env(safe-area-inset-bottom))]",
+          dateError
+            ? "translate-y-0 opacity-100"
+            : "translate-y-3 opacity-0",
+        )}
+      >
+        <div className="flex max-w-sm items-start gap-2.5 rounded-2xl bg-red-600/55 px-4 py-3 text-left shadow-[0_12px_32px_rgba(0,0,0,0.35)] ring-1 ring-red-200/35 backdrop-blur-md">
+          <TriangleAlert
+            className="mt-0.5 size-4 shrink-0 text-red-50"
+            strokeWidth={2.5}
+            aria-hidden
+          />
+          <div className="min-w-0">
+            {dateError === "far" ? (
+              <>
+                <p className="text-sm font-semibold text-white">
+                  Wow — you&apos;re time travelling
+                </p>
+                <p className="mt-0.5 text-xs leading-snug text-red-50/90">
+                  That date is more than {FAR_DATE_DAYS} days from today. Pick a
+                  closer delivery/prep date.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-semibold text-white">Future date</p>
+                <p className="mt-0.5 text-xs leading-snug text-red-50/90">
+                  Delivery/prep date can&apos;t be after today. Tap Today or pick
+                  today or earlier.
+                </p>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

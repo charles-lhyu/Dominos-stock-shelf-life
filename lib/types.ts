@@ -28,6 +28,13 @@ export type ShelfRule = {
   ambientUse?: string;
   also?: ShelfAlso;
   note?: string;
+  /**
+   * PDF import only: the text window cropped after this product name
+   * (life cells the parser read). Absent on the bundled chart.
+   */
+  pdfCrop?: string;
+  /** JPEG data URL of the PDF row strip — kept in memory / IndexedDB, not localStorage. */
+  pdfCropImage?: string;
 };
 
 export type ChartMeta = {

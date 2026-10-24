@@ -1,7 +1,13 @@
 "use client";
 
-import type { ReactNode } from "react";
-import { ChevronDown } from "lucide-react";
+import { useState, useSyncExternalStore, type ReactNode } from "react";
+import {
+  ArrowDownAZ,
+  ArrowDownWideNarrow,
+  ArrowUpAZ,
+  ArrowUpWideNarrow,
+  ChevronDown,
+} from "lucide-react";
 import { WhenDate } from "@/components/when-date";
 import {
   categoriesInPack,
@@ -21,6 +27,11 @@ import {
   type LifeKind,
   type ToppingGroup,
 } from "@/lib/preview";
+import {
+  getHiddenNames,
+  getHiddenNamesServer,
+  subscribeHidden,
+} from "@/lib/hidden-store";
 import type { ChartPack, SectionId } from "@/lib/types";
 import { cn } from "cn";
 
@@ -45,6 +56,50 @@ type StickyBlock = {
   label: string | null;
   rows: ListRow[];
 };
+
+/** Per-section list order: chart default, ascending, or descending. */
+type DirSort = "off" | "asc" | "desc";
+
+function sortRowsByDate(rows: ListRow[], sort: DirSort): ListRow[] {
+  if (sort === "off") return rows;
+  return [...rows].sort((a, b) => {
+    const aTime = a.preview.at?.getTime();
+    const bTime = b.preview.at?.getTime();
+    // Rows without a calculated date stay at the end.
+    if (aTime == null && bTime == null) return a.name.localeCompare(b.name);
+    if (aTime == null) return 1;
+    if (bTime == null) return -1;
+    if (aTime !== bTime) {
+      return sort === "asc" ? aTime - bTime : bTime - aTime;
+    }
+    return a.name.localeCompare(b.name);
+  });
+}
+
+function sortRowsByName(rows: ListRow[], sort: DirSort): ListRow[] {
+  if (sort === "off") return rows;
+  return [...rows].sort((a, b) => {
+    const cmp = a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+    return sort === "asc" ? cmp : -cmp;
+  });
+}
+
+function sortSectionRows(
+  rows: ListRow[],
+  nameSort: DirSort,
+  dateSort: DirSort,
+): ListRow[] {
+  // Date sort wins when active; otherwise alphabetical.
+  if (dateSort !== "off") return sortRowsByDate(rows, dateSort);
+  if (nameSort !== "off") return sortRowsByName(rows, nameSort);
+  return rows;
+}
+
+function nextDirSort(current: DirSort): DirSort {
+  if (current === "off") return "asc";
+  if (current === "asc") return "desc";
+  return "off";
+}
 
 const SECTION_TONE: Record<SectionId, string> = {
   frozen: "bg-sky-500/25 text-sky-100 ring-sky-400/40",
@@ -71,13 +126,29 @@ const LIFE_ACTIVE: Record<LifeKind, string> = {
 function scrollSectionToTop(section: HTMLElement) {
   const scroller = section.closest("main");
   if (!(scroller instanceof HTMLElement)) return;
-  // Use the non-sticky section wrapper — a stuck header's getBoundingClientRect
-  // is already at the top, so scrolling it does nothing.
+  // Aim the first row just under the sticky category header so the header
+  // doesn't cover it (flush section-top scroll sits the row too high).
+  const header = section.querySelector<HTMLElement>("[data-section-header]");
+  const firstRow =
+    section.querySelector<HTMLElement>(":scope > ul > li") ??
+    section.querySelector<HTMLElement>("ul li");
+  // Include sticky `top` offset (e.g. Toppings subgroups sit under the title).
+  const stickTop = header ? Number.parseFloat(getComputedStyle(header).top) || 0 : 0;
+  const headerH = (header?.offsetHeight ?? 0) + stickTop;
+  const anchor = firstRow ?? section;
   const top =
-    section.getBoundingClientRect().top -
+    anchor.getBoundingClientRect().top -
     scroller.getBoundingClientRect().top +
-    scroller.scrollTop;
+    scroller.scrollTop -
+    (firstRow ? headerH : 0);
   scroller.scrollTop = Math.max(0, top);
+}
+
+function sectionRootFromEvent(event: { currentTarget: EventTarget | null }) {
+  const el = event.currentTarget;
+  if (!(el instanceof HTMLElement)) return null;
+  const root = el.closest("[data-section-root]");
+  return root instanceof HTMLElement ? root : null;
 }
 
 export function ChartList({
@@ -111,11 +182,19 @@ export function ChartList({
   onOpen: (name: string, sectionId: SectionId) => void;
   compact?: boolean;
 }) {
+  const [nameSortByKey, setNameSortByKey] = useState<Record<string, DirSort>>({});
+  const [dateSortByKey, setDateSortByKey] = useState<Record<string, DirSort>>({});
+  const hiddenNames = useSyncExternalStore(
+    subscribeHidden,
+    getHiddenNames,
+    getHiddenNamesServer,
+  );
+  const hidden = new Set(hiddenNames);
   const categories = category === "all" ? categoriesInPack(pack) : [category];
   const blocks: StickyBlock[] = [];
 
   for (const cat of categories) {
-    const names = uniqueNamesInCategory(pack.rules, cat);
+    const names = uniqueNamesInCategory(pack.rules, cat).filter((name) => !hidden.has(name));
     const rows: ListRow[] = names.flatMap((name) => {
       let variants = variantsForName(name, pack.rules, pack).filter(
         (item) => item.rule.category === cat,
@@ -168,11 +247,28 @@ export function ChartList({
     }
   }
 
-  const actions = {
+  const actions: ListActions = {
     onOpen,
     onPreferredSection,
     onPreferredLife,
     compact,
+    nameSortByKey,
+    dateSortByKey,
+    onToggleNameSort: (key) => {
+      setNameSortByKey((prev) => ({
+        ...prev,
+        [key]: nextDirSort(prev[key] ?? "off"),
+      }));
+      // Prefer one active sort mode at a time.
+      setDateSortByKey((prev) => ({ ...prev, [key]: "off" }));
+    },
+    onToggleDateSort: (key) => {
+      setDateSortByKey((prev) => ({
+        ...prev,
+        [key]: nextDirSort(prev[key] ?? "off"),
+      }));
+      setNameSortByKey((prev) => ({ ...prev, [key]: "off" }));
+    },
   };
   const activeLife: LifeKind = lifeFilter === "all" ? "stock" : lifeFilter;
 
@@ -222,7 +318,93 @@ type ListActions = {
   onPreferredSection: (section: SectionId) => void;
   onPreferredLife: (kind: LifeKind) => void;
   compact: boolean;
+  nameSortByKey: Record<string, DirSort>;
+  dateSortByKey: Record<string, DirSort>;
+  onToggleNameSort: (key: string) => void;
+  onToggleDateSort: (key: string) => void;
 };
+
+function CategoryNameSortButton({
+  sortKey,
+  sort,
+  onToggle,
+}: {
+  sortKey: string;
+  sort: DirSort;
+  onToggle: (key: string) => void;
+}) {
+  const label =
+    sort === "asc"
+      ? "Sorted A to Z. Tap for Z to A."
+      : sort === "desc"
+        ? "Sorted Z to A. Tap for chart order."
+        : "Sort this section A to Z";
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      aria-pressed={sort !== "off"}
+      onClick={(event) => {
+        event.stopPropagation();
+        onToggle(sortKey);
+      }}
+      className={cn(
+        "inline-flex size-8 shrink-0 items-center justify-center rounded-lg ring-1 transition-colors",
+        sort === "off"
+          ? "text-stone-400 ring-white/15 hover:bg-white/10 hover:text-white"
+          : "bg-sky-400/20 text-sky-100 ring-sky-400/40 hover:bg-sky-400/30",
+      )}
+    >
+      {sort === "desc" ? (
+        <ArrowUpAZ className="size-3.5" strokeWidth={2.25} aria-hidden />
+      ) : (
+        <ArrowDownAZ className="size-3.5" strokeWidth={2.25} aria-hidden />
+      )}
+    </button>
+  );
+}
+
+function CategoryDateSortButton({
+  sortKey,
+  sort,
+  onToggle,
+}: {
+  sortKey: string;
+  sort: DirSort;
+  onToggle: (key: string) => void;
+}) {
+  const label =
+    sort === "asc"
+      ? "Sorted by date, soonest first. Tap for latest first."
+      : sort === "desc"
+        ? "Sorted by date, latest first. Tap for chart order."
+        : "Sort this section by use-by date";
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      aria-pressed={sort !== "off"}
+      onClick={(event) => {
+        event.stopPropagation();
+        onToggle(sortKey);
+      }}
+      className={cn(
+        "inline-flex size-8 shrink-0 items-center justify-center rounded-lg ring-1 transition-colors",
+        sort === "off"
+          ? "text-stone-400 ring-white/15 hover:bg-white/10 hover:text-white"
+          : "bg-amber-400/20 text-amber-100 ring-amber-400/40 hover:bg-amber-400/30",
+      )}
+    >
+      {sort === "desc" ? (
+        <ArrowUpWideNarrow className="size-3.5" strokeWidth={2.25} aria-hidden />
+      ) : (
+        <ArrowDownWideNarrow className="size-3.5" strokeWidth={2.25} aria-hidden />
+      )}
+    </button>
+  );
+}
 
 /**
  * Toppings sticky title row only (pt-1 + text-lg). Subgroup labels stick at this
@@ -254,55 +436,102 @@ function renderCoverStack(
     const groups = blocks.slice(index, end);
     const zBase = 10 + index;
 
+    const toppingsNameSort = actions.nameSortByKey.Toppings ?? "off";
+    const toppingsDateSort = actions.dateSortByKey.Toppings ?? "off";
+
     return (
-      <div key="toppings">
-        <button
-          type="button"
-          aria-label="Go to Toppings"
-          onClick={(event) => {
-            const section = event.currentTarget.parentElement;
-            if (section instanceof HTMLElement) scrollSectionToTop(section);
-          }}
+      <div key="toppings" data-section-root="">
+        <div
+          data-section-header=""
           className={cn(
-            "sticky top-0 -mx-4 block w-[calc(100%+2rem)] border-b border-white/10 bg-[#0f1624] px-4 pt-1 pb-1.5 text-left",
+            "sticky top-0 -mx-4 flex w-[calc(100%+2rem)] items-start gap-2 border-b border-white/10 bg-[#0f1624] px-4 pt-1 pb-1.5",
             actions.compact && "pr-[11.5rem]",
           )}
           style={{ zIndex: zBase }}
         >
-          <h2 className="font-display text-lg leading-tight text-white">Toppings</h2>
-          {/* Invisible slot — subgroup stickies overlay this when merged. */}
-          <p
-            className="mt-1 h-5 text-[11px] leading-5 font-semibold uppercase tracking-wider invisible"
-            aria-hidden
-          >
-            Meats
-          </p>
-        </button>
+          <div className="flex min-w-0 flex-1 items-start gap-1.5">
+            <button
+              type="button"
+              aria-label="Go to Toppings"
+              onClick={(event) => {
+                const section = sectionRootFromEvent(event);
+                if (section) scrollSectionToTop(section);
+              }}
+              className="min-w-0 flex-1 text-left"
+            >
+              <h2 className="font-display text-lg leading-tight text-white">Toppings</h2>
+              {/* Invisible slot — subgroup stickies overlay this when merged. */}
+            <p
+              className="mt-1 h-5 text-[11px] leading-5 font-semibold uppercase tracking-wider invisible"
+              aria-hidden
+            >
+              Meats
+            </p>
+            </button>
+            <CategoryNameSortButton
+              sortKey="Toppings"
+              sort={toppingsNameSort}
+              onToggle={actions.onToggleNameSort}
+            />
+          </div>
+          <div className="flex max-w-[46%] shrink-0 justify-end pt-0.5">
+            <CategoryDateSortButton
+              sortKey="Toppings"
+              sort={toppingsDateSort}
+              onToggle={actions.onToggleDateSort}
+            />
+          </div>
+        </div>
         {renderToppingGroupStack(groups, 0, actions, zBase)}
         {renderCoverStack(blocks, end, actions)}
       </div>
     );
   }
 
+  const nameSort = actions.nameSortByKey[block.key] ?? "off";
+  const dateSort = actions.dateSortByKey[block.key] ?? "off";
+  const rows = sortSectionRows(block.rows, nameSort, dateSort);
+
   return (
-    <div key={block.key}>
-      <button
-        type="button"
-        aria-label={`Go to ${block.category}`}
-        onClick={(event) => {
-          const section = event.currentTarget.parentElement;
-          if (section instanceof HTMLElement) scrollSectionToTop(section);
-        }}
+    <div key={block.key} data-section-root="">
+      <div
+        data-section-header=""
         className={cn(
-          "sticky top-0 -mx-4 block w-[calc(100%+2rem)] border-b border-white/10 bg-[#0f1624] px-4 pt-1 pb-1.5 text-left",
+          "sticky top-0 -mx-4 flex w-[calc(100%+2rem)] items-center gap-2 border-b border-white/10 bg-[#0f1624] px-4 pt-1 pb-1.5",
           actions.compact && "pr-[11.5rem]",
         )}
         style={{ zIndex: 10 + index }}
       >
-        <h2 className="font-display text-lg leading-tight text-white">{block.category}</h2>
-      </button>
+        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+          <button
+            type="button"
+            aria-label={`Go to ${block.category}`}
+            onClick={(event) => {
+              const section = sectionRootFromEvent(event);
+              if (section) scrollSectionToTop(section);
+            }}
+            className="min-w-0 flex-1 text-left"
+          >
+            <h2 className="font-display text-lg leading-tight text-white">
+              {block.category}
+            </h2>
+          </button>
+          <CategoryNameSortButton
+            sortKey={block.key}
+            sort={nameSort}
+            onToggle={actions.onToggleNameSort}
+          />
+        </div>
+        <div className="flex max-w-[46%] shrink-0 justify-end">
+          <CategoryDateSortButton
+            sortKey={block.key}
+            sort={dateSort}
+            onToggle={actions.onToggleDateSort}
+          />
+        </div>
+      </div>
       <ul className="divide-y divide-white/10">
-        {block.rows.map((row) => (
+        {rows.map((row) => (
           <ProductRow
             key={`${block.key}:${row.name}`}
             row={row}
@@ -327,14 +556,19 @@ function renderToppingGroupStack(
   const group = groups[index];
   if (!group) return null;
 
+  const nameSort = actions.nameSortByKey.Toppings ?? "off";
+  const dateSort = actions.dateSortByKey.Toppings ?? "off";
+  const rows = sortSectionRows(group.rows, nameSort, dateSort);
+
   return (
-    <div key={group.key}>
+    <div key={group.key} data-section-root="">
       <button
         type="button"
+        data-section-header=""
         aria-label={`Go to Toppings, ${group.label}`}
         onClick={(event) => {
-          const section = event.currentTarget.parentElement;
-          if (section instanceof HTMLElement) scrollSectionToTop(section);
+          const section = sectionRootFromEvent(event);
+          if (section) scrollSectionToTop(section);
         }}
         className="sticky -mx-4 block w-[calc(100%+2rem)] border-b border-white/10 bg-[#0f1624] px-4 pb-1.5 text-left"
         style={{
@@ -349,7 +583,7 @@ function renderToppingGroupStack(
         </p>
       </button>
       <ul className="divide-y divide-white/10">
-        {group.rows.map((row) => (
+        {rows.map((row) => (
           <ProductRow
             key={`${group.key}:${row.name}`}
             row={row}
@@ -398,8 +632,8 @@ function ProductRow({
           }
         }}
       >
-        <div className="flex w-full min-w-0 items-center gap-2">
-          <div className="flex min-w-0 flex-1 items-center gap-1.5">
+        <div className="flex w-full min-w-0 items-center gap-2 overflow-hidden">
+          <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
             <span className="min-w-0 truncate font-medium text-white">{name}</span>
             {compact ? (
               <CompactStorageTag
@@ -413,7 +647,7 @@ function ProductRow({
             when={preview.when}
             at={preview.at}
             className={cn(
-              "shrink-0 touch-pan-y text-sm leading-snug whitespace-nowrap",
+              "max-w-[46%] shrink truncate touch-pan-y text-right text-sm leading-snug",
               preview.tone === "neutral" ? "text-stone-400" : "text-emerald-300",
             )}
           />

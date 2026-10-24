@@ -69,6 +69,7 @@ function parseRule(value: unknown, index: number): ShelfRule | string {
     ambientUse: asString(value.ambientUse) ?? undefined,
     also: parseAlso(value.also),
     note: asString(value.note) ?? undefined,
+    pdfCrop: asString(value.pdfCrop) ?? undefined,
   };
 }
 

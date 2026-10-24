@@ -5,7 +5,13 @@ const JUST_UPDATED_KEY = "app-just-updated";
 const UPDATE_POLL_MS = 60_000;
 
 function localVersion() {
-  return process.env.NEXT_PUBLIC_APP_VERSION ?? "1.4.9";
+  return process.env.NEXT_PUBLIC_APP_VERSION ?? "1.4.10";
+}
+
+/** Header / notice label — `dev` on local preview, real semver in production. */
+export function appVersionLabel() {
+  if (process.env.NODE_ENV === "development") return "dev";
+  return `v${localVersion()}`;
 }
 
 async function fetchRemoteVersion(): Promise<string | null> {
@@ -24,8 +30,8 @@ async function fetchRemoteVersion(): Promise<string | null> {
 
 /** True when hosted app-version.json differs from this shell. */
 export async function checkAppUpdateAvailable(): Promise<boolean> {
-  // Local preview always surfaces the Settings update pulse.
-  if (process.env.NODE_ENV === "development") return true;
+  // Local `next dev` never shows the update pulse (avoids version-file noise).
+  if (process.env.NODE_ENV === "development") return false;
   const remote = await fetchRemoteVersion();
   if (remote == null) return false;
   return remote !== localVersion();

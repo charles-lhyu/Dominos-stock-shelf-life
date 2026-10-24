@@ -13,17 +13,14 @@ import {
   subscribeAppStatus,
   type AppStatusKind,
 } from "@/lib/app-status";
+import { appVersionLabel } from "@/lib/reload-app";
 
 const VERSION_KEY = "app-version";
 const JUST_UPDATED_KEY = "app-just-updated";
 const AUTO_CLOSE_MS = 3000;
 
 function currentVersion() {
-  return process.env.NEXT_PUBLIC_APP_VERSION ?? "1.4.9";
-}
-
-function versionLabel() {
-  return `v${currentVersion()}`;
+  return process.env.NEXT_PUBLIC_APP_VERSION ?? "1.4.10";
 }
 
 /**
@@ -86,7 +83,7 @@ export function UpdateNotice() {
               {updated ? "App updated" : "App up to date"}
             </DialogTitle>
             <span className="shrink-0 pt-1 font-mono text-sm tracking-wide text-stone-400">
-              {versionLabel()}
+              {appVersionLabel()}
             </span>
           </div>
           <DialogDescription className="text-stone-400">

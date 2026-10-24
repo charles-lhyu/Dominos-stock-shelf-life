@@ -1,21 +1,13 @@
 import { BUNDLED_PACK, EMPTY_PACK, parseChartPack } from "./chart-pack";
-import { addDaysIso, toIsoDate } from "./dates";
+import { toIsoDate } from "./dates";
+import { clearHiddenNames } from "./hidden-store";
 import type { ChartPack, ShelfRule } from "./types";
 
 const STORAGE_KEY = "shelf-life-desk-v1";
 
-/** Sample Campaign 5 chart for `next dev`, marked expired so update prompts show. */
+/** Sample Campaign 5 chart for `next dev` (real valid-until — no fake expiry/update cues). */
 const PREVIEW_PACK: ChartPack =
-  process.env.NODE_ENV === "development"
-    ? {
-        ...BUNDLED_PACK,
-        chart: {
-          ...BUNDLED_PACK.chart,
-          // Yesterday — past valid-until so Settings / collapsed update cues preview.
-          validUntil: addDaysIso(new Date(), -1),
-        },
-      }
-    : EMPTY_PACK;
+  process.env.NODE_ENV === "development" ? BUNDLED_PACK : EMPTY_PACK;
 
 export type DeskState = {
   deliveryDate: string;
@@ -75,10 +67,30 @@ export function repairStoredRules(rules: ShelfRule[]): ShelfRule[] {
   });
 }
 
+function repairChartMeta(pack: ChartPack): ChartPack["chart"] {
+  const base = BUNDLED_PACK.chart;
+  const chart = pack.chart;
+  return {
+    title: chart.title?.trim() || base.title,
+    audience: chart.audience?.trim() || base.audience,
+    version: chart.version?.trim() || base.version,
+    issued: chart.issued?.trim() || base.issued,
+    validUntil: chart.validUntil?.trim() || base.validUntil,
+  };
+}
+
 function repairPack(pack: ChartPack): ChartPack {
   const rules = repairStoredRules(pack.rules);
-  if (rules.every((rule, index) => rule === pack.rules[index])) return pack;
-  return { ...pack, rules };
+  const chart = repairChartMeta(pack);
+  const rulesChanged = rules.some((rule, index) => rule !== pack.rules[index]);
+  const chartChanged =
+    chart.title !== pack.chart.title ||
+    chart.audience !== pack.chart.audience ||
+    chart.version !== pack.chart.version ||
+    chart.issued !== pack.chart.issued ||
+    chart.validUntil !== pack.chart.validUntil;
+  if (!rulesChanged && !chartChanged) return pack;
+  return { ...pack, chart, rules };
 }
 
 function isPrepTime(value: unknown): value is string {
@@ -131,6 +143,13 @@ function readStored(): DeskState {
   }
 }
 
+function packForStorage(pack: ChartPack): ChartPack {
+  return {
+    ...pack,
+    rules: pack.rules.map(({ pdfCropImage: _image, ...rule }) => rule),
+  };
+}
+
 function writeStored(next: DeskState) {
   try {
     window.localStorage.setItem(
@@ -139,7 +158,7 @@ function writeStored(next: DeskState) {
         deliveryDate: next.deliveryDate,
         prepTime: next.prepTime || null,
         sourceUrl: next.sourceUrl,
-        pack: next.imported ? next.pack : null,
+        pack: next.imported ? packForStorage(next.pack) : null,
       }),
     );
   } catch {
@@ -188,6 +207,8 @@ export function setPrepTime(prepTime: string) {
 }
 
 export function setImportedPack(pack: ChartPack, sourceUrl: string) {
+  // New campaign / chart — bring every product back into the list.
+  clearHiddenNames();
   state = {
     ...state,
     pack: repairPack(pack),

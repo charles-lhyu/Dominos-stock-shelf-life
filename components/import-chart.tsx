@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
   Camera,
+  Eye,
   FileText,
   ImageUp,
   Link2,
@@ -28,16 +29,26 @@ import {
 import { Input } from "@/components/ui/input";
 import { parseChartPack } from "@/lib/chart-pack";
 import { formatLongDate } from "@/lib/dates";
+import { readDebug, subscribeDebug, writeDebug } from "@/lib/debug-store";
+import {
+  clearHiddenNames,
+  getHiddenNames,
+  getHiddenNamesServer,
+  subscribeHidden,
+  unhideProductName,
+} from "@/lib/hidden-store";
 import {
   clearImportedPack,
   setImportedPack,
   type DeskState,
 } from "@/lib/desk-store";
+import { clearPdfCrops, replacePdfCrops } from "@/lib/pdf-crop-images";
 import { parsePdfChartFile } from "@/lib/pdf-chart";
 import { prepClockTime } from "@/lib/preview";
 import { reloadAppToLatest } from "@/lib/reload-app";
 import { textConversionTable } from "@/lib/text-conversion";
 import { fetchRemoteChart } from "@/lib/remote-chart";
+import type { ChartPack } from "@/lib/types";
 import {
   DEFAULT_ROTATION_PREF,
   getRotationPref,
@@ -58,31 +69,6 @@ declare global {
   interface Window {
     BarcodeDetector?: BarcodeDetectorCtor;
   }
-}
-
-const DEBUG_KEY = "shelf-life-debug";
-const debugListeners = new Set<() => void>();
-
-function subscribeDebug(listener: () => void) {
-  debugListeners.add(listener);
-  return () => debugListeners.delete(listener);
-}
-
-function readDebug() {
-  try {
-    return window.localStorage.getItem(DEBUG_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
-function writeDebug(on: boolean) {
-  try {
-    window.localStorage.setItem(DEBUG_KEY, on ? "1" : "0");
-  } catch {
-    // Ignore quota / private mode.
-  }
-  for (const listener of debugListeners) listener();
 }
 
 export function ImportChartButton({
@@ -108,6 +94,11 @@ export function ImportChartButton({
   const photoRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const debug = useSyncExternalStore(subscribeDebug, readDebug, () => false);
+  const hiddenNames = useSyncExternalStore(
+    subscribeHidden,
+    getHiddenNames,
+    getHiddenNamesServer,
+  );
   const rotation = useSyncExternalStore(
     subscribeRotation,
     () => {
@@ -141,15 +132,29 @@ export function ImportChartButton({
     setScanning(false);
   }
 
+  async function commitPack(
+    pack: ChartPack,
+    source: string,
+    crops?: Record<string, string>,
+    message?: string,
+  ) {
+    if (crops && Object.keys(crops).length > 0) {
+      await replacePdfCrops(crops);
+    } else {
+      await clearPdfCrops();
+    }
+    setImportedPack(pack, source);
+    setMessage(message ?? `Loaded ${pack.rules.length} products.`);
+    setError(null);
+    stopScan();
+  }
+
   async function applyPack(pack: Awaited<ReturnType<typeof parseChartPack>>, source: string) {
     if (!pack.ok) {
       setError(pack.error);
       return;
     }
-    setImportedPack(pack.pack, source);
-    setMessage(`Loaded ${pack.pack.rules.length} products.`);
-    setError(null);
-    stopScan();
+    await commitPack(pack.pack, source);
   }
 
   async function importFromUrl(nextUrl: string) {
@@ -162,10 +167,13 @@ export function ImportChartButton({
       setError(result.error);
       return;
     }
-    setImportedPack(result.pack, nextUrl.trim());
     setUrl(nextUrl.trim());
-    setMessage(`Loaded ${result.pack.rules.length} products from Google Drive.`);
-    stopScan();
+    await commitPack(
+      result.pack,
+      nextUrl.trim(),
+      result.crops,
+      `Loaded ${result.pack.rules.length} products from Google Drive.`,
+    );
   }
 
   async function importFromText(raw: string, source: string) {
@@ -315,7 +323,12 @@ export function ImportChartButton({
               setError(null);
               setMessage(null);
               try {
-                await applyPack(await parsePdfChartFile(file), file.name);
+                const result = await parsePdfChartFile(file);
+                if (!result.ok) {
+                  setError(result.error);
+                  return;
+                }
+                await commitPack(result.pack, file.name, result.crops);
               } catch {
                 setError("Could not read that PDF.");
               } finally {
@@ -408,9 +421,10 @@ export function ImportChartButton({
           {desk.imported ? (
             <Button
               type="button"
-              variant="ghost"
-              className="h-11 w-full rounded-xl text-stone-300"
+              variant="outline"
+              className="h-12 w-full justify-start rounded-xl border-white/10 text-base text-white"
               onClick={() => {
+                void clearPdfCrops();
                 clearImportedPack();
                 setUrl("");
                 setMessage("Chart cleared.");
@@ -418,7 +432,7 @@ export function ImportChartButton({
               }}
             >
               <RotateCcw className="size-4" />
-              Clear chart
+              Reset chart
             </Button>
           ) : null}
 
@@ -503,6 +517,51 @@ export function ImportChartButton({
               Pick portrait or landscape, then lock so phones stay in that view. Wide
               desktops never rotate.
             </p>
+          </div>
+
+          <div className="space-y-3 border-t border-white/10 pt-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">
+                Hidden ({hiddenNames.length})
+              </p>
+              {hiddenNames.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => clearHiddenNames()}
+                  className="text-xs font-medium text-stone-400 underline-offset-2 hover:text-white hover:underline"
+                >
+                  Show all
+                </button>
+              ) : null}
+            </div>
+            {hiddenNames.length === 0 ? (
+              <p className="text-sm text-stone-500">
+                Hide a product from its detail card. It leaves the list until you
+                show it again here.
+              </p>
+            ) : (
+              <ul className="divide-y divide-white/10 rounded-xl border border-white/10 bg-card">
+                {hiddenNames.map((name) => (
+                  <li
+                    key={name}
+                    className="flex items-center gap-2 px-3 py-2.5"
+                  >
+                    <span className="min-w-0 flex-1 truncate text-sm text-white">
+                      {name}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => unhideProductName(name)}
+                      className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-white/5 px-2 py-1.5 text-xs font-semibold text-stone-200 ring-1 ring-white/15 transition-colors hover:bg-white/10 hover:text-white"
+                      aria-label={`Show ${name} in the list again`}
+                    >
+                      <Eye className="size-3.5" aria-hidden />
+                      Show
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
 
           <div className="space-y-3 border-t border-white/10 pt-3">
