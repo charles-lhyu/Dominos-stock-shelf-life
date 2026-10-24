@@ -323,7 +323,7 @@ export const RULES: ShelfRule[] = [
   ...group(
     "pack",
     "Desserts",
-    ["Ice Cream", "Chocolate Disc", "NEW White Chocolate Disc", "Cinnamon Sugar"],
+    ["Ice Cream", "Chocolate Disc", "NEW White Chocolate Disc", "Cinnamon Sugar", "Butter Whirl"],
     { unopened: "Date on pack" },
     {
       "NEW White Chocolate Disc": ["white chocolate", "chocoate"],
@@ -335,7 +335,7 @@ export const RULES: ShelfRule[] = [
   ...group(
     "pack",
     "Other",
-    ["Butter Whirl", "Salt Sachets", "Ketchup Sachets", "Drinks", "Milk"],
+    ["Salt Sachets", "Ketchup Sachets", "Drinks", "Milk"],
     { unopened: "Date on pack" },
   ),
 ];

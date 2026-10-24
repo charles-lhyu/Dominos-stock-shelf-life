@@ -64,6 +64,21 @@ describe("stored chart repair", () => {
     assert.equal(repaired?.inUse, "48 hours prepped");
   });
 
+  it("moves a saved butter whirl row from Other to Desserts", () => {
+    const saved: ShelfRule = {
+      id: "pack:butter-whirl",
+      sectionId: "pack",
+      category: "Other",
+      name: "Butter Whirl",
+      aliases: [],
+      sameAs: [],
+      unopened: "Date on pack",
+    };
+    const [repaired] = repairStoredRules([saved]);
+    assert.equal(repaired?.category, "Desserts");
+    assert.equal(repaired?.unopened, "Date on pack");
+  });
+
   it("leaves a saved 10-day life unchanged", () => {
     const original = [rule("Pineapple", "10 days"), rule("Olives", "10 days")];
     const repaired = repairStoredRules(original);

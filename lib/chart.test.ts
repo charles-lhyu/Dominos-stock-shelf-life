@@ -29,6 +29,11 @@ describe("Campaign 5 chart", () => {
     assert.equal(rule("Ice Cream", "pack").category, "Desserts");
     assert.equal(rule("Chocolate Disc", "pack").category, "Desserts");
     assert.equal(rule("Cinnamon Sugar", "pack").category, "Desserts");
+    assert.equal(rule("Butter Whirl", "pack").category, "Desserts");
+    assert.equal(rule("Cornmeal", "ambient").category, "Other");
+    assert.equal(rule("Salt Sachets", "pack").category, "Other");
+    assert.equal(rule("Ketchup Sachets", "pack").category, "Other");
+    assert.equal(rule("Drinks", "pack").category, "Other");
     assert.equal(rule("Milk", "pack").category, "Other");
     assert.equal(rule("Mac n Cheese", "frozen").inUse, "48 hours prepped");
     assert.equal(rule("Pepperoni", "frozen").fromDelivery, "12 days");
