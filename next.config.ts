@@ -5,10 +5,12 @@ import type { NextConfig } from "next";
 const isGithubPages = process.env.GITHUB_PAGES === "true";
 const repoName = "Dominos-stock-shelf-life";
 const basePath = isGithubPages ? `/${repoName}` : "";
+
+// Numeric app version: 1.<GitHub run> on Pages, 1.0 locally.
+const runNumber = process.env.GITHUB_RUN_NUMBER;
 const appVersion =
-  process.env.GITHUB_SHA?.slice(0, 7) ??
   process.env.NEXT_PUBLIC_APP_VERSION ??
-  "dev";
+  (runNumber && /^\d+$/.test(runNumber) ? `1.${runNumber}` : "1.0");
 
 // Static file the Update button fetches to see if a newer deploy is live.
 writeFileSync(
@@ -36,7 +38,7 @@ const nextConfig: NextConfig = {
       }),
   env: {
     NEXT_PUBLIC_BASE_PATH: basePath,
-    // GitHub Actions sets GITHUB_SHA — used to detect a fresh deploy after Update.
+    // GitHub Actions sets GITHUB_RUN_NUMBER — used for Update checks + UI.
     NEXT_PUBLIC_APP_VERSION: appVersion,
   },
   turbopack: {

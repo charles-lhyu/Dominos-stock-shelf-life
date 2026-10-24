@@ -4,7 +4,7 @@ import { withBasePath } from "@/lib/base-path";
 const JUST_UPDATED_KEY = "app-just-updated";
 
 function localVersion() {
-  return process.env.NEXT_PUBLIC_APP_VERSION ?? "dev";
+  return process.env.NEXT_PUBLIC_APP_VERSION ?? "1.0";
 }
 
 async function fetchRemoteVersion(): Promise<string | null> {

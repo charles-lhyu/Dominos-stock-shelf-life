@@ -474,7 +474,7 @@ export function StockDesk() {
                 <div className="flex shrink-0 flex-col items-center gap-1 p-0.5">
                   <ImportChartButton desk={desk} />
                   <span className="font-mono text-sm tracking-wide text-stone-500">
-                    {process.env.NEXT_PUBLIC_APP_VERSION ?? "dev"}
+                    v{process.env.NEXT_PUBLIC_APP_VERSION ?? "1.0"}
                   </span>
                 </div>
               </div>
