@@ -29,6 +29,15 @@ describe("stored chart repair", () => {
     assert.equal(repaired[3]?.prepped, "6 days");
   });
 
+  it("puts pepperdew back to 25 days when a saved chart copied the previous row", () => {
+    const repaired = repairStoredRules([
+      rule("Pepperdew Piquante Peppers", "11 days"),
+      rule("Pineapple", "10 days"),
+    ]);
+    assert.equal(repaired[0]?.prepped, "25 days");
+    assert.equal(repaired[1]?.prepped, "10 days");
+  });
+
   it("leaves a saved 10-day life unchanged", () => {
     const original = [rule("Pineapple", "10 days"), rule("Olives", "10 days")];
     const repaired = repairStoredRules(original);

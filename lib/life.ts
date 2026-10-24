@@ -15,8 +15,6 @@ export type Clock = {
   prompt: string;
   mode: "date" | "datetime" | "display";
   addDays?: number;
-  /** When true, the start date counts as day 1 (12 days from 1 Oct ends 12 Oct). */
-  inclusiveDays?: boolean;
   addHours?: number;
   cap?: boolean;
   /** Prepped/in-use life that applies while the product stays chilled. */
@@ -126,7 +124,6 @@ function clockFromValue(
       prompt: promptFor(label, "date"),
       mode: "date",
       addDays: Number(days[1]),
-      inclusiveDays: true,
       chilled,
     };
   }
@@ -179,13 +176,7 @@ export function projectClock(clock: Clock, raw: string, today: Date): ClockResul
 
   if (clock.mode === "date") {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
-    const shift =
-      clock.addDays == null
-        ? 0
-        : clock.inclusiveDays
-          ? Math.max(0, clock.addDays - 1)
-          : clock.addDays;
-    const iso = clock.addDays != null ? addDaysToIso(value, shift) : value;
+    const iso = clock.addDays != null ? addDaysToIso(value, clock.addDays) : value;
     const readout = readExpiry(iso, today);
     const from = clock.addDays
       ? `From ${formatLongDate(value)}. ${readout.detail}.`

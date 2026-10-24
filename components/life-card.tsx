@@ -260,7 +260,7 @@ export function LifeCard({
         ) : null}
         {clocks.some((clock) => clock.addDays) ? (
           <p className="mt-4 text-xs text-stone-500">
-            The date you enter is day 1. 12 days from 1 Oct ends on 12 Oct.
+            The life is added to the date you enter. 12 days from 1 Oct is 13 Oct.
           </p>
         ) : null}
       </div>

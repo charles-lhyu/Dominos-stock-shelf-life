@@ -7,7 +7,7 @@ import { capAdvice, clocksFor, projectClock } from "./life";
 const today = new Date(2026, 9, 23);
 
 describe("shelf life dates", () => {
-  it("counts the start date as day 1", () => {
+  it("adds the life to the date you enter", () => {
     const pepperoni = RULES.find(
       (rule) => rule.name === "Pepperoni" && rule.sectionId === "frozen",
     );
@@ -15,10 +15,9 @@ describe("shelf life dates", () => {
     const delivery = clocksFor(pepperoni).find((clock) => clock.id === "delivery");
     assert.ok(delivery);
     assert.equal(delivery.addDays, 12);
-    assert.equal(delivery.inclusiveDays, true);
     const result = projectClock(delivery, "2026-10-01", today);
-    assert.equal(result?.when, "Mon 12 Oct 2026");
-    assert.equal(addDaysToIso("2026-10-01", 11), "2026-10-12");
+    assert.equal(result?.when, "Tue 13 Oct 2026");
+    assert.equal(addDaysToIso("2026-10-01", 12), "2026-10-13");
     const later = addHoursToLocal("2026-09-10T10:00", 48);
     assert.equal(later.getDate(), 12);
     assert.equal(later.getHours(), 10);
@@ -30,7 +29,6 @@ describe("shelf life dates", () => {
     const clocks = clocksFor(dough);
     assert.equal(clocks.length, 1);
     assert.equal(clocks[0]?.addDays, 1);
-    assert.equal(clocks[0]?.inclusiveDays, undefined);
     const result = projectClock(clocks[0], "2026-10-23", today);
     assert.equal(result?.when, "Sat 24 Oct 2026");
   });
@@ -68,11 +66,11 @@ describe("shelf life dates", () => {
       today,
     );
     assert.ok(pack && prepped);
-    assert.equal(prepped.when, "Mon 12 Oct 2026 | 23:59");
-    assert.match(capAdvice([pack, prepped]) ?? "", /12 Oct 2026/);
+    assert.equal(prepped.when, "Tue 13 Oct 2026 | 23:59");
+    assert.match(capAdvice([pack, prepped]) ?? "", /13 Oct 2026/);
   });
 
-  it("ends pineapple and olives 10 days from prep, counting the start date", () => {
+  it("adds the 10-day life to the pineapple and olives prep date", () => {
     for (const name of ["Pineapple", "Olives"]) {
       const item = RULES.find((rule) => rule.name === name && rule.sectionId === "ready");
       assert.ok(item);
@@ -81,7 +79,18 @@ describe("shelf life dates", () => {
       assert.equal(prepped.value, "10 days");
       assert.equal(prepped.addDays, 10);
       const result = projectClock(prepped, "2026-10-01", today);
-      assert.equal(result?.when, "Sat 10 Oct 2026 | 23:59");
+      assert.equal(result?.when, "Sun 11 Oct 2026 | 23:59");
     }
+  });
+
+  it("adds pepperdew's 25-day life to the prep date", () => {
+    const item = RULES.find((rule) => rule.name === "Pepperdew Piquante Peppers");
+    assert.ok(item);
+    const prepped = clocksFor(item).find((clock) => clock.id === "prepped");
+    assert.ok(prepped);
+    assert.equal(prepped.value, "25 days");
+    assert.equal(prepped.addDays, 25);
+    const result = projectClock(prepped, "2026-10-24", today);
+    assert.equal(result?.when, "Wed 18 Nov 2026 | 23:59");
   });
 });

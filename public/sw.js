@@ -1,5 +1,5 @@
 /* Minimal service worker so Chromium can offer "Install app". */
-/* v=20261024f — bump to nudge clients after the pineapple and olives prep date repair. */
+/* v=20261024g — bump to nudge clients after pepperdew use-by dates add the full life. */
 self.addEventListener("install", (event) => {
   self.skipWaiting();
   event.waitUntil(Promise.resolve());

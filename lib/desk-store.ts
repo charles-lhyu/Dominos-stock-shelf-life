@@ -35,17 +35,22 @@ const DEFAULT_STATE: DeskState = {
 };
 
 /**
- * Older imports copied Pepperdew's 25-day life onto Pineapple and Olives.
- * Those ready toppings are 10 days. Leave every other stored life alone.
+ * Older imports copied the previous row's life onto the next product.
+ * Pineapple and Olives are 10 days. Pepperdew is 25 days.
+ * Leave every other stored life alone.
  */
 export function repairStoredRules(rules: ShelfRule[]): ShelfRule[] {
   return rules.map((rule) => {
-    if (
-      rule.sectionId === "ready" &&
-      (rule.name === "Pineapple" || rule.name === "Olives") &&
-      rule.prepped === "25 days"
-    ) {
+    if (rule.sectionId !== "ready" || !rule.prepped) return rule;
+    if ((rule.name === "Pineapple" || rule.name === "Olives") && rule.prepped === "25 days") {
       return { ...rule, prepped: "10 days" };
+    }
+    if (
+      rule.name === "Pepperdew Piquante Peppers" &&
+      /^\d+ days$/.test(rule.prepped) &&
+      rule.prepped !== "25 days"
+    ) {
+      return { ...rule, prepped: "25 days" };
     }
     return rule;
   });
