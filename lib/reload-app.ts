@@ -5,7 +5,7 @@ const JUST_UPDATED_KEY = "app-just-updated";
 const UPDATE_POLL_MS = 60_000;
 
 function localVersion() {
-  return process.env.NEXT_PUBLIC_APP_VERSION ?? "1.4.4";
+  return process.env.NEXT_PUBLIC_APP_VERSION ?? "1.4.5";
 }
 
 async function fetchRemoteVersion(): Promise<string | null> {

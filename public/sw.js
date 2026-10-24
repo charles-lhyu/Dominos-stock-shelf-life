@@ -1,5 +1,5 @@
 /* Minimal service worker so Chromium can offer "Install app". */
-/* v=20261024h — bump to nudge clients after gherkins shows its 16-day use-by. */
+/* v=20261024i — bump to nudge clients after the text conversion table. */
 self.addEventListener("install", (event) => {
   self.skipWaiting();
   event.waitUntil(Promise.resolve());

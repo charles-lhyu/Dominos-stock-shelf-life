@@ -578,7 +578,7 @@ export function StockDesk() {
                     />
                   </div>
                   <span className="font-mono text-sm tracking-wide text-stone-500">
-                    v{process.env.NEXT_PUBLIC_APP_VERSION ?? "1.4.4"}
+                    v{process.env.NEXT_PUBLIC_APP_VERSION ?? "1.4.5"}
                   </span>
                 </div>
               </div>
@@ -994,10 +994,11 @@ export function StockDesk() {
               </DragScroll>
             ) : null}
             <LifeCard
-              key={`${activeVariant.rule.id}:${deliveryDate}:${activeLife ?? "all"}`}
+              key={`${activeVariant.rule.id}:${deliveryDate}:${prepTime}:${activeLife ?? "all"}`}
               rule={activeVariant.rule}
               pack={pack}
               deliveryDate={deliveryDate}
+              prepTime={prepTime}
               focusKind={activeLife}
             />
           </div>
@@ -1038,6 +1039,7 @@ export function StockDesk() {
             pack={pack}
             category={category}
             deliveryDate={deliveryDate}
+            prepTime={prepTime}
             today={today}
             sectionFilter={sectionFilter}
             lifeFilter={lifeFilter}

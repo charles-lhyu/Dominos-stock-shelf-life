@@ -84,6 +84,7 @@ export function ChartList({
   pack,
   category,
   deliveryDate,
+  prepTime = "",
   today,
   sectionFilter,
   lifeFilter,
@@ -98,6 +99,7 @@ export function ChartList({
   pack: ChartPack;
   category: string | "all";
   deliveryDate: string;
+  prepTime?: string;
   today: Date | null;
   sectionFilter: SectionId | "all";
   lifeFilter: LifeKind | "all";
@@ -138,7 +140,7 @@ export function ChartList({
         kinds,
         lifePreference ?? calculatedLifeKind(active.rule),
       );
-      const preview = datePreview(active.rule, deliveryDate, activeLife, today);
+      const preview = datePreview(active.rule, deliveryDate, activeLife, today, prepTime);
 
       return [{ name, variants, active, kinds, activeLife, preview }];
     });

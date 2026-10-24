@@ -210,9 +210,27 @@ export function isPrintedPackDate(clock: Clock) {
   return clock.mode === "date" && clock.cap === true && clock.addDays == null;
 }
 
-function projectWithDelivery(clock: Clock, deliveryDate: string, today: Date) {
-  const raw = clock.mode === "datetime" ? `${deliveryDate}T00:00` : deliveryDate;
-  return projectClock(clock, raw, today);
+/** Locked `HH:MM`, or the clock time on `today` when prep time is live. */
+export function prepClockTime(prepTime: string, today: Date) {
+  if (/^\d{2}:\d{2}$/.test(prepTime)) return prepTime;
+  const hours = String(today.getHours()).padStart(2, "0");
+  const minutes = String(today.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
+
+/** Day clocks start on the delivery/prep date. Hour clocks start at the prep time. */
+export function clockStartValue(
+  clock: Clock,
+  deliveryDate: string,
+  prepTime: string,
+  today: Date,
+) {
+  if (clock.mode === "datetime") return `${deliveryDate}T${prepClockTime(prepTime, today)}`;
+  return deliveryDate;
+}
+
+function projectWithDelivery(clock: Clock, deliveryDate: string, today: Date, prepTime: string) {
+  return projectClock(clock, clockStartValue(clock, deliveryDate, prepTime, today), today);
 }
 
 export function datePreview(
@@ -220,6 +238,7 @@ export function datePreview(
   deliveryDate: string,
   preferredKind: LifeKind | null = null,
   today?: Date | null,
+  prepTime = "",
 ): DatePreview {
   const kinds = lifeKindsForRule(rule);
   const kind = pickLifeKind(kinds, preferredKind);
@@ -233,7 +252,7 @@ export function datePreview(
     clocks.find((clock) => clock.mode === "datetime");
 
   if (preferred && deliveryDate && today) {
-    const result = projectWithDelivery(preferred, deliveryDate, today);
+    const result = projectWithDelivery(preferred, deliveryDate, today, prepTime);
     if (result) {
       return {
         when: result.when,

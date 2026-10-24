@@ -6,7 +6,7 @@ import { WhenDate } from "@/components/when-date";
 import { sectionFromPack } from "@/lib/chart-pack";
 import { toIsoDate } from "@/lib/dates";
 import { capAdvice, clocksFor, projectClock, type Clock, type ClockResult } from "@/lib/life";
-import { isPrintedPackDate, LIFE_KIND_META, type LifeKind } from "@/lib/preview";
+import { isPrintedPackDate, LIFE_KIND_META, prepClockTime, type LifeKind } from "@/lib/preview";
 import type { ChartPack, ShelfRule, StockStatus } from "@/lib/types";
 import { cn } from "cn";
 
@@ -32,13 +32,18 @@ function nowLocal() {
   return `${toIsoDate(now)}T${hours}:${minutes}`;
 }
 
-function initialValues(rule: ShelfRule, deliveryDate: string): Record<string, string> {
+function initialValues(
+  rule: ShelfRule,
+  deliveryDate: string,
+  prepTime: string,
+  today: Date,
+): Record<string, string> {
   if (!deliveryDate) return {};
   const values: Record<string, string> = {};
   for (const clock of clocksFor(rule)) {
     if (isPrintedPackDate(clock)) continue;
     if (clock.mode === "date") values[clock.id] = deliveryDate;
-    if (clock.mode === "datetime") values[clock.id] = `${deliveryDate}T00:00`;
+    if (clock.mode === "datetime") values[clock.id] = `${deliveryDate}T${prepClockTime(prepTime, today)}`;
   }
   return values;
 }
@@ -74,11 +79,13 @@ export function LifeCard({
   rule,
   pack,
   deliveryDate = "",
+  prepTime = "",
   focusKind = null,
 }: {
   rule: ShelfRule;
   pack: ChartPack;
   deliveryDate?: string;
+  prepTime?: string;
   focusKind?: LifeKind | null;
 }) {
   const clocks = clocksFor(rule);
@@ -105,10 +112,10 @@ export function LifeCard({
   const [checkedAt, setCheckedAt] = useState<Date | null>(null);
 
   useEffect(() => {
-    const seeded = initialValues(rule, deliveryDate);
+    const seeded = initialValues(rule, deliveryDate, prepTime, new Date());
     setValues(seeded);
     setCheckedAt(Object.keys(seeded).length > 0 ? new Date() : null);
-  }, [rule.id, deliveryDate]);
+  }, [rule.id, deliveryDate, prepTime]);
 
   const results = checkedAt
     ? clocks

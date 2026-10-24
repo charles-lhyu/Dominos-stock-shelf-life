@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { RULES } from "./chart";
+import { addHoursToLocal, formatDateTime } from "./dates";
 import { calculatedLifeKind, datePreview, lifeKindsForRule, pickLifeKind } from "./preview";
 
 const today = new Date(2026, 9, 24);
@@ -34,5 +35,12 @@ describe("list use-by dates", () => {
     const item = rule("Sliced Gherkins");
     const preview = datePreview(item, "2026-10-24", "stock", today);
     assert.equal(preview.when, "Date on pack");
+  });
+
+  it("starts an hour life at the locked prep time", () => {
+    const item = rule("Garlic Butter");
+    const at = new Date(2026, 9, 24, 14, 30);
+    const preview = datePreview(item, "2026-10-24", "ambient", at, "14:30");
+    assert.equal(preview.when, formatDateTime(addHoursToLocal("2026-10-24T14:30", 12)));
   });
 });

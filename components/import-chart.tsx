@@ -27,13 +27,16 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { parseChartPack } from "@/lib/chart-pack";
+import { formatLongDate } from "@/lib/dates";
 import {
   clearImportedPack,
   setImportedPack,
   type DeskState,
 } from "@/lib/desk-store";
 import { parsePdfChartFile } from "@/lib/pdf-chart";
+import { prepClockTime } from "@/lib/preview";
 import { reloadAppToLatest } from "@/lib/reload-app";
+import { textConversionTable } from "@/lib/text-conversion";
 import { fetchRemoteChart } from "@/lib/remote-chart";
 import {
   DEFAULT_ROTATION_PREF,
@@ -55,6 +58,31 @@ declare global {
   interface Window {
     BarcodeDetector?: BarcodeDetectorCtor;
   }
+}
+
+const DEBUG_KEY = "shelf-life-debug";
+const debugListeners = new Set<() => void>();
+
+function subscribeDebug(listener: () => void) {
+  debugListeners.add(listener);
+  return () => debugListeners.delete(listener);
+}
+
+function readDebug() {
+  try {
+    return window.localStorage.getItem(DEBUG_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeDebug(on: boolean) {
+  try {
+    window.localStorage.setItem(DEBUG_KEY, on ? "1" : "0");
+  } catch {
+    // Ignore quota / private mode.
+  }
+  for (const listener of debugListeners) listener();
 }
 
 export function ImportChartButton({
@@ -79,6 +107,7 @@ export function ImportChartButton({
   const scanTimer = useRef<number | null>(null);
   const photoRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const debug = useSyncExternalStore(subscribeDebug, readDebug, () => false);
   const rotation = useSyncExternalStore(
     subscribeRotation,
     () => {
@@ -478,6 +507,34 @@ export function ImportChartButton({
 
           <div className="space-y-3 border-t border-white/10 pt-3">
             <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">
+              Debug
+            </p>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={debug}
+              aria-label="Show text conversion table"
+              onClick={() => writeDebug(!debug)}
+              className={cn(
+                "flex h-12 w-full items-center justify-between rounded-xl border px-3 text-left text-base text-white",
+                debug ? "border-sky-400/40 bg-sky-500/15" : "border-white/10 bg-card",
+              )}
+            >
+              <span>Text conversion table</span>
+              <span
+                className={cn(
+                  "text-xs font-semibold uppercase tracking-wide",
+                  debug ? "text-sky-300" : "text-stone-500",
+                )}
+              >
+                {debug ? "On" : "Off"}
+              </span>
+            </button>
+            {debug ? <TextConvertTable desk={desk} /> : null}
+          </div>
+
+          <div className="space-y-3 border-t border-white/10 pt-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">
               App
             </p>
             <Button
@@ -510,5 +567,60 @@ export function ImportChartButton({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function TextConvertTable({ desk }: { desk: DeskState }) {
+  const now = new Date();
+  const rows = textConversionTable(desk.pack, desk.deliveryDate, desk.prepTime, now);
+  const start = desk.deliveryDate ? formatLongDate(desk.deliveryDate) : "not set";
+  const clock = prepClockTime(desk.prepTime, now);
+
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-stone-500">
+        Use-bys are from the Delivery/Prep Date ({start}). Pack dates stay the printed date.
+        Dough uses that date as the tray date. Hour clocks start at {clock}
+        {desk.prepTime ? "" : " (live clock)"}. A life that differs from the chart is marked.
+      </p>
+      {rows.length === 0 ? (
+        <p className="text-sm text-stone-400">Import a chart to see conversions.</p>
+      ) : (
+        <div className="max-h-80 overflow-auto rounded-xl ring-1 ring-white/10">
+          <table className="w-full min-w-[36rem] border-collapse text-left text-xs text-stone-200">
+            <thead className="sticky top-0 z-10 bg-zinc-950 text-stone-400">
+              <tr>
+                <th className="px-2 py-2 font-semibold">Product</th>
+                <th className="px-2 py-2 font-semibold">Section</th>
+                <th className="px-2 py-2 font-semibold">Field</th>
+                <th className="px-2 py-2 font-semibold">Text</th>
+                <th className="px-2 py-2 font-semibold">Use by</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr
+                  key={`${row.section}:${row.name}:${row.field}:${row.text}`}
+                  className="border-t border-white/10"
+                >
+                  <td className="px-2 py-1.5 align-top text-white">{row.name}</td>
+                  <td className="px-2 py-1.5 align-top">{row.section}</td>
+                  <td className="px-2 py-1.5 align-top">{row.field}</td>
+                  <td
+                    className={cn(
+                      "px-2 py-1.5 align-top",
+                      row.text.includes(" · chart ") && "text-amber-300",
+                    )}
+                  >
+                    {row.text}
+                  </td>
+                  <td className="px-2 py-1.5 align-top whitespace-nowrap">{row.useBy}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
   );
 }
