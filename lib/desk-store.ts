@@ -38,8 +38,8 @@ const DEFAULT_STATE: DeskState = {
  * Older imports copied the previous row's life onto the next product.
  * Pineapple and Olives are 10 days. Pepperdew is 25 days. Sliced gherkins are 16 days.
  * Leave every other stored life alone.
- * Category corrections (mac and cheese as a side, biscoff as a dessert, and the
- * pack-dated items that were all filed under Other) follow the bundled chart.
+ * Categories follow the Campaign 5 chart. A saved pack that was refiled into
+ * menu categories is put back to the chart headings.
  */
 function withChartCategory(rule: ShelfRule): ShelfRule {
   const bundled = BUNDLED_PACK.rules.find(

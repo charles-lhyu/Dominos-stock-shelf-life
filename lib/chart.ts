@@ -133,7 +133,7 @@ export const RULES: ShelfRule[] = [
     "Potato Wedges": ["wedges"],
   }),
   ...group("frozen", "Sides", ["Fries"], { fromDelivery: "7 days" }),
-  ...group("frozen", "Sides", ["Mac n Cheese"], {
+  ...group("frozen", "Desserts", ["Mac n Cheese"], {
     fromDelivery: "6 days",
     inUse: "48 hours prepped",
   }, { "Mac n Cheese": ["mac and cheese", "macaroni cheese"] }),
@@ -144,7 +144,7 @@ export const RULES: ShelfRule[] = [
     fromDelivery: "14 days",
   }, { "Dominos Cookies with Creme Egg": ["creme egg", "cream egg"] }),
   ...group("frozen", "Desserts", ["Cookies"], { fromDelivery: "17 days" }),
-  ...group("frozen", "Sides", ["Cheese String - Garlic & Herb"], {
+  ...group("frozen", "Cheese", ["Cheese String - Garlic & Herb"], {
     fromDelivery: "7 days",
     note: "Keep stored in a clean, sanitised and lidded container.",
   }, { "Cheese String - Garlic & Herb": ["cheese string", "garlic herb"] }),
@@ -202,7 +202,7 @@ export const RULES: ShelfRule[] = [
     prepped: "10 days",
     ambientUse: "12 hours",
   }, { "Garlic Butter": ["garlic butter"] }),
-  ...group("chilled", "Cheese", ["Liquid Cheese"], {
+  ...group("chilled", "Sauces", ["Liquid Cheese"], {
     unopened: "Date on pack",
     prepped: "6 days",
   }),
@@ -293,7 +293,7 @@ export const RULES: ShelfRule[] = [
     prepped: "35 days",
     note: "Keep ambient.",
   }, { "Habanero Hot Honey": ["hot honey", "habanero"] }),
-  ...group("ambient", "Desserts", ["NEW Biscoff Crumb"], {
+  ...group("ambient", "Toppings", ["NEW Biscoff Crumb"], {
     unopened: "Date on pack",
     prepped: "30 days",
   }, { "NEW Biscoff Crumb": ["biscoff", "lotus"] }),
@@ -305,38 +305,36 @@ export const RULES: ShelfRule[] = [
 
   ...group(
     "pack",
-    "Sauces",
-    ["Franks Hot Sauce", "Dips Pots", "Chick'N'Dip Dip Pots (inc. NEW Ranch Dip)"],
+    "Other",
+    [
+      "Franks Hot Sauce",
+      "Butter Whirl",
+      "Coleslaw",
+      "Salt Sachets",
+      "Ketchup Sachets",
+      "Dips Pots",
+      "Chick'N'Dip Dip Pots (inc. NEW Ranch Dip)",
+      "Herbs",
+      "Dr Schar Gluten Free Pizza Base",
+      "Drinks",
+      "Ice Cream",
+      "Milk",
+      "Chocolate Disc",
+      "NEW White Chocolate Disc",
+      "Cinnamon Sugar",
+      "Tortilla Chips (Nachos)",
+    ],
     { unopened: "Date on pack" },
     {
       "Franks Hot Sauce": ["franks", "frank's"],
       "Chick'N'Dip Dip Pots (inc. NEW Ranch Dip)": ["chick n dip", "ranch dip", "ranch"],
-    },
-  ),
-  ...group("pack", "Sides", ["Coleslaw", "Tortilla Chips (Nachos)"], { unopened: "Date on pack" }, {
-    "Tortilla Chips (Nachos)": ["nachos", "tortilla"],
-  }),
-  ...group("pack", "Toppings", ["Herbs"], { unopened: "Date on pack" }),
-  ...group("pack", "Bases", ["Dr Schar Gluten Free Pizza Base"], { unopened: "Date on pack" }, {
-    "Dr Schar Gluten Free Pizza Base": ["gluten free", "gluten-free", "schar"],
-  }),
-  ...group(
-    "pack",
-    "Desserts",
-    ["Ice Cream", "Chocolate Disc", "NEW White Chocolate Disc", "Cinnamon Sugar", "Butter Whirl"],
-    { unopened: "Date on pack" },
-    {
+      "Dr Schar Gluten Free Pizza Base": ["gluten free", "gluten-free", "schar"],
       "NEW White Chocolate Disc": ["white chocolate", "chocoate"],
       "Chocolate Disc": ["chocolate disc"],
+      "Tortilla Chips (Nachos)": ["nachos", "tortilla"],
       "Ice Cream": ["ice cream"],
       "Cinnamon Sugar": ["cinnamon"],
     },
-  ),
-  ...group(
-    "pack",
-    "Other",
-    ["Salt Sachets", "Ketchup Sachets", "Drinks", "Milk"],
-    { unopened: "Date on pack" },
   ),
 ];
 
