@@ -1,8 +1,21 @@
-import { EMPTY_PACK, parseChartPack } from "./chart-pack";
-import { toIsoDate } from "./dates";
+import { BUNDLED_PACK, EMPTY_PACK, parseChartPack } from "./chart-pack";
+import { addDaysIso, toIsoDate } from "./dates";
 import type { ChartPack } from "./types";
 
 const STORAGE_KEY = "shelf-life-desk-v1";
+
+/** Sample Campaign 5 chart for `next dev`, marked expired so update prompts show. */
+const PREVIEW_PACK: ChartPack =
+  process.env.NODE_ENV === "development"
+    ? {
+        ...BUNDLED_PACK,
+        chart: {
+          ...BUNDLED_PACK.chart,
+          // Yesterday — past valid-until so Settings / collapsed update cues preview.
+          validUntil: addDaysIso(new Date(), -1),
+        },
+      }
+    : EMPTY_PACK;
 
 export type DeskState = {
   deliveryDate: string;
@@ -13,7 +26,7 @@ export type DeskState = {
 
 const DEFAULT_STATE: DeskState = {
   deliveryDate: "",
-  pack: EMPTY_PACK,
+  pack: PREVIEW_PACK,
   imported: false,
   sourceUrl: "",
 };
@@ -120,7 +133,7 @@ export function setImportedPack(pack: ChartPack, sourceUrl: string) {
 export function clearImportedPack() {
   state = {
     ...state,
-    pack: EMPTY_PACK,
+    pack: PREVIEW_PACK,
     imported: false,
     sourceUrl: "",
   };

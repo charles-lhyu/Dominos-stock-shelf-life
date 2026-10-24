@@ -53,6 +53,12 @@ export function toIsoDate(date: Date): string {
   return `${date.getFullYear()}-${month}-${day}`;
 }
 
+/** True when today is after the chart’s valid-until day. */
+export function isPastValidUntil(validUntil: string, today: Date = new Date()): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(validUntil)) return false;
+  return toIsoDate(today) > validUntil;
+}
+
 export function parseIsoDate(iso: string): Date {
   const [year, month, day] = iso.split("-").map(Number);
   return new Date(year, month - 1, day);

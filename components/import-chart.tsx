@@ -1,15 +1,19 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
   Camera,
   FileText,
   ImageUp,
   Link2,
+  Lock,
   QrCode,
+  RectangleHorizontal,
+  RectangleVertical,
   RefreshCw,
   RotateCcw,
-  Upload,
+  Settings,
+  Unlock,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -31,6 +35,15 @@ import {
 import { parsePdfChartFile } from "@/lib/pdf-chart";
 import { reloadAppToLatest } from "@/lib/reload-app";
 import { fetchRemoteChart } from "@/lib/remote-chart";
+import {
+  DEFAULT_ROTATION_PREF,
+  getRotationPref,
+  hydrateRotationStore,
+  setPreferredOrientation,
+  setRotationLocked,
+  subscribeRotation,
+} from "@/lib/rotation-store";
+import { cn } from "cn";
 
 type BarcodeDetectorLike = {
   detect: (source: ImageBitmapSource) => Promise<Array<{ rawValue: string }>>;
@@ -66,6 +79,14 @@ export function ImportChartButton({
   const scanTimer = useRef<number | null>(null);
   const photoRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const rotation = useSyncExternalStore(
+    subscribeRotation,
+    () => {
+      hydrateRotationStore();
+      return getRotationPref();
+    },
+    () => DEFAULT_ROTATION_PREF,
+  );
 
   useEffect(() => () => stopScan(), []);
 
@@ -210,25 +231,25 @@ export function ImportChartButton({
           <button
             type="button"
             className="inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-white/10 text-white ring-1 ring-white/25"
-            aria-label="Upload chart data"
+            aria-label="Settings"
           />
         }
       >
-        <Upload className="size-5" />
+        <Settings className="size-5" />
       </DialogTrigger>
       <DialogContent
         className="relative max-h-[90dvh] w-[calc(100%-1.25rem)] max-w-md gap-0 overflow-y-auto rounded-2xl p-0"
         showCloseButton={false}
       >
         <DialogHeader className="border-b border-white/10 px-4 py-4 pr-14">
-          <DialogTitle className="font-display text-2xl text-white">Upload chart</DialogTitle>
+          <DialogTitle className="font-display text-2xl text-white">Settings</DialogTitle>
           <DialogDescription className="text-stone-400">
-            Scan a QR or paste a Google Drive share link to load the chart PDF.
+            Upload a chart, check for updates, or change display options.
           </DialogDescription>
           <button
             type="button"
             className="absolute top-3 right-3 inline-flex size-10 items-center justify-center rounded-full bg-white/10 text-white"
-            aria-label="Close upload"
+            aria-label="Close settings"
             onClick={() => setOpen(false)}
           >
             <X className="size-5" />
@@ -236,6 +257,10 @@ export function ImportChartButton({
         </DialogHeader>
 
         <div className="space-y-3 px-4 py-5">
+          <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">
+            Upload chart
+          </p>
+
           <input
             ref={photoRef}
             type="file"
@@ -320,7 +345,7 @@ export function ImportChartButton({
             PDF chart
           </Button>
 
-          <div className="space-y-2 border-t border-white/10 pt-3">
+          <div className="space-y-2">
             <label htmlFor="chart-url" className="text-sm font-medium text-stone-300">
               Google Drive link
             </label>
@@ -368,25 +393,113 @@ export function ImportChartButton({
             </Button>
           ) : null}
 
-          <Button
-            type="button"
-            variant="ghost"
-            className="h-11 w-full rounded-xl text-stone-300"
-            disabled={busy}
-            onClick={() => {
-              setBusy(true);
-              setMessage("Checking for updates…");
-              setError(null);
-              void reloadAppToLatest().finally(() => {
-                setBusy(false);
-                setMessage(null);
-                setOpen(false);
-              });
-            }}
-          >
-            <RefreshCw className="size-4" />
-            Update app
-          </Button>
+          <div className="space-y-3 border-t border-white/10 pt-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">
+              Display
+            </p>
+            <div
+              role="group"
+              aria-label="Preferred orientation"
+              className="grid grid-cols-2 gap-2"
+            >
+              {(
+                [
+                  {
+                    id: "portrait" as const,
+                    label: "Portrait",
+                    Icon: RectangleVertical,
+                  },
+                  {
+                    id: "landscape" as const,
+                    label: "Landscape",
+                    Icon: RectangleHorizontal,
+                  },
+                ] as const
+              ).map(({ id, label, Icon }) => {
+                const active = rotation.orientation === id;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => setPreferredOrientation(id)}
+                    className={cn(
+                      "flex h-12 items-center justify-center gap-2 rounded-xl border text-sm font-medium text-white",
+                      active
+                        ? "border-sky-400/50 bg-sky-500/20"
+                        : "border-white/10 bg-card text-stone-300",
+                    )}
+                  >
+                    <Icon className="size-4 opacity-80" aria-hidden />
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={rotation.locked}
+              aria-label={
+                rotation.locked
+                  ? `Unlock ${rotation.orientation} view`
+                  : `Lock to ${rotation.orientation} view`
+              }
+              onClick={() => setRotationLocked(!rotation.locked)}
+              className={cn(
+                "flex h-12 w-full items-center justify-between rounded-xl border px-3 text-left text-base text-white",
+                rotation.locked
+                  ? "border-emerald-400/40 bg-emerald-500/15"
+                  : "border-white/10 bg-card",
+              )}
+            >
+              <span className="inline-flex items-center gap-2">
+                {rotation.locked ? (
+                  <Lock className="size-4 opacity-80" aria-hidden />
+                ) : (
+                  <Unlock className="size-4 opacity-80" aria-hidden />
+                )}
+                {rotation.locked ? "Locked to view" : "Lock to this view"}
+              </span>
+              <span
+                className={cn(
+                  "text-xs font-semibold uppercase tracking-wide",
+                  rotation.locked ? "text-emerald-300" : "text-stone-500",
+                )}
+              >
+                {rotation.locked ? "On" : "Off"}
+              </span>
+            </button>
+            <p className="text-xs text-stone-500">
+              Pick portrait or landscape, then lock so phones stay in that view. Wide
+              desktops never rotate.
+            </p>
+          </div>
+
+          <div className="space-y-3 border-t border-white/10 pt-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">
+              App
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-12 w-full justify-start rounded-xl border-white/10 text-base text-white"
+              disabled={busy}
+              onClick={() => {
+                setBusy(true);
+                setMessage("Checking for updates…");
+                setError(null);
+                void reloadAppToLatest().finally(() => {
+                  setBusy(false);
+                  setMessage(null);
+                  setOpen(false);
+                });
+              }}
+            >
+              <RefreshCw className="size-4" />
+              Update app
+            </Button>
+          </div>
 
           {error ? <p className="text-sm text-red-400">{error}</p> : null}
           {message ? (

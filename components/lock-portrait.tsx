@@ -1,30 +1,39 @@
 "use client";
 
 import { useEffect, useRef, type ReactNode } from "react";
+import {
+  getRotationPref,
+  hydrateRotationStore,
+  shouldForceRotate,
+  subscribeRotation,
+} from "@/lib/rotation-store";
 
 type OrientationWithLock = ScreenOrientation & {
   lock?: (orientation: string) => Promise<void>;
 };
 
-async function tryLockPortrait() {
-  const orientation = screen.orientation as OrientationWithLock | undefined;
-  const lock = orientation?.lock;
+async function tryNativeLock() {
+  const { locked, orientation } = getRotationPref();
+  if (!locked) return;
+  const screenOrientation = screen.orientation as OrientationWithLock | undefined;
+  const lock = screenOrientation?.lock;
   if (typeof lock !== "function") return;
   try {
-    await lock.call(orientation, "portrait");
+    await lock.call(screenOrientation, orientation);
   } catch {
     // Many browsers only allow this when installed / fullscreen.
   }
 }
 
 /**
- * Keeps the UI looking like portrait: when the device is landscape, the
- * content is rotated so layout and controls match the upright phone view.
+ * When rotation is locked, keep the UI in the preferred orientation on phones
+ * (CSS counter-rotate). Wide desktops never rotate.
  */
 export function LockPortrait({ children }: { children: ReactNode }) {
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    hydrateRotationStore();
     const root = rootRef.current;
     if (!root) return;
 
@@ -42,14 +51,14 @@ export function LockPortrait({ children }: { children: ReactNode }) {
     const apply = () => {
       const wide = window.innerWidth;
       const tall = window.innerHeight;
-      const landscape = wide > tall;
+      const preference = getRotationPref();
 
-      if (!landscape) {
+      if (!shouldForceRotate(wide, tall, preference)) {
         clear();
         return;
       }
 
-      // Logical portrait frame: short side × long side, then counter-rotate.
+      // Swap axes then counter-rotate so the preferred orientation fills the phone.
       root.style.position = "fixed";
       root.style.top = "0";
       root.style.left = "0";
@@ -62,19 +71,30 @@ export function LockPortrait({ children }: { children: ReactNode }) {
         screen.orientation?.angle ??
         (typeof window.orientation === "number" ? window.orientation : 90);
 
-      if (angle === 90 || angle === -270) {
-        root.style.transform = "rotate(-90deg) translateX(-100%)";
-      } else {
+      if (preference.orientation === "portrait") {
+        if (angle === 90 || angle === -270) {
+          root.style.transform = "rotate(-90deg) translateX(-100%)";
+        } else {
+          root.style.transform = "rotate(90deg) translateY(-100%)";
+        }
+      } else if (angle === 0 || angle === 360) {
         root.style.transform = "rotate(90deg) translateY(-100%)";
+      } else {
+        root.style.transform = "rotate(-90deg) translateX(-100%)";
       }
     };
 
     apply();
-    void tryLockPortrait();
+    void tryNativeLock();
 
     const onGesture = () => {
-      void tryLockPortrait();
+      void tryNativeLock();
     };
+
+    const unsub = subscribeRotation(() => {
+      apply();
+      void tryNativeLock();
+    });
 
     window.addEventListener("resize", apply);
     window.addEventListener("orientationchange", apply);
@@ -84,6 +104,7 @@ export function LockPortrait({ children }: { children: ReactNode }) {
 
     return () => {
       clear();
+      unsub();
       window.removeEventListener("resize", apply);
       window.removeEventListener("orientationchange", apply);
       screen.orientation?.removeEventListener?.("change", apply);

@@ -2,9 +2,10 @@ import { showAppStatus } from "@/lib/app-status";
 import { withBasePath } from "@/lib/base-path";
 
 const JUST_UPDATED_KEY = "app-just-updated";
+const UPDATE_POLL_MS = 60_000;
 
 function localVersion() {
-  return process.env.NEXT_PUBLIC_APP_VERSION ?? "1.1.0";
+  return process.env.NEXT_PUBLIC_APP_VERSION ?? "1.3.0";
 }
 
 async function fetchRemoteVersion(): Promise<string | null> {
@@ -19,6 +20,47 @@ async function fetchRemoteVersion(): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+/** True when hosted app-version.json differs from this shell. */
+export async function checkAppUpdateAvailable(): Promise<boolean> {
+  // Local preview always surfaces the Settings update pulse.
+  if (process.env.NODE_ENV === "development") return true;
+  const remote = await fetchRemoteVersion();
+  if (remote == null) return false;
+  return remote !== localVersion();
+}
+
+/**
+ * Poll for a newer hosted build. Re-checks on an interval, when the tab
+ * becomes visible, and on window focus.
+ */
+export function subscribeAppUpdateAvailable(
+  onChange: (available: boolean) => void,
+): () => void {
+  let cancelled = false;
+
+  const run = () => {
+    void checkAppUpdateAvailable().then((available) => {
+      if (!cancelled) onChange(available);
+    });
+  };
+
+  run();
+  const timer = window.setInterval(run, UPDATE_POLL_MS);
+
+  const onVisible = () => {
+    if (document.visibilityState === "visible") run();
+  };
+  document.addEventListener("visibilitychange", onVisible);
+  window.addEventListener("focus", run);
+
+  return () => {
+    cancelled = true;
+    window.clearInterval(timer);
+    document.removeEventListener("visibilitychange", onVisible);
+    window.removeEventListener("focus", run);
+  };
 }
 
 /**

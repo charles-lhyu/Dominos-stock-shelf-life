@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { ArrowUp, List, Search, Tags, X } from "lucide-react";
+import { ArrowUp, List, RefreshCw, Search, Tags, Upload, X } from "lucide-react";
 import { ChartList } from "@/components/chart-list";
 import { DateField } from "@/components/date-field";
 import { DragScroll } from "@/components/drag-scroll";
@@ -14,13 +14,19 @@ import {
   subscribeDateFormat,
   toggleCompactDateFormat,
 } from "@/lib/date-format-store";
-import { formatCompactDate, formatShortDate, toIsoDate } from "@/lib/dates";
+import {
+  formatCompactDate,
+  formatShortDate,
+  isPastValidUntil,
+  toIsoDate,
+} from "@/lib/dates";
 import {
   getDeskState,
   hydrateDeskStore,
   setDeliveryDate,
   subscribeDesk,
 } from "@/lib/desk-store";
+import { reloadAppToLatest, subscribeAppUpdateAvailable } from "@/lib/reload-app";
 import {
   categoriesInPack,
   LIFE_KIND_META,
@@ -130,13 +136,15 @@ export function StockDesk() {
   const [preferredLife, setPreferredLife] = useState<LifeKind | null>(null);
   const [placeholder, setPlaceholder] = useState("Pepperoni, Chorizo, Nduja Sausage…");
   const [today, setToday] = useState<Date | null>(null);
+  const [appUpdateAvailable, setAppUpdateAvailable] = useState(false);
+  const [updatingApp, setUpdatingApp] = useState(false);
   /** Title tucked away once the collapse gesture finishes. */
   const [headerCollapsed, setHeaderCollapsed] = useState(false);
   /** List only scrolls when collapsed and the header transition has settled. */
   const [listScrollable, setListScrollable] = useState(false);
   const [showGoTop, setShowGoTop] = useState(false);
   const [compactList, setCompactList] = useState(false);
-  const [uploadOpen, setUploadOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const shellRef = useRef<HTMLDivElement>(null);
@@ -166,6 +174,24 @@ export function StockDesk() {
     setPreferredSection(readLastSection());
     setPreferredLife(readLastLife());
     setToday(new Date());
+  }, []);
+
+  useEffect(() => subscribeAppUpdateAvailable(setAppUpdateAvailable), []);
+
+  // Re-check chart expiry across midnight / long sessions.
+  useEffect(() => {
+    const refreshToday = () => setToday(new Date());
+    const timer = window.setInterval(refreshToday, 60_000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refreshToday();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", refreshToday);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", refreshToday);
+    };
   }, []);
 
   useEffect(() => {
@@ -408,6 +434,10 @@ export function StockDesk() {
 
   const hasChart = rules.length > 0;
   const browsing = hasChart && !query.trim();
+  const chartExpired =
+    Boolean(today) &&
+    Boolean(chart.validUntil) &&
+    isPastValidUntil(chart.validUntil, today ?? undefined);
   /** Collapsed idle: narrow search + full date. Focus/query: wide search + date icon. */
   const searchExpanded =
     !headerCollapsed || searchFocused || Boolean(query.trim());
@@ -466,14 +496,16 @@ export function StockDesk() {
                       Upload a chart to get started
                     </p>
                   )}
-                  {chart.validUntil ? (
+                  {chart.validUntil && !chartExpired ? (
                     <p className="mt-1 text-sm font-medium text-amber-200">
                       Valid until{" "}
                       <button
                         type="button"
                         onClick={toggleCompactDateFormat}
                         className="underline-offset-2 hover:underline"
-                        aria-label={compactDates ? "Show full dates" : "Show short dates"}
+                        aria-label={
+                          compactDates ? "Show full dates" : "Show short dates"
+                        }
                         tabIndex={headerCollapsed ? -1 : undefined}
                       >
                         {compactDates
@@ -482,21 +514,88 @@ export function StockDesk() {
                       </button>
                     </p>
                   ) : null}
+                  {chartExpired && chart.validUntil ? (
+                    <p className="mt-1 text-sm font-medium text-amber-300">
+                      <button
+                        type="button"
+                        onClick={() => setSettingsOpen(true)}
+                        className="text-left underline-offset-2 hover:underline"
+                        aria-label="Chart expired — open settings to upload a new chart"
+                        tabIndex={headerCollapsed ? -1 : undefined}
+                      >
+                        Expired{" "}
+                        {compactDates
+                          ? formatCompactDate(chart.validUntil)
+                          : formatShortDate(chart.validUntil)}{" "}
+                        — upload a new chart
+                      </button>
+                    </p>
+                  ) : null}
                 </div>
-                {/* Inset so the round ring isn’t clipped by the collapse overflow. */}
-                <div className="flex shrink-0 flex-col items-center gap-1 p-0.5">
-                  <ImportChartButton
-                    desk={desk}
-                    open={uploadOpen}
-                    onOpenChange={setUploadOpen}
-                  />
+                {/* Extra padding so the update pulse isn’t clipped by collapse overflow. */}
+                <div className="flex shrink-0 flex-col items-center gap-1 p-2">
+                  <div className="flex items-center gap-2">
+                    {chartExpired ? (
+                      <button
+                        type="button"
+                        onClick={() => setSettingsOpen(true)}
+                        aria-label="Upload a new chart"
+                        title="Upload a new chart"
+                        tabIndex={headerCollapsed ? -1 : undefined}
+                        className="chart-update-pulse inline-flex size-11 shrink-0 items-center justify-center rounded-full"
+                      >
+                        <Upload className="size-5" aria-hidden />
+                      </button>
+                    ) : null}
+                    {appUpdateAvailable ? (
+                      <button
+                        type="button"
+                        disabled={updatingApp}
+                        onClick={() => {
+                          setUpdatingApp(true);
+                          void reloadAppToLatest().finally(() => {
+                            setUpdatingApp(false);
+                          });
+                        }}
+                        aria-label="Update app"
+                        title="Update app"
+                        tabIndex={headerCollapsed ? -1 : undefined}
+                        className="chart-update-pulse inline-flex size-11 shrink-0 items-center justify-center rounded-full disabled:opacity-70"
+                      >
+                        <RefreshCw
+                          className={cn("size-5", updatingApp && "animate-spin")}
+                          aria-hidden
+                        />
+                      </button>
+                    ) : null}
+                    <ImportChartButton
+                      desk={desk}
+                      open={settingsOpen}
+                      onOpenChange={setSettingsOpen}
+                    />
+                  </div>
                   <span className="font-mono text-sm tracking-wide text-stone-500">
-                    v{process.env.NEXT_PUBLIC_APP_VERSION ?? "1.1.0"}
+                    v{process.env.NEXT_PUBLIC_APP_VERSION ?? "1.3.0"}
                   </span>
                 </div>
               </div>
             </div>
           </div>
+
+          {headerCollapsed && chartExpired && chart.validUntil ? (
+            <button
+              type="button"
+              onClick={() => setSettingsOpen(true)}
+              className="block w-full truncate text-left text-xs font-medium text-amber-300 underline-offset-2 hover:underline"
+              aria-label="Chart expired — open settings to upload a new chart"
+            >
+              Expired{" "}
+              {compactDates
+                ? formatCompactDate(chart.validUntil)
+                : formatShortDate(chart.validUntil)}{" "}
+              — upload a new chart
+            </button>
+          ) : null}
 
           <div
             className={cn(
@@ -608,10 +707,10 @@ export function StockDesk() {
 
             <div
               className={cn(
-                "shrink-0 self-stretch transition-[max-width,opacity,margin] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                "flex shrink-0 items-center gap-1.5 self-stretch transition-[max-width,opacity,margin] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
                 !headerCollapsed
                   ? "pointer-events-none max-w-0 overflow-hidden opacity-0"
-                  : "max-w-[16rem] opacity-100",
+                  : "max-w-[18rem] opacity-100",
               )}
               aria-hidden={!headerCollapsed}
             >
@@ -626,6 +725,21 @@ export function StockDesk() {
                   inputRef.current?.blur();
                 }}
               />
+              {chartExpired ? (
+                <button
+                  type="button"
+                  tabIndex={headerCollapsed ? undefined : -1}
+                  onClick={() => setSettingsOpen(true)}
+                  aria-label="Upload a new chart"
+                  title="Upload a new chart"
+                  className={cn(
+                    "chart-update-pulse flex shrink-0 items-center justify-center rounded-xl",
+                    headerCollapsed && searchExpanded ? "size-10" : "h-10 w-10",
+                  )}
+                >
+                  <Upload className="size-4" strokeWidth={2.25} aria-hidden />
+                </button>
+              ) : null}
             </div>
           </div>
 
@@ -797,12 +911,12 @@ export function StockDesk() {
         {!hasChart ? (
           <button
             type="button"
-            onClick={() => setUploadOpen(true)}
+            onClick={() => setSettingsOpen(true)}
             className="my-3 flex min-h-0 w-full flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-white/20 bg-card/80 px-5 py-10 text-center active:bg-white/[0.06]"
           >
             <span className="font-display text-2xl text-white">No chart loaded</span>
             <span className="mt-2 block text-sm text-stone-400">
-              Tap here to upload a shelf-life PDF or Drive link.
+              Tap here to open settings and upload a chart.
             </span>
           </button>
         ) : null}
