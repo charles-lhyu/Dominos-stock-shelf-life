@@ -1,13 +1,89 @@
 import { BUNDLED_PACK, parseChartPack } from "./chart-pack";
 import type { ChartPack, ShelfRule } from "./types";
 
-function fold(value: string) {
-  return value
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Word key that ignores punctuation, so "Bacon (FROZEN)" matches "bacon frozen". */
+function nameKey(name: string) {
+  return name
     .toLowerCase()
-    .replace(/&/g, " and ")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim()
-    .replace(/\s+/g, " ");
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean)
+    .join(" ");
+}
+
+function namePattern(name: string) {
+  const parts = nameKey(name).split(" ").map(escapeRegExp);
+  return new RegExp(`(?:^|[^a-z0-9])${parts.join("[^a-z0-9]+")}(?![a-z0-9])`, "gi");
+}
+
+type NameSpan = { name: string; start: number; end: number };
+
+function findNameSpans(haystack: string): NameSpan[] {
+  const names = [...new Set(BUNDLED_PACK.rules.map((rule) => rule.name))].sort(
+    (a, b) => nameKey(b).length - nameKey(a).length,
+  );
+  const spans: NameSpan[] = [];
+  const overlaps = (start: number, end: number) =>
+    spans.some((span) => start < span.end && end > span.start);
+
+  for (const name of names) {
+    const key = nameKey(name);
+    if (key.length < 3) continue;
+    const pattern = namePattern(name);
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(haystack))) {
+      const atStart = match.index === 0 && /^[a-z0-9]/.test(match[0]);
+      const start = match.index + (atStart ? 0 : 1);
+      const end = match.index + match[0].length;
+      if (end > start && !overlaps(start, end)) {
+        spans.push({ name: key, start, end });
+      }
+      if (pattern.lastIndex === match.index) pattern.lastIndex += 1;
+    }
+  }
+
+  spans.sort((a, b) => a.start - b.start || b.end - a.end);
+  return spans;
+}
+
+/** Commas, slashes, and "and" between names that share one life cell. */
+function isGlue(gap: string) {
+  return gap.length <= 24 && /^[\s,;/|&+\-]*(?:and)?[\s,;/|&+\-]*$/i.test(gap);
+}
+
+/**
+ * Day and hour counts are read after the product name, up to the next product.
+ * Names in one cell (Pineapple / Olives) share the count that follows the group.
+ * Counting from before the name steals the previous row — Pepperdew's 25 days
+ * was being applied to Pineapple and Olives, which are 10.
+ */
+function lifeWindow(spans: NameSpan[], index: number, haystack: string) {
+  let groupEnd = index;
+  while (
+    groupEnd + 1 < spans.length &&
+    isGlue(haystack.slice(spans[groupEnd].end, spans[groupEnd + 1].start))
+  ) {
+    groupEnd += 1;
+  }
+  const from = spans[groupEnd].end;
+  const nextStart = groupEnd + 1 < spans.length ? spans[groupEnd + 1].start : haystack.length;
+  return haystack.slice(from, Math.min(nextStart, from + 160));
+}
+
+function takeSpan(spans: NameSpan[], name: string, cursor: Map<string, number>) {
+  const startAt = cursor.get(name) ?? 0;
+  for (let index = startAt; index < spans.length; index += 1) {
+    if (spans[index]?.name !== name) continue;
+    cursor.set(name, index + 1);
+    return index;
+  }
+  for (let index = 0; index < spans.length; index += 1) {
+    if (spans[index]?.name === name) return index;
+  }
+  return null;
 }
 
 function isoFromLooseDate(raw: string): string {
@@ -64,7 +140,7 @@ async function extractPdfText(data: Uint8Array): Promise<string> {
   return chunks.join("\n");
 }
 
-function packFromPdfText(text: string, fileName: string): { ok: true; pack: ChartPack } | { ok: false; error: string } {
+export function packFromPdfText(text: string, fileName: string): { ok: true; pack: ChartPack } | { ok: false; error: string } {
   const trimmed = text.trim();
   if (trimmed.startsWith("{")) {
     try {
@@ -88,14 +164,16 @@ function packFromPdfText(text: string, fileName: string): { ok: true; pack: Char
 
   const rules: ShelfRule[] = [];
   const used = new Set<string>();
+  const haystack = flat.toLowerCase();
+  const spans = findNameSpans(haystack);
+  const spanCursor = new Map<string, number>();
 
   for (const base of BUNDLED_PACK.rules) {
-    const needle = fold(base.name);
+    const needle = nameKey(base.name);
     if (needle.length < 3) continue;
-    const index = fold(flat).indexOf(needle);
-    if (index < 0) continue;
-    const start = Math.max(0, index - 20);
-    const window = flat.slice(start, start + Math.max(needle.length + 80, 140));
+    const spanIndex = takeSpan(spans, needle, spanCursor);
+    if (spanIndex == null) continue;
+    const window = lifeWindow(spans, spanIndex, haystack);
     const days = window.match(/(\d+)\s*days?/i);
     const hours = window.match(/(\d+)\s*hours?/i);
     const next: ShelfRule = {

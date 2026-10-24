@@ -33,6 +33,8 @@ describe("Campaign 5 chart", () => {
     assert.equal(rule("Sliced Gherkins", "ready").prepped, "16 days");
     assert.equal(rule("Pepperdew Piquante Peppers", "ready").prepped, "25 days");
     assert.equal(rule("Pepperdew Piquante Peppers", "ready").note, undefined);
+    assert.equal(rule("Pineapple", "ready").prepped, "10 days");
+    assert.equal(rule("Olives", "ready").prepped, "10 days");
     assert.equal(rule("Burger Sauce", "ambient").prepped, "14 days");
     assert.equal(rule("Pesto Drizzle", "ambient").prepped, "21 days");
     assert.equal(rule("Habanero Hot Honey", "ambient").prepped, "35 days");

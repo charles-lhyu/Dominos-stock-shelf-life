@@ -71,4 +71,17 @@ describe("shelf life dates", () => {
     assert.equal(prepped.when, "Mon 12 Oct 2026 | 23:59");
     assert.match(capAdvice([pack, prepped]) ?? "", /12 Oct 2026/);
   });
+
+  it("ends pineapple and olives 10 days from prep, counting the start date", () => {
+    for (const name of ["Pineapple", "Olives"]) {
+      const item = RULES.find((rule) => rule.name === name && rule.sectionId === "ready");
+      assert.ok(item);
+      const prepped = clocksFor(item).find((clock) => clock.id === "prepped");
+      assert.ok(prepped);
+      assert.equal(prepped.value, "10 days");
+      assert.equal(prepped.addDays, 10);
+      const result = projectClock(prepped, "2026-10-01", today);
+      assert.equal(result?.when, "Sat 10 Oct 2026 | 23:59");
+    }
+  });
 });

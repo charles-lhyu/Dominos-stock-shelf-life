@@ -1,5 +1,5 @@
 /* Minimal service worker so Chromium can offer "Install app". */
-/* v=20261024d — bump to nudge clients after delivery/prep time. */
+/* v=20261024e — bump to nudge clients after shelf-life day parsing. */
 self.addEventListener("install", (event) => {
   self.skipWaiting();
   event.waitUntil(Promise.resolve());
