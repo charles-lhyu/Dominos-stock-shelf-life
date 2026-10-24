@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { ArrowUp, Search, X } from "lucide-react";
+import { ArrowUp, List, Search, Tags, X } from "lucide-react";
 import { ChartList } from "@/components/chart-list";
 import { DateField } from "@/components/date-field";
 import { DragScroll } from "@/components/drag-scroll";
@@ -135,6 +135,7 @@ export function StockDesk() {
   /** List only scrolls when collapsed and the header transition has settled. */
   const [listScrollable, setListScrollable] = useState(false);
   const [showGoTop, setShowGoTop] = useState(false);
+  const [compactList, setCompactList] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const shellRef = useRef<HTMLDivElement>(null);
@@ -148,6 +149,8 @@ export function StockDesk() {
   /** List place to restore when clearing a product opened from the chart. */
   const savedListScrollRef = useRef(0);
   const savedListCollapsedRef = useRef(false);
+  /** Life filter before compact mode — restored when leaving compact. */
+  const lifeFilterBeforeCompactRef = useRef<LifeKind | "all">("all");
   const { pack, deliveryDate, imported } = desk;
   const { chart, footnotes, rules } = pack;
   const categories = categoriesInPack(pack);
@@ -412,7 +415,7 @@ export function StockDesk() {
       ref={shellRef}
       className="relative mx-auto flex h-dvh w-full max-w-md min-w-0 flex-col overflow-hidden overscroll-none"
     >
-      <header className="shrink-0 border-b border-red-500/30 bg-[#0f1624] text-white">
+      <header className="relative z-20 shrink-0 bg-[#0f1624] text-white after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-2 after:border-t after:border-red-500/30 after:bg-[#0f1624]">
         <div
           className={cn(
             "min-w-0 space-y-2 px-4 pt-[max(0.85rem,env(safe-area-inset-top))] transition-[padding] duration-300",
@@ -604,7 +607,13 @@ export function StockDesk() {
           </div>
 
           {browsing ? (
-            <div className="relative">
+            <div
+              className={cn(
+                // Clear the expanded search bar’s 4px hard shadow so category chips aren’t covered.
+                "relative",
+                !headerCollapsed && "pt-2",
+              )}
+            >
               <div
                 className={cn(
                   "grid transition-[grid-template-rows,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
@@ -656,26 +665,28 @@ export function StockDesk() {
                       );
                     })}
                   </DragScroll>
-                  <DragScroll role="group" aria-label="Life date filters">
-                    <FilterChip
-                      selected={lifeFilter === "all"}
-                      onClick={() => setLifeFilter("all")}
-                    >
-                      Any
-                    </FilterChip>
-                    {LIFE_KINDS.map((kind) => (
+                  {!compactList ? (
+                    <DragScroll role="group" aria-label="Life date filters">
                       <FilterChip
-                        key={kind}
-                        selected={lifeFilter === kind}
-                        onClick={() => {
-                          setLifeFilter(kind);
-                          rememberLife(kind);
-                        }}
+                        selected={lifeFilter === "all"}
+                        onClick={() => setLifeFilter("all")}
                       >
-                        {LIFE_KIND_META[kind].filter}
+                        Any
                       </FilterChip>
-                    ))}
-                  </DragScroll>
+                      {LIFE_KINDS.map((kind) => (
+                        <FilterChip
+                          key={kind}
+                          selected={lifeFilter === kind}
+                          onClick={() => {
+                            setLifeFilter(kind);
+                            rememberLife(kind);
+                          }}
+                        >
+                          {LIFE_KIND_META[kind].filter}
+                        </FilterChip>
+                      ))}
+                    </DragScroll>
+                  ) : null}
                 </div>
               </div>
 
@@ -689,7 +700,12 @@ export function StockDesk() {
                 aria-hidden={!headerCollapsed}
               >
                 <div className="min-h-0 overflow-hidden">
-                  <div className="grid grid-cols-3 gap-1.5">
+                  <div
+                    className={cn(
+                      "grid gap-1.5",
+                      compactList ? "grid-cols-2" : "grid-cols-3",
+                    )}
+                  >
                     <FilterSelect
                       aria-label="Product category"
                       value={category}
@@ -722,22 +738,24 @@ export function StockDesk() {
                         );
                       })}
                     </FilterSelect>
-                    <FilterSelect
-                      aria-label="Life date"
-                      value={lifeFilter}
-                      onChange={(value) => {
-                        const next = value as LifeKind | "all";
-                        setLifeFilter(next);
-                        if (next !== "all") rememberLife(next);
-                      }}
-                    >
-                      <option value="all">Any</option>
-                      {LIFE_KINDS.map((kind) => (
-                        <option key={kind} value={kind}>
-                          {LIFE_KIND_META[kind].filter}
-                        </option>
-                      ))}
-                    </FilterSelect>
+                    {!compactList ? (
+                      <FilterSelect
+                        aria-label="Life date"
+                        value={lifeFilter}
+                        onChange={(value) => {
+                          const next = value as LifeKind | "all";
+                          setLifeFilter(next);
+                          if (next !== "all") rememberLife(next);
+                        }}
+                      >
+                        <option value="all">Any</option>
+                        {LIFE_KINDS.map((kind) => (
+                          <option key={kind} value={kind}>
+                            {LIFE_KIND_META[kind].filter}
+                          </option>
+                        ))}
+                      </FilterSelect>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -862,7 +880,12 @@ export function StockDesk() {
             preferredLife={preferredLife}
             onPreferredSection={rememberSection}
             onPreferredLife={rememberLife}
+            onLifeFilter={(kind) => {
+              setLifeFilter(kind);
+              rememberLife(kind);
+            }}
             onOpen={choose}
+            compact={compactList}
           />
         ) : null}
 
@@ -874,6 +897,41 @@ export function StockDesk() {
           </ul>
         ) : null}
       </main>
+
+      {!query.trim() ? (
+        <button
+          type="button"
+          data-go-top=""
+          aria-label={compactList ? "Show tags" : "Compact list without tags"}
+          aria-pressed={compactList}
+          onClick={() => {
+            const enabling = !compactList;
+            if (enabling) {
+              lifeFilterBeforeCompactRef.current = lifeFilter;
+              setCompactList(true);
+              // Compact has no "Any" — default to Delivery without overwriting preference.
+              if (lifeFilter === "all") setLifeFilter("stock");
+            } else {
+              setCompactList(false);
+              setLifeFilter(lifeFilterBeforeCompactRef.current);
+            }
+          }}
+          className={cn(
+            "absolute right-4 z-20 flex size-11 items-center justify-center rounded-full text-stone-950 shadow-[0_8px_24px_rgba(0,0,0,0.25)] ring-1 backdrop-blur-sm transition-all duration-200",
+            "bottom-[calc(max(1rem,env(safe-area-inset-bottom))+3.25rem)]",
+            "hover:bg-white hover:opacity-100 focus-visible:bg-white focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 active:bg-white active:opacity-100",
+            compactList
+              ? "bg-white opacity-100 ring-black/10"
+              : "bg-white/40 opacity-45 ring-white/20",
+          )}
+        >
+          {compactList ? (
+            <Tags className="size-5" strokeWidth={2.5} />
+          ) : (
+            <List className="size-5" strokeWidth={2.5} />
+          )}
+        </button>
+      ) : null}
 
       <button
         type="button"

@@ -21,15 +21,15 @@ const display = Fraunces({
 });
 
 export const metadata: Metadata = {
-  applicationName: "Campaign 5 Shelf Life",
-  title: "Campaign 5 Shelf Life",
+  applicationName: "Domino's Stock Shelf Life",
+  title: "Domino's Stock Shelf Life",
   description:
-    "Campaign 5 shelf life chart. Type a product, then enter the delivery or pack date to see the use-by date.",
+    "Domino's stock shelf life chart. Type a product, then enter the delivery or pack date to see the use-by date.",
   // Next does not always prefix metadata asset hrefs with basePath on static export.
   manifest: withBasePath("/manifest.webmanifest"),
   appleWebApp: {
     capable: true,
-    title: "Shelf life",
+    title: "Stock Shelf Life",
     statusBarStyle: "black-translucent",
   },
   icons: {

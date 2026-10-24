@@ -7,6 +7,7 @@ import {
   categoriesInPack,
   datePreview,
   LIFE_KIND_META,
+  LIFE_KINDS,
   lifeKindsForRule,
   pickLifeKind,
   pickVariant,
@@ -66,6 +67,18 @@ const LIFE_ACTIVE: Record<LifeKind, string> = {
   ambient: "bg-rose-300 text-rose-950 ring-rose-200",
 };
 
+function scrollSectionToTop(section: HTMLElement) {
+  const scroller = section.closest("main");
+  if (!(scroller instanceof HTMLElement)) return;
+  // Use the non-sticky section wrapper — a stuck header's getBoundingClientRect
+  // is already at the top, so scrolling it does nothing.
+  const top =
+    section.getBoundingClientRect().top -
+    scroller.getBoundingClientRect().top +
+    scroller.scrollTop;
+  scroller.scrollTop = Math.max(0, top);
+}
+
 export function ChartList({
   pack,
   category,
@@ -77,7 +90,9 @@ export function ChartList({
   preferredLife,
   onPreferredSection,
   onPreferredLife,
+  onLifeFilter,
   onOpen,
+  compact = false,
 }: {
   pack: ChartPack;
   category: string | "all";
@@ -89,7 +104,9 @@ export function ChartList({
   preferredLife: LifeKind | null;
   onPreferredSection: (section: SectionId) => void;
   onPreferredLife: (kind: LifeKind) => void;
+  onLifeFilter: (kind: LifeKind) => void;
   onOpen: (name: string, sectionId: SectionId) => void;
+  compact?: boolean;
 }) {
   const categories = category === "all" ? categoriesInPack(pack) : [category];
   const blocks: StickyBlock[] = [];
@@ -145,14 +162,49 @@ export function ChartList({
     }
   }
 
-  const actions = { onOpen, onPreferredSection, onPreferredLife };
+  const actions = {
+    onOpen,
+    onPreferredSection,
+    onPreferredLife,
+    compact,
+  };
+  const activeLife: LifeKind = lifeFilter === "all" ? "stock" : lifeFilter;
 
   return (
-    <div className="select-none">
+    <div className="relative select-none">
+      {compact ? (
+        <div className="sticky top-0 z-50 -mx-4 h-0 w-[calc(100%+2rem)] overflow-visible">
+          <div
+            className="absolute top-1.5 right-4 flex flex-nowrap items-center gap-1"
+            role="group"
+            aria-label="Life date filter"
+          >
+            {LIFE_KINDS.map((kind) => {
+              const selected = activeLife === kind;
+              return (
+                <button
+                  key={kind}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => onLifeFilter(kind)}
+                  className={cn(
+                    "shrink-0 rounded-md px-1.5 py-1 text-[10px] font-semibold tracking-wide ring-1",
+                    selected
+                      ? LIFE_ACTIVE[kind]
+                      : "bg-card text-stone-300 ring-white/15",
+                  )}
+                >
+                  {LIFE_KIND_META[kind].tag}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
       {/*
         Nested sections: each sticky parent wraps everything after it, so the
         header stays put while the next header (higher z-index) slides over it.
-        No upward shadow — that was covering the previous section’s last row.
+        Life tags sit in a single overlay on the topmost sticky header row.
       */}
       {renderCoverStack(blocks, 0, actions)}
     </div>
@@ -166,15 +218,30 @@ function renderCoverStack(
     onOpen: (name: string, sectionId: SectionId) => void;
     onPreferredSection: (section: SectionId) => void;
     onPreferredLife: (kind: LifeKind) => void;
+    compact: boolean;
   },
 ): ReactNode {
   const block = blocks[index];
   if (!block) return null;
 
+  const sectionTitle = block.label
+    ? `${block.category}, ${block.label}`
+    : block.category;
+
   return (
     <div key={block.key}>
-      <div
-        className="sticky top-0 -mx-4 border-y border-white/10 bg-[#0f1624] px-4 pt-1 pb-1.5"
+      <button
+        type="button"
+        aria-label={`Go to ${sectionTitle}`}
+        onClick={(event) => {
+          const section = event.currentTarget.parentElement;
+          if (section instanceof HTMLElement) scrollSectionToTop(section);
+        }}
+        className={cn(
+          // No border-t — the header’s red rule + opaque hang seals the filter gap above.
+          "sticky top-0 -mx-4 block w-[calc(100%+2rem)] border-b border-white/10 bg-[#0f1624] px-4 pt-1 pb-1.5 text-left",
+          actions.compact && "pr-[11.5rem]",
+        )}
         style={{ zIndex: 10 + index }}
       >
         <h2 className="font-display text-lg leading-tight text-white">{block.category}</h2>
@@ -187,12 +254,13 @@ function renderCoverStack(
         >
           {block.label ?? "Meats"}
         </p>
-      </div>
+      </button>
       <ul className="divide-y divide-white/10">
         {block.rows.map((row) => (
           <ProductRow
             key={`${block.key}:${row.name}`}
             row={row}
+            compact={actions.compact}
             onOpen={actions.onOpen}
             onPreferredSection={actions.onPreferredSection}
             onPreferredLife={actions.onPreferredLife}
@@ -206,11 +274,13 @@ function renderCoverStack(
 
 function ProductRow({
   row,
+  compact,
   onOpen,
   onPreferredSection,
   onPreferredLife,
 }: {
   row: ListRow;
+  compact: boolean;
   onOpen: (name: string, sectionId: SectionId) => void;
   onPreferredSection: (section: SectionId) => void;
   onPreferredLife: (kind: LifeKind) => void;
@@ -223,7 +293,10 @@ function ProductRow({
         role="button"
         tabIndex={0}
         aria-label={`Open ${name}`}
-        className="min-h-14 touch-pan-y rounded-xl py-2.5 transition-colors hover:bg-white/[0.03] active:bg-white/[0.06]"
+        className={cn(
+          "touch-pan-y rounded-xl transition-colors hover:bg-white/[0.03] active:bg-white/[0.06]",
+          compact ? "min-h-11 py-2" : "min-h-14 py-2.5",
+        )}
         onClick={() => onOpen(name, active.sectionId)}
         onKeyDown={(event) => {
           if (event.key === "Enter" || event.key === " ") {
@@ -232,8 +305,17 @@ function ProductRow({
           }
         }}
       >
-        <div className="flex w-full min-w-0 items-baseline gap-2">
-          <span className="min-w-0 flex-1 truncate font-medium text-white">{name}</span>
+        <div className="flex w-full min-w-0 items-center gap-2">
+          <div className="flex min-w-0 flex-1 items-center gap-1.5">
+            <span className="min-w-0 truncate font-medium text-white">{name}</span>
+            {compact ? (
+              <CompactStorageTag
+                variants={variants}
+                active={active}
+                onPreferredSection={onPreferredSection}
+              />
+            ) : null}
+          </div>
           <WhenDate
             when={preview.when}
             at={preview.at}
@@ -243,65 +325,121 @@ function ProductRow({
             )}
           />
         </div>
-        <div
-          className="mt-1.5 flex min-h-8 flex-wrap content-start gap-1"
-          role="group"
-          aria-label={`${name} tags`}
-        >
-          {variants.map((variant) => {
-            const selected = variant.sectionId === active.sectionId;
-            return (
-              <button
-                key={variant.sectionId}
-                type="button"
-                aria-pressed={selected}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onPreferredSection(variant.sectionId);
-                }}
-                className={cn(
-                  "touch-pan-y shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide ring-1",
-                  selected
-                    ? SECTION_ACTIVE[variant.sectionId]
-                    : SECTION_TONE[variant.sectionId],
-                )}
-              >
-                {variant.tag}
-              </button>
-            );
-          })}
-          {activeLife ? (
-            kinds.length > 1 ? (
-              <button
-                type="button"
-                aria-label={`Life: ${LIFE_KIND_META[activeLife].tag}. Tap to cycle.`}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  const kindIndex = kinds.indexOf(activeLife);
-                  const next = kinds[(kindIndex + 1) % kinds.length]!;
-                  onPreferredLife(next);
-                }}
-                className={cn(
-                  "inline-flex touch-pan-y shrink-0 items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[11px] font-semibold tracking-wide ring-1",
-                  LIFE_ACTIVE[activeLife],
-                )}
-              >
-                {LIFE_KIND_META[activeLife].tag}
-                <ChevronDown className="size-3 opacity-80" aria-hidden />
-              </button>
-            ) : (
-              <span
-                className={cn(
-                  "shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-semibold tracking-wide ring-1",
-                  LIFE_ACTIVE[activeLife],
-                )}
-              >
-                {LIFE_KIND_META[activeLife].tag}
-              </span>
-            )
-          ) : null}
-        </div>
+        {!compact ? (
+          <div
+            className="mt-1.5 flex min-h-8 flex-wrap content-start gap-1"
+            role="group"
+            aria-label={`${name} tags`}
+          >
+            {variants.map((variant) => {
+              const selected = variant.sectionId === active.sectionId;
+              return (
+                <button
+                  key={variant.sectionId}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onPreferredSection(variant.sectionId);
+                  }}
+                  className={cn(
+                    "touch-pan-y shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide ring-1",
+                    selected
+                      ? SECTION_ACTIVE[variant.sectionId]
+                      : SECTION_TONE[variant.sectionId],
+                  )}
+                >
+                  {variant.tag}
+                </button>
+              );
+            })}
+            {activeLife ? (
+              kinds.length > 1 ? (
+                <button
+                  type="button"
+                  aria-label={`Life: ${LIFE_KIND_META[activeLife].tag}. Tap to cycle.`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    const kindIndex = kinds.indexOf(activeLife);
+                    const next = kinds[(kindIndex + 1) % kinds.length]!;
+                    onPreferredLife(next);
+                  }}
+                  className={cn(
+                    "inline-flex touch-pan-y shrink-0 items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[11px] font-semibold tracking-wide ring-1",
+                    LIFE_ACTIVE[activeLife],
+                  )}
+                >
+                  {LIFE_KIND_META[activeLife].tag}
+                  <ChevronDown className="size-3 opacity-80" aria-hidden />
+                </button>
+              ) : (
+                <span
+                  className={cn(
+                    "shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-semibold tracking-wide ring-1",
+                    LIFE_ACTIVE[activeLife],
+                  )}
+                >
+                  {LIFE_KIND_META[activeLife].tag}
+                </span>
+              )
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </li>
   );
 }
+
+function CompactStorageTag({
+  variants,
+  active,
+  onPreferredSection,
+}: {
+  variants: ItemVariant[];
+  active: ItemVariant;
+  onPreferredSection: (section: SectionId) => void;
+}) {
+  const tone = SECTION_ACTIVE[active.sectionId];
+
+  if (variants.length <= 1) {
+    return (
+      <span
+        className={cn(
+          "shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide ring-1",
+          tone,
+        )}
+      >
+        {active.tag}
+      </span>
+    );
+  }
+
+  return (
+    <label
+      className="relative inline-flex shrink-0"
+      onClick={(event) => event.stopPropagation()}
+      onKeyDown={(event) => event.stopPropagation()}
+    >
+      <select
+        aria-label="Storage"
+        value={active.sectionId}
+        onChange={(event) => onPreferredSection(event.target.value as SectionId)}
+        className={cn(
+          "h-6 max-w-[7.5rem] appearance-none truncate rounded-md py-0 pr-5 pl-1.5 text-[11px] font-semibold uppercase tracking-wide outline-none ring-1",
+          tone,
+        )}
+      >
+        {variants.map((variant) => (
+          <option key={variant.sectionId} value={variant.sectionId}>
+            {variant.tag}
+          </option>
+        ))}
+      </select>
+      <ChevronDown
+        className="pointer-events-none absolute top-1/2 right-1 size-3 -translate-y-1/2 opacity-80"
+        aria-hidden
+      />
+    </label>
+  );
+}
+

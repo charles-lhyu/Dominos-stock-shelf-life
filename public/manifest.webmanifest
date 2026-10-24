@@ -1,7 +1,7 @@
 {
-  "name": "Campaign 5 Shelf Life",
-  "short_name": "Shelf life",
-  "description": "Campaign 5 shelf life chart. Type a product, then enter the delivery or pack date to see the use-by date.",
+  "name": "Domino's Stock Shelf Life",
+  "short_name": "Stock Shelf Life",
+  "description": "Domino's stock shelf life chart. Type a product, then enter the delivery or pack date to see the use-by date.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
