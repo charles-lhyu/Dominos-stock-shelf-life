@@ -365,9 +365,13 @@ export function ImportChartButton({ desk }: { desk: DeskState }) {
             disabled={busy}
             onClick={() => {
               setBusy(true);
-              setMessage("Updating…");
+              setMessage("Checking for updates…");
               setError(null);
-              void reloadAppToLatest();
+              void reloadAppToLatest().finally(() => {
+                setBusy(false);
+                setMessage(null);
+                setOpen(false);
+              });
             }}
           >
             <RefreshCw className="size-4" />

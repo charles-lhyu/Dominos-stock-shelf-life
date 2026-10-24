@@ -1,8 +1,43 @@
+import { showAppStatus } from "@/lib/app-status";
+import { withBasePath } from "@/lib/base-path";
+
+const JUST_UPDATED_KEY = "app-just-updated";
+
+function localVersion() {
+  return process.env.NEXT_PUBLIC_APP_VERSION ?? "dev";
+}
+
+async function fetchRemoteVersion(): Promise<string | null> {
+  try {
+    const response = await fetch(
+      `${withBasePath("/app-version.json")}?v=${Date.now()}`,
+      { cache: "no-store" },
+    );
+    if (!response.ok) return null;
+    const data = (await response.json()) as { version?: string };
+    return typeof data.version === "string" ? data.version : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Drop the controlling service worker / caches and reload so the installed
- * PWA picks up the latest GitHub Pages build.
+ * If the hosted build matches this shell, show “up to date”.
+ * Otherwise clear SW/caches and reload so the PWA picks up the new build.
  */
 export async function reloadAppToLatest() {
+  const remote = await fetchRemoteVersion();
+  if (remote != null && remote === localVersion()) {
+    showAppStatus("up-to-date");
+    return;
+  }
+
+  try {
+    window.sessionStorage.setItem(JUST_UPDATED_KEY, "1");
+  } catch {
+    // Private mode may block storage — still reload.
+  }
+
   try {
     if ("serviceWorker" in navigator) {
       const registrations = await navigator.serviceWorker.getRegistrations();

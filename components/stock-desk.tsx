@@ -471,8 +471,11 @@ export function StockDesk() {
                   ) : null}
                 </div>
                 {/* Inset so the round ring isn’t clipped by the collapse overflow. */}
-                <div className="shrink-0 p-0.5">
+                <div className="flex shrink-0 flex-col items-center gap-1 p-0.5">
                   <ImportChartButton desk={desk} />
+                  <span className="font-mono text-sm tracking-wide text-stone-500">
+                    {process.env.NEXT_PUBLIC_APP_VERSION ?? "dev"}
+                  </span>
                 </div>
               </div>
             </div>
