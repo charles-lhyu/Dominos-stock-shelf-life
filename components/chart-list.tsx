@@ -38,6 +38,13 @@ import {
   getHiddenNamesServer,
   subscribeHidden,
 } from "@/lib/hidden-store";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { ChartPack, SectionId } from "@/lib/types";
 import { cn } from "cn";
 
@@ -864,31 +871,45 @@ function CompactStorageTag({
   }
 
   return (
-    <label
+    <div
       className="relative inline-flex shrink-0"
       onClick={(event) => event.stopPropagation()}
       onKeyDown={(event) => event.stopPropagation()}
     >
-      <select
-        aria-label="Storage"
+      <Select
         value={active.sectionId}
-        onChange={(event) => onPreferredSection(event.target.value as SectionId)}
-        className={cn(
-          "h-6 max-w-[7.5rem] appearance-none truncate rounded-md py-0 pr-5 pl-1.5 text-[11px] font-semibold uppercase tracking-wide outline-none ring-1",
-          tone,
-        )}
+        items={variants.map((variant) => ({
+          value: variant.sectionId,
+          label: variant.tag,
+        }))}
+        onValueChange={(value) => {
+          if (typeof value === "string") {
+            onPreferredSection(value as SectionId);
+          }
+        }}
       >
-        {variants.map((variant) => (
-          <option key={variant.sectionId} value={variant.sectionId}>
-            {variant.tag}
-          </option>
-        ))}
-      </select>
-      <ChevronDown
-        className="pointer-events-none absolute top-1/2 right-1 size-3 -translate-y-1/2 opacity-80"
-        aria-hidden
-      />
-    </label>
+        <SelectTrigger
+          aria-label="Storage"
+          className={cn(
+            "h-6 max-w-[7.5rem] gap-0.5 rounded-md border-0 px-1.5 py-0 text-[11px] font-semibold uppercase tracking-wide shadow-none focus-visible:ring-1 focus-visible:ring-white/25 dark:bg-transparent dark:hover:bg-transparent [&_svg]:size-3 [&_svg]:opacity-80 [&_[data-slot=select-value]]:min-w-0 [&_[data-slot=select-value]]:truncate",
+            tone,
+          )}
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent align="start" className="min-w-[7rem]">
+          {variants.map((variant) => (
+            <SelectItem
+              key={variant.sectionId}
+              value={variant.sectionId}
+              className="text-[11px] font-semibold uppercase tracking-wide"
+            >
+              {variant.tag}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
   );
 }
 

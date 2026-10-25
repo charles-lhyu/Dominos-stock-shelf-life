@@ -16,8 +16,16 @@ import { CollapsedDateTime } from "@/components/date-field";
 import { DragScroll } from "@/components/drag-scroll";
 import { ImportChartButton } from "@/components/import-chart";
 import { LifeCard } from "@/components/life-card";
-import { Button } from "@/components/ui/button";
+import { UpdateConfirmDialog } from "@/components/update-confirm";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { formatAppVersion } from "@/lib/changelog";
 import {
   daysBetween,
   formatCompactDate,
@@ -39,8 +47,10 @@ import {
 } from "@/lib/hidden-store";
 import {
   appVersionLabel,
+  localAppVersion,
   reloadAppToLatest,
   subscribeAppUpdateAvailable,
+  type AppUpdateInfo,
 } from "@/lib/reload-app";
 import {
   calculatedLifeKind,
@@ -149,7 +159,13 @@ export function StockDesk() {
   const [preferredLife, setPreferredLife] = useState<LifeKind | null>(null);
   const [placeholder, setPlaceholder] = useState("Pepperoni, Chorizo, Nduja Sausage…");
   const [today, setToday] = useState<Date | null>(null);
-  const [appUpdateAvailable, setAppUpdateAvailable] = useState(false);
+  const [appUpdate, setAppUpdate] = useState<AppUpdateInfo>({
+    available: false,
+    localVersion: localAppVersion(),
+    remoteVersion: null,
+    remoteNotes: [],
+  });
+  const [updateConfirmOpen, setUpdateConfirmOpen] = useState(false);
   const [updatingApp, setUpdatingApp] = useState(false);
   const [dateError, setDateError] = useState<"future" | "far" | null>(null);
   /** Title tucked away once the collapse gesture finishes. */
@@ -159,6 +175,9 @@ export function StockDesk() {
   const [showGoTop, setShowGoTop] = useState(false);
   const [compactList, setCompactList] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  /** Keep FABs unmounted until Settings finish closing so they don't jump. */
+  const [overlayButtonsReady, setOverlayButtonsReady] = useState(true);
+  const overlayButtonsTimerRef = useRef(0);
   const [searchFocused, setSearchFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const shellRef = useRef<HTMLDivElement>(null);
@@ -202,7 +221,26 @@ export function StockDesk() {
     setToday(new Date());
   }, []);
 
-  useEffect(() => subscribeAppUpdateAvailable(setAppUpdateAvailable), []);
+  useEffect(() => subscribeAppUpdateAvailable(setAppUpdate), []);
+
+  const appUpdateAvailable = appUpdate.available;
+  const updateLabel =
+    appUpdate.remoteVersion != null
+      ? `Update available · ${formatAppVersion(appUpdate.localVersion)} → ${formatAppVersion(appUpdate.remoteVersion)}`
+      : "Update available";
+
+  function openUpdateConfirm() {
+    if (!appUpdate.available || !appUpdate.remoteVersion) return;
+    setUpdateConfirmOpen(true);
+  }
+
+  function confirmAppUpdate() {
+    setUpdatingApp(true);
+    void reloadAppToLatest().finally(() => {
+      setUpdatingApp(false);
+      setUpdateConfirmOpen(false);
+    });
+  }
 
   function dateErrorFor(iso: string, from: Date): "future" | "far" | null {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return null;
@@ -218,6 +256,32 @@ export function StockDesk() {
     setDeliveryDate(next);
     setDateError(dateErrorFor(next, today ?? new Date()));
   }
+
+  function setSettingsOpenSafe(open: boolean) {
+    setSettingsOpen(open);
+    if (overlayButtonsTimerRef.current) {
+      window.clearTimeout(overlayButtonsTimerRef.current);
+      overlayButtonsTimerRef.current = 0;
+    }
+    if (open) {
+      setOverlayButtonsReady(false);
+      return;
+    }
+    // Wait for the dialog close animation before bringing FABs back.
+    overlayButtonsTimerRef.current = window.setTimeout(() => {
+      setOverlayButtonsReady(true);
+      overlayButtonsTimerRef.current = 0;
+    }, 180);
+  }
+
+  useEffect(
+    () => () => {
+      if (overlayButtonsTimerRef.current) {
+        window.clearTimeout(overlayButtonsTimerRef.current);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!today || !/^\d{4}-\d{2}-\d{2}$/.test(deliveryDate)) {
@@ -498,31 +562,28 @@ export function StockDesk() {
       className="relative mx-auto flex h-full min-h-0 w-full max-w-md min-w-0 flex-col overflow-hidden overscroll-none"
     >
       <header className="relative z-20 shrink-0 bg-[#0f1624] text-white after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-2 after:border-t after:border-red-500/30 after:bg-[#0f1624]">
-        {headerCollapsed && appUpdateAvailable ? (
+        {appUpdateAvailable ? (
           <button
             type="button"
             disabled={updatingApp}
-            onClick={() => {
-              setUpdatingApp(true);
-              void reloadAppToLatest().finally(() => {
-                setUpdatingApp(false);
-              });
-            }}
+            onClick={openUpdateConfirm}
             className="flex w-full items-center justify-center gap-2 bg-orange-500 px-4 pt-[max(0.55rem,env(safe-area-inset-top))] pb-2 text-sm font-semibold text-orange-950 transition-colors hover:bg-orange-400 active:bg-orange-600 disabled:opacity-70"
-            aria-label="Update available — tap to update"
+            aria-label={`${updateLabel} — tap to review and update`}
           >
             <RefreshCw
               className={cn("size-3.5 shrink-0", updatingApp && "animate-spin")}
               aria-hidden
             />
-            {updatingApp ? "Updating…" : "Update available"}
+            <span className="min-w-0 truncate">
+              {updatingApp ? "Updating…" : updateLabel}
+            </span>
           </button>
         ) : null}
 
         <div
           className={cn(
             "min-w-0 space-y-2 px-4 transition-[padding] duration-300",
-            headerCollapsed && appUpdateAvailable
+            appUpdateAvailable
               ? "pt-2"
               : "pt-[max(0.85rem,env(safe-area-inset-top))]",
             headerCollapsed ? "pb-2" : "pb-3",
@@ -579,7 +640,7 @@ export function StockDesk() {
                     <p className="mt-1 text-sm font-medium text-amber-300">
                       <button
                         type="button"
-                        onClick={() => setSettingsOpen(true)}
+                        onClick={() => setSettingsOpenSafe(true)}
                         className="text-left underline-offset-2 hover:underline"
                         aria-label="Chart expired — open settings to upload a new chart"
                         tabIndex={headerCollapsed ? -1 : undefined}
@@ -595,7 +656,7 @@ export function StockDesk() {
                     {chartExpired ? (
                       <button
                         type="button"
-                        onClick={() => setSettingsOpen(true)}
+                        onClick={() => setSettingsOpenSafe(true)}
                         aria-label="Upload a new chart"
                         title="Upload a new chart"
                         tabIndex={headerCollapsed ? -1 : undefined}
@@ -604,31 +665,10 @@ export function StockDesk() {
                         <Upload className="size-5" aria-hidden />
                       </button>
                     ) : null}
-                    {appUpdateAvailable ? (
-                      <button
-                        type="button"
-                        disabled={updatingApp}
-                        onClick={() => {
-                          setUpdatingApp(true);
-                          void reloadAppToLatest().finally(() => {
-                            setUpdatingApp(false);
-                          });
-                        }}
-                        aria-label="Update app"
-                        title="Update app"
-                        tabIndex={headerCollapsed ? -1 : undefined}
-                        className="chart-update-pulse inline-flex size-11 shrink-0 items-center justify-center rounded-full disabled:opacity-70"
-                      >
-                        <RefreshCw
-                          className={cn("size-5", updatingApp && "animate-spin")}
-                          aria-hidden
-                        />
-                      </button>
-                    ) : null}
                     <ImportChartButton
                       desk={desk}
                       open={settingsOpen}
-                      onOpenChange={setSettingsOpen}
+                      onOpenChange={setSettingsOpenSafe}
                     />
                   </div>
                   <span className="font-mono text-sm tracking-wide text-stone-500">
@@ -642,7 +682,7 @@ export function StockDesk() {
           {headerCollapsed && chartExpired && chart.validUntil ? (
             <button
               type="button"
-              onClick={() => setSettingsOpen(true)}
+              onClick={() => setSettingsOpenSafe(true)}
               className="block w-full truncate text-left text-xs font-medium text-amber-300 underline-offset-2 hover:underline"
               aria-label="Chart expired — open settings to upload a new chart"
             >
@@ -694,65 +734,67 @@ export function StockDesk() {
                 if (hits[0]) choose(hits[0].name);
               }}
             >
-              <div className="flex gap-2">
-                <label
-                  htmlFor="product-search"
+              <label
+                htmlFor="product-search"
+                className={cn(
+                  "relative flex min-w-0 flex-1 items-center rounded-xl border border-white/10 bg-card shadow-[4px_4px_0_0_rgba(0,0,0,0.35)] transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] focus-within:border-white/25 focus-within:ring-3 focus-within:ring-white/15",
+                  headerCollapsed ? "h-9" : "h-10",
+                )}
+              >
+                <span
+                  className="pointer-events-none flex items-center gap-1.5 pl-2.5 text-stone-400"
+                  aria-hidden
+                >
+                  <Search className="size-3.5 shrink-0" />
+                  <span className="h-4 w-px bg-white/20" />
+                </span>
+                <Input
+                  id="product-search"
+                  ref={inputRef}
+                  value={query}
+                  autoComplete="off"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  enterKeyHint="search"
+                  aria-label="Search products"
+                  placeholder={
+                    headerCollapsed && !searchExpanded ? "Search…" : placeholder
+                  }
                   className={cn(
-                    "relative flex min-w-0 flex-1 items-center rounded-xl border border-white/10 bg-card shadow-[4px_4px_0_0_rgba(0,0,0,0.35)] transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] focus-within:border-white/25 focus-within:ring-3 focus-within:ring-white/15",
+                    "min-w-0 flex-1 rounded-xl border-0 bg-transparent py-0 pr-9 pl-2 text-sm text-white shadow-none placeholder:text-stone-500 focus-visible:border-0 focus-visible:ring-0 transition-all duration-300",
                     headerCollapsed ? "h-9" : "h-10",
                   )}
-                >
-                  <span
-                    className="pointer-events-none flex items-center gap-1.5 pl-2.5 text-stone-400"
-                    aria-hidden
-                  >
-                    <Search className="size-3.5 shrink-0" />
-                    <span className="h-4 w-px bg-white/20" />
-                  </span>
-                  <Input
-                    id="product-search"
-                    ref={inputRef}
-                    value={query}
-                    autoComplete="off"
-                    autoCapitalize="none"
-                    spellCheck={false}
-                    enterKeyHint="search"
-                    aria-label="Search products"
-                    placeholder={
-                      headerCollapsed && !searchExpanded ? "Search…" : placeholder
+                  onFocus={() => setSearchFocused(true)}
+                  onBlur={() => setSearchFocused(false)}
+                  onChange={(event) => {
+                    const next = event.target.value;
+                    if (!query.trim() && next.trim()) {
+                      savedListScrollRef.current = mainRef.current?.scrollTop ?? 0;
+                      savedListCollapsedRef.current = headerCollapsedRef.current;
                     }
-                    className={cn(
-                      "flex-1 rounded-xl border-0 bg-transparent px-2 text-sm text-white shadow-none placeholder:text-stone-500 focus-visible:border-0 focus-visible:ring-0 transition-all duration-300",
-                      headerCollapsed ? "h-9" : "h-10",
-                    )}
-                    onFocus={() => setSearchFocused(true)}
-                    onBlur={() => setSearchFocused(false)}
-                    onChange={(event) => {
-                      const next = event.target.value;
-                      if (!query.trim() && next.trim()) {
-                        savedListScrollRef.current = mainRef.current?.scrollTop ?? 0;
-                        savedListCollapsedRef.current = headerCollapsedRef.current;
-                      }
-                      setQuery(next);
-                      setPicked(null);
-                    }}
-                  />
-                </label>
-                {query ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className={cn(
-                      "size-10 shrink-0 rounded-xl border-white/10 bg-card px-0 text-white transition-all duration-300",
-                      headerCollapsed ? "h-9 w-9" : "h-10 w-10",
-                    )}
-                    aria-label="Clear search"
-                    onClick={clearSearch}
-                  >
-                    <X className="size-4" />
-                  </Button>
-                ) : null}
-              </div>
+                    setQuery(next);
+                    setPicked(null);
+                  }}
+                />
+                <button
+                  type="button"
+                  aria-label="Clear search"
+                  disabled={!query.trim()}
+                  tabIndex={-1}
+                  className={cn(
+                    "absolute top-1/2 right-1.5 flex size-7 -translate-y-1/2 items-center justify-center rounded-lg transition-[opacity,background-color,color] duration-200",
+                    !query.trim()
+                      ? "pointer-events-none text-white opacity-35"
+                      : searchFocused
+                        ? "text-red-300 opacity-100 hover:bg-red-500/30 hover:text-red-200"
+                        : "text-red-400 opacity-40 hover:bg-red-500/25 hover:text-red-300 hover:opacity-100",
+                  )}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={clearSearch}
+                >
+                  <X className="size-3.5" aria-hidden />
+                </button>
+              </label>
             </form>
 
             <div
@@ -779,7 +821,7 @@ export function StockDesk() {
                 <button
                   type="button"
                   tabIndex={headerCollapsed ? undefined : -1}
-                  onClick={() => setSettingsOpen(true)}
+                  onClick={() => setSettingsOpenSafe(true)}
                   aria-label="Upload a new chart"
                   title="Upload a new chart"
                   className={cn(
@@ -897,14 +939,14 @@ export function StockDesk() {
                       aria-label="Product category"
                       value={category}
                       onChange={(value) => setCategory(value as string | "all")}
-                    >
-                      <option value="all">All ({categoryTotal})</option>
-                      {categories.map((item) => (
-                        <option key={item} value={item}>
-                          {item} ({categoryCounts[item] ?? 0})
-                        </option>
-                      ))}
-                    </FilterSelect>
+                      options={[
+                        { value: "all", label: `All (${categoryTotal})` },
+                        ...categories.map((item) => ({
+                          value: item,
+                          label: `${item} (${categoryCounts[item] ?? 0})`,
+                        })),
+                      ]}
+                    />
                     <FilterSelect
                       aria-label="Storage"
                       value={sectionFilter}
@@ -913,18 +955,23 @@ export function StockDesk() {
                         setSectionFilter(next);
                         if (next !== "all") rememberSection(next);
                       }}
-                    >
-                      <option value="all">Any ({storageCounts.all})</option>
-                      {FILTER_SECTIONS.map((id) => {
-                        const count = storageCounts.bySection[id] ?? 0;
-                        if (count === 0) return null;
-                        return (
-                          <option key={id} value={id}>
-                            {SECTION_TAG[id]} ({count})
-                          </option>
-                        );
-                      })}
-                    </FilterSelect>
+                      options={[
+                        {
+                          value: "all",
+                          label: `Any (${storageCounts.all})`,
+                        },
+                        ...FILTER_SECTIONS.flatMap((id) => {
+                          const count = storageCounts.bySection[id] ?? 0;
+                          if (count === 0) return [];
+                          return [
+                            {
+                              value: id,
+                              label: `${SECTION_TAG[id]} (${count})`,
+                            },
+                          ];
+                        }),
+                      ]}
+                    />
                     {!compactList ? (
                       <FilterSelect
                         aria-label="Life date"
@@ -934,14 +981,14 @@ export function StockDesk() {
                           setLifeFilter(next);
                           if (next !== "all") rememberLife(next);
                         }}
-                      >
-                        <option value="all">Any</option>
-                        {LIFE_KINDS.map((kind) => (
-                          <option key={kind} value={kind}>
-                            {LIFE_KIND_META[kind].filter}
-                          </option>
-                        ))}
-                      </FilterSelect>
+                        options={[
+                          { value: "all", label: "Any" },
+                          ...LIFE_KINDS.map((kind) => ({
+                            value: kind,
+                            label: LIFE_KIND_META[kind].filter,
+                          })),
+                        ]}
+                      />
                     ) : null}
                   </div>
                 </div>
@@ -961,7 +1008,7 @@ export function StockDesk() {
         {!hasChart ? (
           <button
             type="button"
-            onClick={() => setSettingsOpen(true)}
+            onClick={() => setSettingsOpenSafe(true)}
             className="my-3 flex min-h-0 w-full flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-white/20 bg-card/80 px-5 py-10 text-center active:bg-white/[0.06]"
           >
             <span className="font-display text-2xl text-white">No chart loaded</span>
@@ -1104,7 +1151,7 @@ export function StockDesk() {
         ) : null}
       </main>
 
-      {hasChart && !query.trim() ? (
+      {hasChart && !query.trim() && overlayButtonsReady ? (
         <button
           type="button"
           data-go-top=""
@@ -1123,7 +1170,7 @@ export function StockDesk() {
             }
           }}
           className={cn(
-            "absolute right-4 z-20 flex size-11 items-center justify-center rounded-full text-stone-950 shadow-[0_8px_24px_rgba(0,0,0,0.25)] ring-1 backdrop-blur-sm transition-all duration-200",
+            "absolute right-4 z-20 flex size-11 items-center justify-center rounded-full text-stone-950 shadow-[0_8px_24px_rgba(0,0,0,0.25)] ring-1 backdrop-blur-sm transition-[background-color,opacity,box-shadow] duration-200",
             "bottom-[calc(max(1rem,env(safe-area-inset-bottom))+3.25rem)]",
             "hover:bg-white hover:opacity-100 focus-visible:bg-white focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 active:bg-white active:opacity-100",
             compactList
@@ -1139,33 +1186,36 @@ export function StockDesk() {
         </button>
       ) : null}
 
-      <button
-        type="button"
-        data-go-top=""
-        aria-label="Go to top"
-        onClick={goToTop}
-        className={cn(
-          "absolute right-4 z-20 flex size-11 items-center justify-center rounded-full bg-white/40 text-stone-950 shadow-[0_8px_24px_rgba(0,0,0,0.25)] ring-1 ring-white/20 backdrop-blur-sm transition-all duration-200",
-          "hover:bg-white hover:opacity-100 hover:shadow-[0_8px_24px_rgba(0,0,0,0.45)] focus-visible:bg-white focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 active:bg-white active:opacity-100",
-          "bottom-[max(1rem,env(safe-area-inset-bottom))]",
-          showGoTop
-            ? "translate-y-0 opacity-45"
-            : "pointer-events-none translate-y-3 opacity-0",
-        )}
-      >
-        <ArrowUp className="size-5" strokeWidth={2.5} />
-      </button>
+      {overlayButtonsReady ? (
+        <button
+          type="button"
+          data-go-top=""
+          aria-label="Go to top"
+          onClick={goToTop}
+          className={cn(
+            "absolute right-4 z-20 flex size-11 items-center justify-center rounded-full bg-white/40 text-stone-950 shadow-[0_8px_24px_rgba(0,0,0,0.25)] ring-1 ring-white/20 backdrop-blur-sm transition-[background-color,opacity,box-shadow,transform] duration-200",
+            "hover:bg-white hover:opacity-100 hover:shadow-[0_8px_24px_rgba(0,0,0,0.45)] focus-visible:bg-white focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 active:bg-white active:opacity-100",
+            "bottom-[max(1rem,env(safe-area-inset-bottom))]",
+            showGoTop
+              ? "translate-y-0 opacity-45"
+              : "pointer-events-none translate-y-3 opacity-0",
+          )}
+        >
+          <ArrowUp className="size-5" strokeWidth={2.5} />
+        </button>
+      ) : null}
 
       <div
         role="status"
         aria-live="polite"
         className={cn(
-          "pointer-events-none absolute inset-x-0 z-30 flex justify-center px-4 transition-all duration-300",
+          "pointer-events-none absolute inset-x-0 z-30 flex justify-center px-4 transition-[opacity,transform] duration-300",
           "bottom-[max(1.25rem,env(safe-area-inset-bottom))]",
-          dateError
+          dateError && overlayButtonsReady
             ? "translate-y-0 opacity-100"
             : "translate-y-3 opacity-0",
         )}
+        hidden={!overlayButtonsReady || !dateError}
       >
         <div className="flex max-w-sm items-start gap-2.5 rounded-2xl bg-red-600/55 px-4 py-3 text-left shadow-[0_12px_32px_rgba(0,0,0,0.35)] ring-1 ring-red-200/35 backdrop-blur-md">
           <TriangleAlert
@@ -1196,6 +1246,18 @@ export function StockDesk() {
           </div>
         </div>
       </div>
+
+      {appUpdate.remoteVersion ? (
+        <UpdateConfirmDialog
+          open={updateConfirmOpen}
+          onOpenChange={setUpdateConfirmOpen}
+          localVersion={appUpdate.localVersion}
+          remoteVersion={appUpdate.remoteVersion}
+          notes={appUpdate.remoteNotes}
+          busy={updatingApp}
+          onConfirm={confirmAppUpdate}
+        />
+      ) : null}
     </div>
   );
 }
@@ -1211,33 +1273,36 @@ function ChipCount({ value }: { value: number }) {
 function FilterSelect({
   value,
   onChange,
-  children,
+  options,
   "aria-label": ariaLabel,
 }: {
   value: string;
   onChange: (value: string) => void;
-  children: ReactNode;
+  options: { value: string; label: string }[];
   "aria-label": string;
 }) {
   return (
-    <label className="relative min-w-0">
-      <select
+    <Select
+      value={value}
+      items={options}
+      onValueChange={(next) => {
+        if (typeof next === "string") onChange(next);
+      }}
+    >
+      <SelectTrigger
         aria-label={ariaLabel}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="h-9 w-full appearance-none truncate rounded-xl border border-white/10 bg-card py-0 pr-7 pl-2 text-xs font-medium text-white outline-none focus-visible:border-white/25 focus-visible:ring-2 focus-visible:ring-white/15"
+        className="h-9 w-full min-w-0 rounded-xl border-white/10 bg-card px-2 text-xs font-medium text-white hover:bg-white/[0.06] focus-visible:border-white/25 focus-visible:ring-white/15 dark:bg-card dark:hover:bg-white/[0.06] [&_[data-slot=select-value]]:min-w-0 [&_[data-slot=select-value]]:truncate"
       >
-        {children}
-      </select>
-      <span
-        className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-stone-400"
-        aria-hidden
-      >
-        <svg viewBox="0 0 12 12" className="size-3 fill-current">
-          <path d="M2.2 4.2a.75.75 0 0 1 1.06 0L6 6.94l2.74-2.74a.75.75 0 1 1 1.06 1.06l-3.27 3.27a.75.75 0 0 1-1.06 0L2.2 5.26a.75.75 0 0 1 0-1.06Z" />
-        </svg>
-      </span>
-    </label>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent align="start" className="min-w-[8rem]">
+        {options.map((option) => (
+          <SelectItem key={option.value} value={option.value}>
+            {option.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }
 

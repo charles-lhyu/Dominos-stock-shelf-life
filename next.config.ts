@@ -19,10 +19,20 @@ const packageJson = JSON.parse(
 const appVersion =
   process.env.NEXT_PUBLIC_APP_VERSION ?? packageJson.version ?? "1.0.0";
 
-// Static file the Update button fetches to see if a newer deploy is live.
+const changelog = JSON.parse(
+  readFileSync(join(process.cwd(), "lib", "changelog-data.json"), "utf8"),
+) as Array<{ version?: string; notes?: string[] }>;
+const releaseNotes =
+  changelog.find((entry) => entry.version === appVersion)?.notes ?? [];
+
+// Static files the Update flow fetches (version + notes for the confirm sheet).
 writeFileSync(
   join(process.cwd(), "public", "app-version.json"),
-  `${JSON.stringify({ version: appVersion }, null, 2)}\n`,
+  `${JSON.stringify({ version: appVersion, notes: releaseNotes }, null, 2)}\n`,
+);
+writeFileSync(
+  join(process.cwd(), "public", "changelog.json"),
+  `${JSON.stringify(changelog, null, 2)}\n`,
 );
 
 const nextConfig: NextConfig = {

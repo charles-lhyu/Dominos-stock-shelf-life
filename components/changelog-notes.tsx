@@ -2,6 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { ChangelogEntry } from "@/lib/changelog";
 import { formatAppVersion } from "@/lib/changelog";
 import { cn } from "cn";
@@ -70,30 +77,38 @@ export function ChangelogBrowser({
         >
           <ChevronLeft className="size-5" aria-hidden />
         </button>
-        <label className="min-w-0 flex-1">
-          <span className="sr-only">Changelog version</span>
-          <select
+        <div className="min-w-0 flex-1">
+          <Select
             value={entry.version}
-            onChange={(event) => {
-              const next = entries.findIndex(
-                (item) => item.version === event.target.value,
-              );
+            items={entries.map((item) => ({
+              value: item.version,
+              label: formatAppVersion(item.version),
+            }))}
+            onValueChange={(value) => {
+              if (typeof value !== "string") return;
+              const next = entries.findIndex((item) => item.version === value);
               if (next >= 0) setIndex(next);
             }}
-            className="h-10 w-full appearance-none rounded-xl border border-white/10 bg-card bg-[length:1rem] bg-[right_0.75rem_center] bg-no-repeat px-9 text-center font-mono text-sm text-white outline-none ring-sky-400/40 focus:ring-2"
-            style={{
-              backgroundImage: `url("data:image/svg+xml,${encodeURIComponent(
-                '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%23a8a29e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>',
-              )}")`,
-            }}
           >
-            {entries.map((item) => (
-              <option key={item.version} value={item.version}>
-                {formatAppVersion(item.version)}
-              </option>
-            ))}
-          </select>
-        </label>
+            <SelectTrigger
+              aria-label="Changelog version"
+              className="h-10 w-full justify-center rounded-xl border-white/10 bg-card px-3 font-mono text-sm text-white hover:bg-white/[0.06] focus-visible:border-sky-400/40 focus-visible:ring-sky-400/30 dark:bg-card dark:hover:bg-white/[0.06] [&_[data-slot=select-value]]:justify-center"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent align="center" className="min-w-[8rem]">
+              {entries.map((item) => (
+                <SelectItem
+                  key={item.version}
+                  value={item.version}
+                  className="font-mono"
+                >
+                  {formatAppVersion(item.version)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         <button
           type="button"
           aria-label="Older version"

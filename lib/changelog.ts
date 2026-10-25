@@ -1,3 +1,5 @@
+import changelogData from "./changelog-data.json";
+
 export type ChangelogEntry = {
   version: string;
   /** Short bullets for that release. Empty = version-only notice. */
@@ -5,38 +7,10 @@ export type ChangelogEntry = {
 };
 
 /**
- * Newest first. Add a block whenever you bump package.json.
+ * Newest first. Edit `changelog-data.json` whenever you bump package.json.
  * Notes are optional — omit or leave empty for a version-only line.
  */
-export const CHANGELOG: ChangelogEntry[] = [
-  {
-    version: "1.4.12",
-    notes: [
-      "Changelog button and version browser in Settings",
-      "Update notice shows this build’s release notes",
-      "Fix GitHub Pages deploy TypeScript check",
-    ],
-  },
-  {
-    version: "1.4.11",
-    notes: [
-      "Settings section chips with scroll spy and App details",
-      "Desk stays empty until a chart is imported",
-      "Bottom toasts for import success and read errors",
-      "Clear-chart confirmation popup",
-      "Sort controls only on the top sticky category header",
-    ],
-  },
-  {
-    version: "1.4.10",
-    notes: [
-      "PDF row crops on the desk",
-      "Combined delivery and prep dates",
-      "Hide products from the list",
-      "Section tools and sticky category headers",
-    ],
-  },
-];
+export const CHANGELOG: ChangelogEntry[] = changelogData;
 
 export function appSemver(): string {
   return process.env.NEXT_PUBLIC_APP_VERSION ?? CHANGELOG[0]?.version ?? "0.0.0";

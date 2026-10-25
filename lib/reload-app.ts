@@ -5,6 +5,18 @@ import { appSemver, formatAppVersion } from "@/lib/changelog";
 const JUST_UPDATED_KEY = "app-just-updated";
 const UPDATE_POLL_MS = 60_000;
 
+export type RemoteAppInfo = {
+  version: string;
+  notes: string[];
+};
+
+export type AppUpdateInfo = {
+  available: boolean;
+  localVersion: string;
+  remoteVersion: string | null;
+  remoteNotes: string[];
+};
+
 function localVersion() {
   return appSemver();
 }
@@ -15,15 +27,26 @@ export function appVersionLabel() {
   return formatAppVersion(localVersion());
 }
 
-async function fetchRemoteVersion(): Promise<string | null> {
+export function localAppVersion() {
+  return localVersion();
+}
+
+export async function fetchRemoteAppInfo(): Promise<RemoteAppInfo | null> {
   try {
     const response = await fetch(
       `${withBasePath("/app-version.json")}?v=${Date.now()}`,
       { cache: "no-store" },
     );
     if (!response.ok) return null;
-    const data = (await response.json()) as { version?: string };
-    return typeof data.version === "string" ? data.version : null;
+    const data = (await response.json()) as {
+      version?: string;
+      notes?: unknown;
+    };
+    if (typeof data.version !== "string" || !data.version.trim()) return null;
+    const notes = Array.isArray(data.notes)
+      ? data.notes.filter((item): item is string => typeof item === "string")
+      : [];
+    return { version: data.version.trim(), notes };
   } catch {
     return null;
   }
@@ -31,11 +54,35 @@ async function fetchRemoteVersion(): Promise<string | null> {
 
 /** True when hosted app-version.json differs from this shell. */
 export async function checkAppUpdateAvailable(): Promise<boolean> {
-  // Local `next dev` never shows the update pulse (avoids version-file noise).
-  if (process.env.NODE_ENV === "development") return false;
-  const remote = await fetchRemoteVersion();
-  if (remote == null) return false;
-  return remote !== localVersion();
+  const info = await getAppUpdateInfo();
+  return info.available;
+}
+
+export async function getAppUpdateInfo(): Promise<AppUpdateInfo> {
+  const local = localVersion();
+  if (process.env.NODE_ENV === "development") {
+    return {
+      available: false,
+      localVersion: local,
+      remoteVersion: null,
+      remoteNotes: [],
+    };
+  }
+  const remote = await fetchRemoteAppInfo();
+  if (remote == null) {
+    return {
+      available: false,
+      localVersion: local,
+      remoteVersion: null,
+      remoteNotes: [],
+    };
+  }
+  return {
+    available: remote.version !== local,
+    localVersion: local,
+    remoteVersion: remote.version,
+    remoteNotes: remote.notes,
+  };
 }
 
 /**
@@ -43,13 +90,13 @@ export async function checkAppUpdateAvailable(): Promise<boolean> {
  * becomes visible, and on window focus.
  */
 export function subscribeAppUpdateAvailable(
-  onChange: (available: boolean) => void,
+  onChange: (info: AppUpdateInfo) => void,
 ): () => void {
   let cancelled = false;
 
   const run = () => {
-    void checkAppUpdateAvailable().then((available) => {
-      if (!cancelled) onChange(available);
+    void getAppUpdateInfo().then((info) => {
+      if (!cancelled) onChange(info);
     });
   };
 
@@ -75,10 +122,10 @@ export function subscribeAppUpdateAvailable(
  * Only reload when the remote version is known and different.
  */
 export async function reloadAppToLatest() {
-  const remote = await fetchRemoteVersion();
-  if (remote == null || remote === localVersion()) {
+  const remote = await fetchRemoteAppInfo();
+  if (remote == null || remote.version === localVersion()) {
     showAppStatus("up-to-date");
-    return;
+    return { updated: false as const };
   }
 
   try {
@@ -108,4 +155,5 @@ export async function reloadAppToLatest() {
   const url = new URL(window.location.href);
   url.searchParams.set("v", String(Date.now()));
   window.location.replace(url.toString());
+  return { updated: true as const };
 }

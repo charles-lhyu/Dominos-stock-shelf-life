@@ -1,0 +1,38 @@
+---
+description: When the user says update or deploy — verify, ship to GitHub Pages, confirm live
+alwaysApply: true
+---
+
+# Update / deploy
+
+When the user says **update**, **deploy**, or equivalent (ship, publish, push live):
+
+## 1. Make the page work
+
+- Finish the feature/fix; do not leave broken UI.
+- Run `npm test` and `npx tsc --noEmit` (or `npm run build` with `GITHUB_PAGES=true` if deploy-shaped).
+- Spot-check critical flows in the browser when UI changed (settings, search, chart list).
+
+## 2. Version + changelog
+
+- Bump `package.json` patch version (e.g. 1.4.12 → 1.4.13).
+- Add a matching entry at the top of `lib/changelog-data.json` with short user-facing notes.
+- Rebuild so `public/app-version.json` / `public/changelog.json` match (or whatever the project’s version write step is).
+
+## 3. Commit and push GitHub `main`
+
+- Commit only when shipping (user asked update/deploy).
+- Push to **`github` remote `main`** (`https://github.com/charles-lhyu/Dominos-stock-shelf-life.git`) — that triggers Pages.
+- Do not stop at Cursor Origin alone; GitHub `main` is what deploys.
+
+## 4. Confirm deployment and live page
+
+- Watch the **Deploy GitHub Pages** workflow until success (`gh run watch` / `gh run list`).
+- Confirm Pages status built and URL: https://charles-lhyu.github.io/Dominos-stock-shelf-life/
+- Hard-check the live site (version label / `app-version.json` matches the shipped version).
+- Report commit, workflow result, and live URL/version to the user.
+
+## Do not
+
+- Push a known failing build.
+- Skip the live confirmation step after push.

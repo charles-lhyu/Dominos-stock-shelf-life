@@ -26,6 +26,7 @@ import {
   X,
 } from "lucide-react";
 import { ChangelogBrowser } from "@/components/changelog-notes";
+import { UpdateConfirmDialog } from "@/components/update-confirm";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -36,6 +37,13 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { CHANGELOG } from "@/lib/changelog";
 import { parseChartPack } from "@/lib/chart-pack";
 import { formatCompactDate, formatLongDate } from "@/lib/dates";
@@ -61,7 +69,11 @@ import {
 import { clearPdfCrops, replacePdfCrops } from "@/lib/pdf-crop-images";
 import { parsePdfChartFile } from "@/lib/pdf-chart";
 import { prepClockTime } from "@/lib/preview";
-import { appVersionLabel, reloadAppToLatest } from "@/lib/reload-app";
+import {
+  appVersionLabel,
+  getAppUpdateInfo,
+  reloadAppToLatest,
+} from "@/lib/reload-app";
 import { textConversionTable } from "@/lib/text-conversion";
 import { fetchRemoteChart } from "@/lib/remote-chart";
 import type { ChartPack } from "@/lib/types";
@@ -119,6 +131,12 @@ export function ImportChartButton({
   const [busy, setBusy] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const [changelogOpen, setChangelogOpen] = useState(false);
+  const [updateConfirmOpen, setUpdateConfirmOpen] = useState(false);
+  const [pendingUpdate, setPendingUpdate] = useState<{
+    localVersion: string;
+    remoteVersion: string;
+    notes: string[];
+  } | null>(null);
   const [scanning, setScanning] = useState(false);
   const [activeSettingsSection, setActiveSettingsSection] =
     useState<SettingsSectionId>("settings-chart");
@@ -159,11 +177,13 @@ export function ImportChartButton({
       setUrl(desk.sourceUrl);
       setConfirmReset(false);
       setChangelogOpen(false);
+      setUpdateConfirmOpen(false);
       setActiveSettingsSection("settings-chart");
     } else {
       stopScan();
       setConfirmReset(false);
       setChangelogOpen(false);
+      setUpdateConfirmOpen(false);
       if (settingsJumpTimer.current != null) {
         window.clearTimeout(settingsJumpTimer.current);
         settingsJumpTimer.current = null;
@@ -328,10 +348,18 @@ export function ImportChartButton({
     { id: "settings-app" as const, label: "App" },
   ];
 
+  const activeSettingsLabel =
+    settingsNav.find((item) => item.id === activeSettingsSection)?.label ??
+    "Chart";
+
+  const settingsSelectLabels = Object.fromEntries(
+    settingsNav.map((item) => [item.id, item.label]),
+  );
+
   function syncNavCard(id: SettingsSectionId) {
     const nav = settingsNavRef.current;
     const chip = nav?.querySelector<HTMLElement>(
-      `[data-settings-nav="${id}"]`,
+      `button[data-settings-nav="${id}"]`,
     );
     if (!nav || !chip) return;
     const navRect = nav.getBoundingClientRect();
@@ -501,8 +529,46 @@ export function ImportChartButton({
         >
           <div
             ref={settingsNavRef}
-            className="flex snap-x snap-mandatory gap-2 overflow-x-auto scroll-px-1 pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            className="flex items-center gap-2 overflow-x-auto scroll-px-2 px-0.5 pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           >
+            <div className="sticky left-0 z-10 flex shrink-0 items-center gap-2 bg-popover pr-0.5">
+              <Select
+                value={activeSettingsSection}
+                items={settingsSelectLabels}
+                onValueChange={(value) => {
+                  if (typeof value === "string") {
+                    jumpToSection(value as SettingsSectionId);
+                  }
+                }}
+              >
+                <SelectTrigger
+                  aria-label={`Current section: ${activeSettingsLabel}`}
+                  className="h-auto max-w-[9.5rem] gap-1 rounded-xl border-sky-400/50 bg-sky-500/20 px-3.5 py-2 text-white shadow-[0_0_0_1px_rgba(56,189,248,0.25)] hover:bg-sky-500/25 focus-visible:border-sky-400/60 focus-visible:ring-sky-400/30 data-popup-open:relative data-popup-open:z-[101] data-popup-open:rounded-b-none data-popup-open:border-b-0 data-popup-open:shadow-none dark:bg-sky-500/20 dark:hover:bg-sky-500/25 [&_svg]:size-3.5 [&_svg]:text-sky-300 data-popup-open:[&_svg]:rotate-180 [&_[data-slot=select-value]]:text-[0.65rem] [&_[data-slot=select-value]]:font-semibold [&_[data-slot=select-value]]:tracking-[0.14em] [&_[data-slot=select-value]]:uppercase"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent
+                  align="start"
+                  sideOffset={0}
+                  alignItemWithTrigger={false}
+                  className="w-max min-w-(--anchor-width) rounded-t-none rounded-b-xl border-sky-400/50 border-t-0 bg-popover p-1 shadow-[0_0_0_1px_rgba(56,189,248,0.25)] ring-0"
+                >
+                  {settingsNav.map((item) => (
+                    <SelectItem
+                      key={item.id}
+                      value={item.id}
+                      className="text-[0.7rem] font-semibold tracking-[0.12em] uppercase"
+                    >
+                      {item.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <span
+                aria-hidden
+                className="h-5 w-px shrink-0 bg-white/15"
+              />
+            </div>
             {settingsNav.map((item) => {
               const selected = activeSettingsSection === item.id;
               return (
@@ -513,9 +579,9 @@ export function ImportChartButton({
                   aria-current={selected ? "true" : undefined}
                   onClick={() => jumpToSection(item.id)}
                   className={cn(
-                    "snap-center shrink-0 rounded-xl border px-3.5 py-2.5 text-left transition-[background-color,border-color,box-shadow,transform,color] duration-200",
+                    "shrink-0 rounded-xl border px-3.5 py-2 text-left transition-[background-color,border-color,box-shadow,color] duration-200",
                     selected
-                      ? "scale-[1.02] border-sky-400/50 bg-sky-500/20 text-white shadow-[0_0_0_1px_rgba(56,189,248,0.25)]"
+                      ? "border-sky-400/50 bg-sky-500/20 text-white shadow-[0_0_0_1px_rgba(56,189,248,0.25)]"
                       : "border-white/10 bg-card text-stone-400 hover:border-white/20 hover:bg-white/[0.06] hover:text-stone-200",
                   )}
                 >
@@ -965,11 +1031,21 @@ export function ImportChartButton({
               onClick={() => {
                 setBusy(true);
                 const toastId = toast.loading("Checking for updates…");
-                void reloadAppToLatest().finally(() => {
-                  toast.dismiss(toastId);
-                  setBusy(false);
-                  setOpen(false);
-                });
+                void getAppUpdateInfo()
+                  .then((info) => {
+                    toast.dismiss(toastId);
+                    if (info.available && info.remoteVersion) {
+                      setPendingUpdate({
+                        localVersion: info.localVersion,
+                        remoteVersion: info.remoteVersion,
+                        notes: info.remoteNotes,
+                      });
+                      setUpdateConfirmOpen(true);
+                      return;
+                    }
+                    return reloadAppToLatest().finally(() => setOpen(false));
+                  })
+                  .finally(() => setBusy(false));
               }}
             >
               <RefreshCw className="size-4" />
@@ -1022,6 +1098,29 @@ export function ImportChartButton({
         </div>
       </DialogContent>
     </Dialog>
+
+    {pendingUpdate ? (
+      <UpdateConfirmDialog
+        open={updateConfirmOpen}
+        onOpenChange={(next) => {
+          setUpdateConfirmOpen(next);
+          if (!next) setPendingUpdate(null);
+        }}
+        localVersion={pendingUpdate.localVersion}
+        remoteVersion={pendingUpdate.remoteVersion}
+        notes={pendingUpdate.notes}
+        busy={busy}
+        onConfirm={() => {
+          setBusy(true);
+          void reloadAppToLatest().finally(() => {
+            setBusy(false);
+            setUpdateConfirmOpen(false);
+            setPendingUpdate(null);
+            setOpen(false);
+          });
+        }}
+      />
+    ) : null}
 
     <Dialog open={changelogOpen} onOpenChange={setChangelogOpen}>
       <DialogContent

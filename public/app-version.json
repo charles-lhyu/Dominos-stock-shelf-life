@@ -1,3 +1,9 @@
 {
-  "version": "1.4.12"
+  "version": "1.4.13",
+  "notes": [
+    "Dark themed settings and filter dropdowns",
+    "Settings section picker merges with chips and highlights the current item",
+    "Search clear control sits inside the field with red hover states",
+    "Floating desk buttons stay hidden while Settings is open or closing"
+  ]
 }

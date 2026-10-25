@@ -1,0 +1,38 @@
+[
+  {
+    "version": "1.4.13",
+    "notes": [
+      "Dark themed settings and filter dropdowns",
+      "Settings section picker merges with chips and highlights the current item",
+      "Search clear control sits inside the field with red hover states",
+      "Floating desk buttons stay hidden while Settings is open or closing"
+    ]
+  },
+  {
+    "version": "1.4.12",
+    "notes": [
+      "Changelog button and version browser in Settings",
+      "Update notice shows this build’s release notes",
+      "Fix GitHub Pages deploy TypeScript check"
+    ]
+  },
+  {
+    "version": "1.4.11",
+    "notes": [
+      "Settings section chips with scroll spy and App details",
+      "Desk stays empty until a chart is imported",
+      "Bottom toasts for import success and read errors",
+      "Clear-chart confirmation popup",
+      "Sort controls only on the top sticky category header"
+    ]
+  },
+  {
+    "version": "1.4.10",
+    "notes": [
+      "PDF row crops on the desk",
+      "Combined delivery and prep dates",
+      "Hide products from the list",
+      "Section tools and sticky category headers"
+    ]
+  }
+]
