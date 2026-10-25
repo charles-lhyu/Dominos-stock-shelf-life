@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { packFromPdfText } from "./pdf-chart";
+import type { ShelfRule } from "./types";
 
 const HEADER =
   "Campaign 5 shelf life chart. All stores. Version 1. Issued on 7 September 2026. Valid until 17 November 2026. ";
@@ -80,7 +81,7 @@ describe("PDF shelf life parsing", () => {
     assert.equal(result.ok, true);
     if (!result.ok) return;
     for (const name of ["Pepperoni", "Chorizo", "Nduja Sausage"]) {
-      const rule = result.pack.rules.find(
+      const rule: ShelfRule | undefined = result.pack.rules.find(
         (item) => item.name === name && item.sectionId === "frozen",
       );
       assert.ok(rule, name);

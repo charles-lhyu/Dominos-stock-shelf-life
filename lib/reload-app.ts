@@ -1,17 +1,18 @@
 import { showAppStatus } from "@/lib/app-status";
 import { withBasePath } from "@/lib/base-path";
+import { appSemver, formatAppVersion } from "@/lib/changelog";
 
 const JUST_UPDATED_KEY = "app-just-updated";
 const UPDATE_POLL_MS = 60_000;
 
 function localVersion() {
-  return process.env.NEXT_PUBLIC_APP_VERSION ?? "1.4.11";
+  return appSemver();
 }
 
 /** Header / notice label — `dev` on local preview, real semver in production. */
 export function appVersionLabel() {
   if (process.env.NODE_ENV === "development") return "dev";
-  return `v${localVersion()}`;
+  return formatAppVersion(localVersion());
 }
 
 async function fetchRemoteVersion(): Promise<string | null> {

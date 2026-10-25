@@ -20,10 +20,12 @@ import {
   RectangleVertical,
   RefreshCw,
   RotateCcw,
+  ScrollText,
   Settings,
   Unlock,
   X,
 } from "lucide-react";
+import { ChangelogBrowser } from "@/components/changelog-notes";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -34,6 +36,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { CHANGELOG } from "@/lib/changelog";
 import { parseChartPack } from "@/lib/chart-pack";
 import { formatCompactDate, formatLongDate } from "@/lib/dates";
 import {
@@ -115,6 +118,7 @@ export function ImportChartButton({
   const [url, setUrl] = useState(desk.sourceUrl);
   const [busy, setBusy] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [changelogOpen, setChangelogOpen] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [activeSettingsSection, setActiveSettingsSection] =
     useState<SettingsSectionId>("settings-chart");
@@ -154,10 +158,12 @@ export function ImportChartButton({
     if (next) {
       setUrl(desk.sourceUrl);
       setConfirmReset(false);
+      setChangelogOpen(false);
       setActiveSettingsSection("settings-chart");
     } else {
       stopScan();
       setConfirmReset(false);
+      setChangelogOpen(false);
       if (settingsJumpTimer.current != null) {
         window.clearTimeout(settingsJumpTimer.current);
         settingsJumpTimer.current = null;
@@ -946,6 +952,15 @@ export function ImportChartButton({
               type="button"
               variant="outline"
               className="h-12 w-full justify-start rounded-xl border-white/10 text-base text-white"
+              onClick={() => setChangelogOpen(true)}
+            >
+              <ScrollText className="size-4" />
+              Changelog
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-12 w-full justify-start rounded-xl border-white/10 text-base text-white"
               disabled={busy}
               onClick={() => {
                 setBusy(true);
@@ -1004,6 +1019,34 @@ export function ImportChartButton({
             <RotateCcw className="size-4" />
             Clear chart
           </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog open={changelogOpen} onOpenChange={setChangelogOpen}>
+      <DialogContent
+        showCloseButton={false}
+        overlayClassName="z-[60] bg-black/50"
+        className="z-[60] flex h-[min(28rem,85dvh)] w-[calc(100%-1.25rem)] max-w-sm flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-sm"
+      >
+        <DialogHeader className="shrink-0 space-y-1 border-b border-white/10 px-4 py-3 pr-14">
+          <DialogTitle className="font-display text-xl text-white">
+            Changelog
+          </DialogTitle>
+          <DialogDescription className="text-sm text-stone-400">
+            Recent app releases on this install.
+          </DialogDescription>
+          <button
+            type="button"
+            className="absolute top-3 right-3 inline-flex size-10 items-center justify-center rounded-full bg-white/10 text-white"
+            aria-label="Close changelog"
+            onClick={() => setChangelogOpen(false)}
+          >
+            <X className="size-5" />
+          </button>
+        </DialogHeader>
+        <div className="min-h-0 flex-1 px-4 py-3">
+          <ChangelogBrowser entries={CHANGELOG} className="h-full" />
         </div>
       </DialogContent>
     </Dialog>
