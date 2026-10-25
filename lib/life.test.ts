@@ -76,19 +76,47 @@ describe("shelf life dates", () => {
       assert.ok(item);
       const prepped = clocksFor(item).find((clock) => clock.id === "prepped");
       assert.ok(prepped);
-      assert.equal(prepped.value, "10 days");
+      assert.equal(prepped.chilled, true);
+      assert.equal(prepped.value, "10 days (Chilled)");
       assert.equal(prepped.addDays, 10);
       const result = projectClock(prepped, "2026-10-01", today);
       assert.equal(result?.when, "Sun 11 Oct 2026 | 23:59");
     }
   });
 
+  it("marks ready-section prepped life chilled and keeps ambient use ambient", () => {
+    const sauce = RULES.find((rule) => rule.name === "Pizza Sauce" && rule.sectionId === "ready");
+    assert.ok(sauce);
+    const clocks = clocksFor(sauce);
+    const prepped = clocks.find((clock) => clock.id === "prepped");
+    const ambient = clocks.find((clock) => clock.id === "ambient");
+    assert.equal(prepped?.chilled, true);
+    assert.equal(prepped?.value, "10 days (Chilled)");
+    assert.equal(ambient?.chilled, false);
+    assert.equal(ambient?.value, "15 hours");
+  });
+
+  it("keeps true ambient-section prepped life without a chilled state", () => {
+    const sauce = RULES.find((rule) => rule.name === "Burger Sauce" && rule.sectionId === "ambient");
+    assert.ok(sauce);
+    const prepped = clocksFor(sauce).find((clock) => clock.id === "prepped");
+    assert.equal(prepped?.chilled, false);
+    assert.equal(prepped?.value, "14 days");
+  });
+
   it("adds sliced gherkins' 16-day life to the prep date", () => {
     const item = RULES.find((rule) => rule.name === "Sliced Gherkins");
     assert.ok(item);
-    const prepped = clocksFor(item).find((clock) => clock.id === "prepped");
+    const clocks = clocksFor(item);
+    assert.equal(
+      clocks.some((clock) => clock.id === "ambient"),
+      false,
+      "ambient N/A must not show an ambient clock",
+    );
+    const prepped = clocks.find((clock) => clock.id === "prepped");
     assert.ok(prepped);
-    assert.equal(prepped.value, "16 days");
+    assert.equal(prepped.chilled, true);
+    assert.equal(prepped.value, "16 days (Chilled)");
     assert.equal(prepped.addDays, 16);
     const result = projectClock(prepped, "2026-10-24", today);
     assert.equal(result?.when, "Mon 9 Nov 2026 | 23:59");
@@ -99,7 +127,8 @@ describe("shelf life dates", () => {
     assert.ok(item);
     const prepped = clocksFor(item).find((clock) => clock.id === "prepped");
     assert.ok(prepped);
-    assert.equal(prepped.value, "25 days");
+    assert.equal(prepped.chilled, true);
+    assert.equal(prepped.value, "25 days (Chilled)");
     assert.equal(prepped.addDays, 25);
     const result = projectClock(prepped, "2026-10-24", today);
     assert.equal(result?.when, "Wed 18 Nov 2026 | 23:59");

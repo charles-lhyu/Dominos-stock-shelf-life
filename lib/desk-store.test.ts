@@ -100,4 +100,68 @@ describe("stored chart repair", () => {
     assert.equal(repaired[0], original[0]);
     assert.equal(repaired[1], original[1]);
   });
+
+  it("drops an invented inUse that only copied fromDelivery", () => {
+    const saved: ShelfRule = {
+      id: "frozen:pepperoni",
+      sectionId: "frozen",
+      category: "Toppings",
+      name: "Pepperoni",
+      aliases: [],
+      sameAs: ["Chorizo", "Nduja Sausage"],
+      fromDelivery: "12 days",
+      inUse: "12 days",
+    };
+    const [repaired] = repairStoredRules([saved]);
+    assert.equal(repaired?.fromDelivery, "12 days");
+    assert.equal(repaired?.inUse, undefined);
+  });
+
+  it("keeps bacon delivery and in-use when both are on the chart", () => {
+    const saved: ShelfRule = {
+      id: "frozen:bacon-frozen",
+      sectionId: "frozen",
+      category: "Toppings",
+      name: "Bacon (FROZEN)",
+      aliases: [],
+      sameAs: [],
+      fromDelivery: "10 days",
+      inUse: "7 days",
+    };
+    const [repaired] = repairStoredRules([saved]);
+    assert.equal(repaired?.fromDelivery, "10 days");
+    assert.equal(repaired?.inUse, "7 days");
+  });
+
+  it("drops chilled chorizo and nduja that are not on the chart", () => {
+    const pepperoni: ShelfRule = {
+      id: "chilled:pepperoni",
+      sectionId: "chilled",
+      category: "Toppings",
+      name: "Pepperoni",
+      aliases: [],
+      sameAs: [],
+      unopened: "Date on pack",
+      prepped: "12 days",
+    };
+    const chorizo: ShelfRule = {
+      id: "chilled:chorizo",
+      sectionId: "chilled",
+      category: "Toppings",
+      name: "Chorizo",
+      aliases: [],
+      sameAs: [],
+      unopened: "Date on pack",
+      prepped: "12 days",
+    };
+    const repaired = repairStoredRules([pepperoni, chorizo]);
+    assert.equal(
+      repaired.some((item) => item.name === "Chorizo" && item.sectionId === "chilled"),
+      false,
+    );
+    assert.equal(
+      repaired.some((item) => item.name === "Pepperoni" && item.sectionId === "chilled"),
+      true,
+    );
+  });
 });

@@ -74,6 +74,21 @@ describe("PDF shelf life parsing", () => {
     assert.equal(bacon.inUse, "7 days");
   });
 
+  it("updates only from-delivery when the chart row has no separate in-use column", () => {
+    const text = "Pepperoni / Chorizo / Nduja Sausage 11 days Tandoori Chicken 10 days";
+    const result = packFromPdfText(`${HEADER}${text}`, "campaign-5.pdf");
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    for (const name of ["Pepperoni", "Chorizo", "Nduja Sausage"]) {
+      const rule = result.pack.rules.find(
+        (item) => item.name === name && item.sectionId === "frozen",
+      );
+      assert.ok(rule, name);
+      assert.equal(rule.fromDelivery, "11 days");
+      assert.equal(rule.inUse, undefined);
+    }
+  });
+
   it("assigns a life column one count per name instead of the first count", () => {
     const columns =
       "Pepperdew Piquante Peppers Pineapple Olives 25 days 10 days 10 days";

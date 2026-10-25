@@ -5,10 +5,6 @@ import type { ChartPack, ShelfRule } from "./types";
 
 const STORAGE_KEY = "shelf-life-desk-v1";
 
-/** Sample Campaign 5 chart for `next dev` (real valid-until — no fake expiry/update cues). */
-const PREVIEW_PACK: ChartPack =
-  process.env.NODE_ENV === "development" ? BUNDLED_PACK : EMPTY_PACK;
-
 export type DeskState = {
   deliveryDate: string;
   /** Locked prep time `HH:MM`; empty means live clock. */
@@ -21,7 +17,7 @@ export type DeskState = {
 const DEFAULT_STATE: DeskState = {
   deliveryDate: "",
   prepTime: "",
-  pack: PREVIEW_PACK,
+  pack: EMPTY_PACK,
   imported: false,
   sourceUrl: "",
 };
@@ -42,29 +38,68 @@ function withChartCategory(rule: ShelfRule): ShelfRule {
   return { ...rule, category: bundled.category };
 }
 
+/**
+ * Drop fields we invented that are not on the Campaign chart:
+ * - chilled Chorizo / Nduja (frozen-only on the chart)
+ * - duplicate inUse copied from fromDelivery when the chart has no in-use column
+ */
+function withoutInventedFields(rule: ShelfRule): ShelfRule | null {
+  if (
+    rule.sectionId === "chilled" &&
+    (rule.name === "Chorizo" || rule.name === "Nduja Sausage")
+  ) {
+    return null;
+  }
+  const bundled = BUNDLED_PACK.rules.find(
+    (item) => item.name === rule.name && item.sectionId === rule.sectionId,
+  );
+  if (
+    bundled &&
+    !bundled.inUse &&
+    rule.inUse &&
+    rule.fromDelivery &&
+    rule.inUse === rule.fromDelivery &&
+    /^\d+\s*days?$/i.test(rule.inUse)
+  ) {
+    const next = { ...rule };
+    delete next.inUse;
+    return next;
+  }
+  return rule;
+}
+
 export function repairStoredRules(rules: ShelfRule[]): ShelfRule[] {
-  return rules.map((rule) => {
-    const current = withChartCategory(rule);
-    if (current.sectionId !== "ready" || !current.prepped) return current;
+  const repaired: ShelfRule[] = [];
+  for (const rule of rules) {
+    const current = withoutInventedFields(withChartCategory(rule));
+    if (!current) continue;
+    if (current.sectionId !== "ready" || !current.prepped) {
+      repaired.push(current);
+      continue;
+    }
     if ((current.name === "Pineapple" || current.name === "Olives") && current.prepped === "25 days") {
-      return { ...current, prepped: "10 days" };
+      repaired.push({ ...current, prepped: "10 days" });
+      continue;
     }
     if (
       current.name === "Pepperdew Piquante Peppers" &&
       /^\d+ days$/.test(current.prepped) &&
       current.prepped !== "25 days"
     ) {
-      return { ...current, prepped: "25 days" };
+      repaired.push({ ...current, prepped: "25 days" });
+      continue;
     }
     if (
       current.name === "Sliced Gherkins" &&
       /^\d+ days$/.test(current.prepped) &&
       current.prepped !== "16 days"
     ) {
-      return { ...current, prepped: "16 days" };
+      repaired.push({ ...current, prepped: "16 days" });
+      continue;
     }
-    return current;
-  });
+    repaired.push(current);
+  }
+  return repaired;
 }
 
 function repairChartMeta(pack: ChartPack): ChartPack["chart"] {
@@ -220,9 +255,10 @@ export function setImportedPack(pack: ChartPack, sourceUrl: string) {
 }
 
 export function clearImportedPack() {
+  clearHiddenNames();
   state = {
     ...state,
-    pack: PREVIEW_PACK,
+    pack: EMPTY_PACK,
     imported: false,
     sourceUrl: "",
   };

@@ -1,5 +1,6 @@
 import { BUNDLED_PACK, parseChartPack } from "./chart-pack";
 import { putPdfCropImage, saveSourcePdf } from "./pdf-crop-images";
+import { splitPreppedAmbientFields } from "./storage-life";
 import type { ChartPack, ShelfRule } from "./types";
 
 function pdfWorkerSrc() {
@@ -271,8 +272,9 @@ function dayField(value: string | undefined) {
 
 /**
  * Map day counts from the PDF window onto delivery / in-use / prepped.
- * Bacon (FROZEN) prints 10 days delivery + 7 days in use — a single "7 days"
- * after the name must not overwrite delivery.
+ * Only fields that exist on the chart row are updated — never invent a second
+ * life column. Bacon (FROZEN) prints 10 days delivery + 7 days in use; a
+ * single "7 days" after the name must not overwrite delivery.
  */
 function applyParsedDayCounts(
   next: ShelfRule,
@@ -495,14 +497,22 @@ export function packFromPdfText(text: string, fileName: string): { ok: true; pac
     };
 
     applyParsedDayCounts(next, base, window, columnDays.get(spanIndex));
-    if (hours && base.inUse && /hour/i.test(base.inUse)) {
-      next.inUse = `${hours[1]} hours prepped`;
-    }
-    if (hours && base.ambientUse && /hour/i.test(base.ambientUse)) {
-      next.ambientUse = `${hours[1]} hours`;
-    }
-    if (hours && base.also && /hour/i.test(base.also.value)) {
-      next.also = { ...base.also, value: `${hours[1]} hours` };
+
+    // Divided prepped cells: "chilled" → prepped (chilled), "ambient" → ambientUse.
+    if (/\bchilled\b|\bambient\b/i.test(window)) {
+      const split = splitPreppedAmbientFields(base.prepped, base.ambientUse, window);
+      if (split.prepped) next.prepped = split.prepped;
+      if (split.ambientUse) next.ambientUse = split.ambientUse;
+    } else {
+      if (hours && base.inUse && /hour/i.test(base.inUse)) {
+        next.inUse = `${hours[1]} hours prepped`;
+      }
+      if (hours && base.ambientUse && /hour/i.test(base.ambientUse)) {
+        next.ambientUse = `${hours[1]} hours`;
+      }
+      if (hours && base.also && /hour/i.test(base.also.value)) {
+        next.also = { ...base.also, value: `${hours[1]} hours` };
+      }
     }
 
     if (!used.has(next.id)) {

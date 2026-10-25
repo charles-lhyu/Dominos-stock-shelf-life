@@ -20,12 +20,12 @@ const JUST_UPDATED_KEY = "app-just-updated";
 const AUTO_CLOSE_MS = 3000;
 
 function currentVersion() {
-  return process.env.NEXT_PUBLIC_APP_VERSION ?? "1.4.10";
+  return process.env.NEXT_PUBLIC_APP_VERSION ?? "1.4.11";
 }
 
 /**
- * Bottom status popup: “App updated” after a new build, or “App up to date”
- * when Update finds nothing new. Closes after 5s or on any tap.
+ * Bottom status popup: “App updated” after a new build, or “Up to date”
+ * when Update finds nothing new. Closes after a few seconds or on any tap.
  */
 export function UpdateNotice() {
   const [open, setOpen] = useState(false);
@@ -45,7 +45,13 @@ export function UpdateNotice() {
       return;
     }
 
-    if (justUpdated || (previous != null && previous !== version)) {
+    if (justUpdated) {
+      // Reload ran — only call it “updated” if the stored version actually changed.
+      setKind(
+        previous != null && previous === version ? "up-to-date" : "updated",
+      );
+      setOpen(true);
+    } else if (previous != null && previous !== version) {
       setKind("updated");
       setOpen(true);
     }
@@ -80,7 +86,7 @@ export function UpdateNotice() {
               ) : (
                 <Check className="size-5 shrink-0 text-emerald-300" strokeWidth={2.75} aria-hidden />
               )}
-              {updated ? "App updated" : "App up to date"}
+              {updated ? "App updated" : "Up to date"}
             </DialogTitle>
             <span className="shrink-0 pt-1 font-mono text-sm tracking-wide text-stone-400">
               {appVersionLabel()}
@@ -88,8 +94,8 @@ export function UpdateNotice() {
           </div>
           <DialogDescription className="text-stone-400">
             {updated
-              ? "You’re on the latest version. Tap anywhere to dismiss."
-              : "No newer build found. Tap anywhere to dismiss."}
+              ? "A newer build was installed. Tap anywhere to dismiss."
+              : "You’re already on the latest version. Tap anywhere to dismiss."}
           </DialogDescription>
         </DialogHeader>
       </DialogContent>

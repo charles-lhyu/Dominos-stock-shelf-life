@@ -11,7 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { WhenDate } from "@/components/when-date";
-import { BUNDLED_PACK, sectionFromPack } from "@/lib/chart-pack";
+import { sectionFromPack } from "@/lib/chart-pack";
 import { toIsoDate } from "@/lib/dates";
 import { readDebug, subscribeDebug } from "@/lib/debug-store";
 import { hideProductName } from "@/lib/hidden-store";
@@ -230,6 +230,7 @@ export function LifeCard({
             <WhenDate
               when={result.when}
               at={result.at}
+              asHours={clock.addHours != null && clock.addHours < 24}
               className="font-display text-2xl leading-none break-words"
             />
             <span className="mt-1 block font-sans text-sm font-medium text-stone-300">
@@ -361,10 +362,7 @@ export function LifeCard({
 }
 
 function retrievedFields(rule: ShelfRule) {
-  const bundled = BUNDLED_PACK.rules.find(
-    (item) => item.id === rule.id || (item.name === rule.name && item.sectionId === rule.sectionId),
-  );
-  const rows: { label: string; value: string; chart?: string }[] = [
+  const rows: { label: string; value: string }[] = [
     { label: "id", value: rule.id },
     { label: "section", value: rule.sectionId },
     { label: "category", value: rule.category },
@@ -379,21 +377,12 @@ function retrievedFields(rule: ShelfRule) {
   for (const key of life) {
     const value = rule[key];
     if (typeof value !== "string" || !value) continue;
-    const chart = bundled && typeof bundled[key] === "string" ? (bundled[key] as string) : undefined;
-    rows.push({
-      label: key,
-      value,
-      chart: chart && chart !== value ? chart : undefined,
-    });
+    rows.push({ label: key, value });
   }
   if (rule.also) {
     rows.push({
       label: `also (${rule.also.label})`,
       value: rule.also.value,
-      chart:
-        bundled?.also && bundled.also.value !== rule.also.value
-          ? bundled.also.value
-          : undefined,
     });
   }
   if (rule.note) rows.push({ label: "note", value: rule.note });
@@ -468,11 +457,6 @@ function ItemDebugPanel({ rule, clocks }: { rule: ShelfRule; clocks: Clock[] }) 
               <dt className="shrink-0 text-stone-500">{row.label}</dt>
               <dd className="min-w-0 overflow-hidden break-all text-sky-50">
                 {row.value}
-                {row.chart ? (
-                  <span className="mt-0.5 block break-all text-amber-200/90">
-                    chart {row.chart}
-                  </span>
-                ) : null}
               </dd>
             </div>
           ))}

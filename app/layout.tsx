@@ -3,6 +3,7 @@ import { Fraunces, Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import { LockPortrait } from "@/components/lock-portrait";
 import { RegisterSW } from "@/components/register-sw";
+import { Toaster } from "@/components/ui/sonner";
 import { UpdateNotice } from "@/components/update-notice";
 import { withBasePath } from "@/lib/base-path";
 import "./globals.css";
@@ -79,6 +80,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <LockPortrait>{children}</LockPortrait>
           <UpdateNotice />
           <RegisterSW />
+          <Toaster position="bottom-center" closeButton className="!z-[100]" />
         </ThemeProvider>
       </body>
     </html>

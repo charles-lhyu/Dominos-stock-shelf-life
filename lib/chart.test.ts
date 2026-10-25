@@ -29,8 +29,24 @@ describe("Campaign 5 chart", () => {
     assert.equal(rule("Butter Whirl", "pack").category, "Other");
     assert.equal(rule("Mac n Cheese", "frozen").inUse, "48 hours prepped");
     assert.equal(rule("Pepperoni", "frozen").fromDelivery, "12 days");
+    assert.equal(rule("Pepperoni", "frozen").inUse, undefined);
+    assert.equal(rule("Pepperoni", "chilled").prepped, "12 days");
+    assert.equal(rule("Chorizo", "frozen").fromDelivery, "12 days");
+    assert.equal(rule("Chorizo", "frozen").inUse, undefined);
+    assert.equal(rule("Nduja Sausage", "frozen").fromDelivery, "12 days");
+    assert.equal(
+      RULES.some((item) => item.name === "Chorizo" && item.sectionId === "chilled"),
+      false,
+    );
+    assert.equal(
+      RULES.some((item) => item.name === "Nduja Sausage" && item.sectionId === "chilled"),
+      false,
+    );
+    assert.equal(rule("Bacon (FROZEN)", "frozen").fromDelivery, "10 days");
     assert.equal(rule("Bacon (FROZEN)", "frozen").inUse, "7 days");
     assert.equal(rule("Chicken Wings", "frozen").fromDelivery, "9 days");
+    assert.equal(rule("Chicken Wings", "frozen").inUse, undefined);
+    assert.equal(rule("Fries", "frozen").inUse, undefined);
     assert.equal(rule("Mozzarella Cheese - Standard", "chilled").prepped, "9 days");
     assert.equal(rule("Plant-Based Cheese Alternative", "chilled").prepped, "7 days");
     assert.equal(rule("Ham", "chilled").prepped, "6 days");

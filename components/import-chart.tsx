@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 import {
   Camera,
   Eye,
@@ -28,8 +35,14 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { parseChartPack } from "@/lib/chart-pack";
-import { formatLongDate } from "@/lib/dates";
-import { readDebug, subscribeDebug, writeDebug } from "@/lib/debug-store";
+import { formatCompactDate, formatLongDate } from "@/lib/dates";
+import {
+  readDebug,
+  readDebugDays,
+  subscribeDebug,
+  writeDebug,
+  writeDebugDays,
+} from "@/lib/debug-store";
 import {
   clearHiddenNames,
   getHiddenNames,
@@ -45,7 +58,7 @@ import {
 import { clearPdfCrops, replacePdfCrops } from "@/lib/pdf-crop-images";
 import { parsePdfChartFile } from "@/lib/pdf-chart";
 import { prepClockTime } from "@/lib/preview";
-import { reloadAppToLatest } from "@/lib/reload-app";
+import { appVersionLabel, reloadAppToLatest } from "@/lib/reload-app";
 import { textConversionTable } from "@/lib/text-conversion";
 import { fetchRemoteChart } from "@/lib/remote-chart";
 import type { ChartPack } from "@/lib/types";
@@ -58,6 +71,22 @@ import {
   subscribeRotation,
 } from "@/lib/rotation-store";
 import { cn } from "cn";
+import { toast } from "sonner";
+
+type SettingsSectionId =
+  | "settings-chart"
+  | "settings-display"
+  | "settings-hidden"
+  | "settings-debug"
+  | "settings-app";
+
+const SETTINGS_SECTION_IDS: SettingsSectionId[] = [
+  "settings-chart",
+  "settings-display",
+  "settings-hidden",
+  "settings-debug",
+  "settings-app",
+];
 
 type BarcodeDetectorLike = {
   detect: (source: ImageBitmapSource) => Promise<Array<{ rawValue: string }>>;
@@ -85,15 +114,26 @@ export function ImportChartButton({
   const setOpen = onOpenChange ?? setUncontrolledOpen;
   const [url, setUrl] = useState(desk.sourceUrl);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [confirmReset, setConfirmReset] = useState(false);
   const [scanning, setScanning] = useState(false);
+  const [activeSettingsSection, setActiveSettingsSection] =
+    useState<SettingsSectionId>("settings-chart");
+  const [settingsEndPad, setSettingsEndPad] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const scanTimer = useRef<number | null>(null);
   const photoRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const settingsBodyRef = useRef<HTMLDivElement>(null);
+  const settingsNavRef = useRef<HTMLDivElement>(null);
+  const settingsJumpLock = useRef(false);
+  const settingsJumpTimer = useRef<number | null>(null);
   const debug = useSyncExternalStore(subscribeDebug, readDebug, () => false);
+  const debugDays = useSyncExternalStore(
+    subscribeDebug,
+    readDebugDays,
+    () => false,
+  );
   const hiddenNames = useSyncExternalStore(
     subscribeHidden,
     getHiddenNames,
@@ -113,12 +153,26 @@ export function ImportChartButton({
   function handleOpenChange(next: boolean) {
     if (next) {
       setUrl(desk.sourceUrl);
-      setMessage(null);
-      setError(null);
+      setConfirmReset(false);
+      setActiveSettingsSection("settings-chart");
     } else {
       stopScan();
+      setConfirmReset(false);
+      if (settingsJumpTimer.current != null) {
+        window.clearTimeout(settingsJumpTimer.current);
+        settingsJumpTimer.current = null;
+      }
+      settingsJumpLock.current = false;
     }
     setOpen(next);
+  }
+
+  function resetChart() {
+    void clearPdfCrops();
+    clearImportedPack();
+    setUrl("");
+    setConfirmReset(false);
+    toast.success("Chart cleared.");
   }
 
   function stopScan() {
@@ -136,7 +190,6 @@ export function ImportChartButton({
     pack: ChartPack,
     source: string,
     crops?: Record<string, string>,
-    message?: string,
   ) {
     if (crops && Object.keys(crops).length > 0) {
       await replacePdfCrops(crops);
@@ -144,14 +197,17 @@ export function ImportChartButton({
       await clearPdfCrops();
     }
     setImportedPack(pack, source);
-    setMessage(message ?? `Loaded ${pack.rules.length} products.`);
-    setError(null);
     stopScan();
+    const count = pack.rules.length;
+    toast.success(
+      count === 1 ? "Imported 1 item" : `Imported ${count} items`,
+    );
+    setOpen(false);
   }
 
   async function applyPack(pack: Awaited<ReturnType<typeof parseChartPack>>, source: string) {
     if (!pack.ok) {
-      setError(pack.error);
+      toast.error(pack.error);
       return;
     }
     await commitPack(pack.pack, source);
@@ -159,21 +215,14 @@ export function ImportChartButton({
 
   async function importFromUrl(nextUrl: string) {
     setBusy(true);
-    setMessage(null);
-    setError(null);
     const result = await fetchRemoteChart(nextUrl);
     setBusy(false);
     if (!result.ok) {
-      setError(result.error);
+      toast.error(result.error);
       return;
     }
     setUrl(nextUrl.trim());
-    await commitPack(
-      result.pack,
-      nextUrl.trim(),
-      result.crops,
-      `Loaded ${result.pack.rules.length} products from Google Drive.`,
-    );
+    await commitPack(result.pack, nextUrl.trim(), result.crops);
   }
 
   async function importFromText(raw: string, source: string) {
@@ -185,17 +234,17 @@ export function ImportChartButton({
     try {
       await applyPack(parseChartPack(JSON.parse(trimmed)), source);
     } catch {
-      setError("That file is not valid chart JSON.");
+      toast.error("That file is not valid chart JSON.");
     }
   }
 
   async function readQrFromImage(file: File) {
     setBusy(true);
-    setError(null);
-    setMessage(null);
     try {
       if (!window.BarcodeDetector) {
-        setError("This phone browser cannot read QR codes from photos. Try a file or URL.");
+        toast.error(
+          "This phone browser cannot read QR codes from photos. Try a file or URL.",
+        );
         return;
       }
       const bitmap = await createImageBitmap(file);
@@ -204,7 +253,7 @@ export function ImportChartButton({
       bitmap.close();
       const value = codes[0]?.rawValue?.trim();
       if (!value) {
-        setError("No QR code found in that picture.");
+        toast.error("No QR code found in that picture.");
         return;
       }
       if (/^https?:\/\//i.test(value)) {
@@ -214,16 +263,17 @@ export function ImportChartButton({
         await importFromText(value, "photo-qr");
       }
     } catch {
-      setError("Could not read that picture.");
+      toast.error("Could not read that picture.");
     } finally {
       setBusy(false);
     }
   }
 
   async function startScan() {
-    setError(null);
     if (!window.BarcodeDetector) {
-      setError("Live QR scanning is not supported here. Use a photo, file, or URL.");
+      toast.error(
+        "Live QR scanning is not supported here. Use a photo, file, or URL.",
+      );
       return;
     }
     try {
@@ -256,12 +306,158 @@ export function ImportChartButton({
         }
       }, 450);
     } catch {
-      setError("Camera permission was blocked.");
+      toast.error("Camera permission was blocked.");
       stopScan();
     }
   }
 
+  const settingsNav = [
+    { id: "settings-chart" as const, label: "Chart" },
+    { id: "settings-display" as const, label: "Display" },
+    {
+      id: "settings-hidden" as const,
+      label: `Hidden${hiddenNames.length ? ` (${hiddenNames.length})` : ""}`,
+    },
+    { id: "settings-debug" as const, label: "Debug" },
+    { id: "settings-app" as const, label: "App" },
+  ];
+
+  function syncNavCard(id: SettingsSectionId) {
+    const nav = settingsNavRef.current;
+    const chip = nav?.querySelector<HTMLElement>(
+      `[data-settings-nav="${id}"]`,
+    );
+    if (!nav || !chip) return;
+    const navRect = nav.getBoundingClientRect();
+    const chipRect = chip.getBoundingClientRect();
+    const delta =
+      chipRect.left +
+      chipRect.width / 2 -
+      (navRect.left + navRect.width / 2);
+    if (Math.abs(delta) < 2) return;
+    nav.scrollBy({ left: delta, behavior: "smooth" });
+  }
+
+  function sectionAtScroll(body: HTMLElement): SettingsSectionId {
+    const bodyRect = body.getBoundingClientRect();
+    // Active section = the one whose top has crossed a line near the top of the pane.
+    const marker = bodyRect.top + Math.min(56, bodyRect.height * 0.25);
+    let current: SettingsSectionId = SETTINGS_SECTION_IDS[0];
+    let bestTop = Number.NEGATIVE_INFINITY;
+    for (const id of SETTINGS_SECTION_IDS) {
+      const el = body.querySelector<HTMLElement>(`#${id}`);
+      if (!el) continue;
+      const top = el.getBoundingClientRect().top;
+      if (top <= marker && top >= bestTop) {
+        bestTop = top;
+        current = id;
+      }
+    }
+    return current;
+  }
+
+  function applyActiveSection(id: SettingsSectionId) {
+    setActiveSettingsSection((prev) => {
+      if (prev === id) return prev;
+      requestAnimationFrame(() => syncNavCard(id));
+      return id;
+    });
+  }
+
+  function jumpToSection(id: SettingsSectionId) {
+    const body = settingsBodyRef.current;
+    const target = body?.querySelector<HTMLElement>(`#${id}`);
+    if (!body || !target) return;
+    settingsJumpLock.current = true;
+    applyActiveSection(id);
+    syncNavCard(id);
+    const top =
+      target.getBoundingClientRect().top -
+      body.getBoundingClientRect().top +
+      body.scrollTop;
+    body.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+    if (settingsJumpTimer.current != null) {
+      window.clearTimeout(settingsJumpTimer.current);
+    }
+    settingsJumpTimer.current = window.setTimeout(() => {
+      settingsJumpLock.current = false;
+      settingsJumpTimer.current = null;
+      applyActiveSection(sectionAtScroll(body));
+    }, 650);
+  }
+
+  function measureSettingsEndPad(body: HTMLElement): number {
+    const last = body.querySelector<HTMLElement>("#settings-app");
+    if (!last || body.clientHeight <= 0) return 0;
+    // Pane is a fixed viewport — pad so App's top can sit at the pane top.
+    return Math.max(0, Math.round(body.clientHeight - last.offsetHeight));
+  }
+
+  useEffect(() => {
+    if (!open) return;
+
+    let cancelled = false;
+    let body: HTMLDivElement | null = null;
+    let resizeObserver: ResizeObserver | null = null;
+
+    function syncEndPad() {
+      if (!body) return;
+      const next = measureSettingsEndPad(body);
+      setSettingsEndPad((prev) => (Math.abs(prev - next) < 1 ? prev : next));
+    }
+
+    function onScroll() {
+      if (!body || settingsJumpLock.current) return;
+      applyActiveSection(sectionAtScroll(body));
+    }
+
+    function attach() {
+      if (cancelled) return false;
+      body = settingsBodyRef.current;
+      if (!body) return false;
+      body.addEventListener("scroll", onScroll, { passive: true });
+      resizeObserver = new ResizeObserver(() => {
+        syncEndPad();
+        onScroll();
+      });
+      resizeObserver.observe(body);
+      const app = body.querySelector("#settings-app");
+      if (app) resizeObserver.observe(app);
+      syncEndPad();
+      requestAnimationFrame(() => {
+        if (!cancelled) syncEndPad();
+      });
+      onScroll();
+      return true;
+    }
+
+    let retryTimer: number | null = null;
+    const raf = window.requestAnimationFrame(() => {
+      if (attach()) return;
+      retryTimer = window.setTimeout(() => {
+        attach();
+      }, 80);
+    });
+
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(raf);
+      if (retryTimer != null) window.clearTimeout(retryTimer);
+      resizeObserver?.disconnect();
+      body?.removeEventListener("scroll", onScroll);
+    };
+  }, [open, hiddenNames.length, debug, desk.imported, desk.pack.rules.length]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const body = settingsBodyRef.current;
+    if (!body) return;
+    const next = measureSettingsEndPad(body);
+    if (Math.abs(settingsEndPad - next) >= 1) setSettingsEndPad(next);
+  }, [open, settingsEndPad, debug, desk.imported, desk.pack.rules.length]);
+
   return (
+    <>
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger
         render={
@@ -275,13 +471,13 @@ export function ImportChartButton({
         <Settings className="size-5" />
       </DialogTrigger>
       <DialogContent
-        className="relative max-h-[90dvh] w-[calc(100%-1.25rem)] max-w-md gap-0 overflow-y-auto rounded-2xl p-0"
+        className="relative flex h-[90dvh] max-h-[90dvh] w-[calc(100%-1.25rem)] max-w-md flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-md"
         showCloseButton={false}
       >
-        <DialogHeader className="border-b border-white/10 px-4 py-4 pr-14">
+        <DialogHeader className="shrink-0 border-b border-white/10 px-4 py-3 pr-14">
           <DialogTitle className="font-display text-2xl text-white">Settings</DialogTitle>
-          <DialogDescription className="text-stone-400">
-            Upload a chart, check for updates, or change display options.
+          <DialogDescription className="sr-only">
+            Chart, display, hidden products, debug, and app updates.
           </DialogDescription>
           <button
             type="button"
@@ -293,153 +489,204 @@ export function ImportChartButton({
           </button>
         </DialogHeader>
 
-        <div className="space-y-3 px-4 py-5">
-          <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">
-            Upload chart
-          </p>
-
-          <input
-            ref={photoRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="hidden"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              event.target.value = "";
-              if (file) void readQrFromImage(file);
-            }}
-          />
-          <input
-            ref={fileRef}
-            type="file"
-            accept="application/pdf,.pdf"
-            className="hidden"
-            onChange={async (event) => {
-              const file = event.target.files?.[0];
-              event.target.value = "";
-              if (!file) return;
-              setBusy(true);
-              setError(null);
-              setMessage(null);
-              try {
-                const result = await parsePdfChartFile(file);
-                if (!result.ok) {
-                  setError(result.error);
-                  return;
-                }
-                await commitPack(result.pack, file.name, result.crops);
-              } catch {
-                setError("Could not read that PDF.");
-              } finally {
-                setBusy(false);
-              }
-            }}
-          />
-
-          <Button
-            type="button"
-            variant="outline"
-            className="h-12 w-full justify-start rounded-xl border-white/10 text-base text-white"
-            disabled={busy}
-            onClick={() => photoRef.current?.click()}
+        <nav
+          aria-label="Settings sections"
+          className="shrink-0 border-b border-white/10 bg-popover px-3 py-2.5"
+        >
+          <div
+            ref={settingsNavRef}
+            className="flex snap-x snap-mandatory gap-2 overflow-x-auto scroll-px-1 pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           >
-            <ImageUp className="size-4" />
-            Camera / picture
-          </Button>
+            {settingsNav.map((item) => {
+              const selected = activeSettingsSection === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  data-settings-nav={item.id}
+                  aria-current={selected ? "true" : undefined}
+                  onClick={() => jumpToSection(item.id)}
+                  className={cn(
+                    "snap-center shrink-0 rounded-xl border px-3.5 py-2.5 text-left transition-[background-color,border-color,box-shadow,transform,color] duration-200",
+                    selected
+                      ? "scale-[1.02] border-sky-400/50 bg-sky-500/20 text-white shadow-[0_0_0_1px_rgba(56,189,248,0.25)]"
+                      : "border-white/10 bg-card text-stone-400 hover:border-white/20 hover:bg-white/[0.06] hover:text-stone-200",
+                  )}
+                >
+                  <span className="block text-[0.65rem] font-semibold uppercase tracking-[0.14em]">
+                    {item.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </nav>
 
-          {!scanning ? (
+        <div
+          ref={settingsBodyRef}
+          className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pt-3 pb-0"
+        >
+          <div className="flex flex-col gap-3">
+          <section
+            id="settings-chart"
+            className={cn(
+              "scroll-mt-2 space-y-3 rounded-2xl border p-3 transition-[border-color,box-shadow] duration-200",
+              activeSettingsSection === "settings-chart"
+                ? "border-sky-400/40 bg-card shadow-[0_0_0_1px_rgba(56,189,248,0.18)]"
+                : "border-white/10 bg-card/80",
+            )}
+          >
+            <SettingsSectionTitle>Chart</SettingsSectionTitle>
+
+            <input
+              ref={photoRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                if (file) void readQrFromImage(file);
+              }}
+            />
+            <input
+              ref={fileRef}
+              type="file"
+              accept="application/pdf,.pdf"
+              className="hidden"
+              onChange={async (event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                if (!file) return;
+                setBusy(true);
+                try {
+                  const result = await parsePdfChartFile(file);
+                  if (!result.ok) {
+                    toast.error(result.error);
+                    return;
+                  }
+                  await commitPack(result.pack, file.name, result.crops);
+                } catch {
+                  toast.error("Could not read that PDF.");
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            />
+
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="h-12 justify-start rounded-xl border-white/10 text-sm text-white"
+                disabled={busy}
+                onClick={() => photoRef.current?.click()}
+              >
+                <ImageUp className="size-4" />
+                Camera
+              </Button>
+              {!scanning ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-12 justify-start rounded-xl border-white/10 text-sm text-white"
+                  disabled={busy}
+                  onClick={startScan}
+                >
+                  <QrCode className="size-4" />
+                  Scan QR
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-12 justify-start rounded-xl border-white/10 text-sm text-white"
+                  onClick={stopScan}
+                >
+                  <Camera className="size-4" />
+                  Stop cam
+                </Button>
+              )}
+            </div>
+
+            {scanning ? (
+              <div className="overflow-hidden rounded-2xl bg-black">
+                <video
+                  ref={videoRef}
+                  className="aspect-[3/4] w-full object-cover"
+                  muted
+                  playsInline
+                />
+              </div>
+            ) : null}
+
             <Button
               type="button"
               variant="outline"
               className="h-12 w-full justify-start rounded-xl border-white/10 text-base text-white"
               disabled={busy}
-              onClick={startScan}
+              onClick={() => fileRef.current?.click()}
             >
-              <QrCode className="size-4" />
-              Scan Drive QR
+              <FileText className="size-4" />
+              PDF chart
             </Button>
-          ) : (
+
             <div className="space-y-2">
-              <div className="overflow-hidden rounded-2xl bg-black">
-                <video ref={videoRef} className="aspect-[3/4] w-full object-cover" muted playsInline />
+              <label htmlFor="chart-url" className="text-sm font-medium text-stone-300">
+                Google Drive link
+              </label>
+              <div className="flex gap-2">
+                <Input
+                  id="chart-url"
+                  type="url"
+                  inputMode="url"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  placeholder="https://drive.google.com/file/d/…"
+                  value={url}
+                  onChange={(event) => setUrl(event.target.value)}
+                  className="h-12 rounded-xl border-white/10 bg-black/30 text-base text-white placeholder:text-stone-500"
+                />
+                <Button
+                  type="button"
+                  className="h-12 shrink-0 rounded-xl px-3"
+                  disabled={busy || !url.trim()}
+                  onClick={() => importFromUrl(url)}
+                >
+                  <Link2 className="size-4" />
+                  Load
+                </Button>
               </div>
+              <p className="text-xs text-stone-500">
+                Share the PDF as “Anyone with the link”, then paste that link or put it
+                in a QR code.
+              </p>
+            </div>
+
+            {desk.imported ? (
               <Button
                 type="button"
                 variant="outline"
-                className="h-11 w-full rounded-xl border-white/10 text-white"
-                onClick={stopScan}
+                className="h-12 w-full justify-start rounded-xl border-white/10 text-base text-white"
+                onClick={() => setConfirmReset(true)}
               >
-                <Camera className="size-4" />
-                Stop camera
+                <RotateCcw className="size-4" />
+                Reset chart
               </Button>
-            </div>
-          )}
+            ) : null}
+          </section>
 
-          <Button
-            type="button"
-            variant="outline"
-            className="h-12 w-full justify-start rounded-xl border-white/10 text-base text-white"
-            disabled={busy}
-            onClick={() => fileRef.current?.click()}
+          <section
+            id="settings-display"
+            className={cn(
+              "scroll-mt-2 space-y-3 rounded-2xl border p-3 transition-[border-color,box-shadow] duration-200",
+              activeSettingsSection === "settings-display"
+                ? "border-sky-400/40 bg-card shadow-[0_0_0_1px_rgba(56,189,248,0.18)]"
+                : "border-white/10 bg-card/80",
+            )}
           >
-            <FileText className="size-4" />
-            PDF chart
-          </Button>
-
-          <div className="space-y-2">
-            <label htmlFor="chart-url" className="text-sm font-medium text-stone-300">
-              Google Drive link
-            </label>
-            <div className="flex gap-2">
-              <Input
-                id="chart-url"
-                type="url"
-                inputMode="url"
-                autoCapitalize="none"
-                autoCorrect="off"
-                placeholder="https://drive.google.com/file/d/…"
-                value={url}
-                onChange={(event) => setUrl(event.target.value)}
-                className="h-12 rounded-xl border-white/10 bg-black/30 text-base text-white placeholder:text-stone-500"
-              />
-              <Button
-                type="button"
-                className="h-12 shrink-0 rounded-xl px-3"
-                disabled={busy || !url.trim()}
-                onClick={() => importFromUrl(url)}
-              >
-                <Link2 className="size-4" />
-                Load
-              </Button>
-            </div>
-            <p className="text-xs text-stone-500">
-              Share the PDF as “Anyone with the link”, then paste that link or put it in a QR code.
-            </p>
-          </div>
-
-          {desk.imported ? (
-            <Button
-              type="button"
-              variant="outline"
-              className="h-12 w-full justify-start rounded-xl border-white/10 text-base text-white"
-              onClick={() => {
-                void clearPdfCrops();
-                clearImportedPack();
-                setUrl("");
-                setMessage("Chart cleared.");
-                setError(null);
-              }}
-            >
-              <RotateCcw className="size-4" />
-              Reset chart
-            </Button>
-          ) : null}
-
-          <div className="space-y-3 border-t border-white/10 pt-3">
-            <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">
-              Display
-            </p>
+            <SettingsSectionTitle>Display</SettingsSectionTitle>
             <div
               role="group"
               aria-label="Preferred orientation"
@@ -517,13 +764,21 @@ export function ImportChartButton({
               Pick portrait or landscape, then lock so phones stay in that view. Wide
               desktops never rotate.
             </p>
-          </div>
+          </section>
 
-          <div className="space-y-3 border-t border-white/10 pt-3">
+          <section
+            id="settings-hidden"
+            className={cn(
+              "scroll-mt-2 space-y-3 rounded-2xl border p-3 transition-[border-color,box-shadow] duration-200",
+              activeSettingsSection === "settings-hidden"
+                ? "border-sky-400/40 bg-card shadow-[0_0_0_1px_rgba(56,189,248,0.18)]"
+                : "border-white/10 bg-card/80",
+            )}
+          >
             <div className="flex items-center justify-between gap-2">
-              <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">
+              <SettingsSectionTitle>
                 Hidden ({hiddenNames.length})
-              </p>
+              </SettingsSectionTitle>
               {hiddenNames.length > 0 ? (
                 <button
                   type="button"
@@ -536,16 +791,13 @@ export function ImportChartButton({
             </div>
             {hiddenNames.length === 0 ? (
               <p className="text-sm text-stone-500">
-                Hide a product from its detail card. It leaves the list until you
-                show it again here.
+                Hide a product from its detail card. It leaves the list until you show
+                it again here.
               </p>
             ) : (
               <ul className="divide-y divide-white/10 rounded-xl border border-white/10 bg-card">
                 {hiddenNames.map((name) => (
-                  <li
-                    key={name}
-                    className="flex items-center gap-2 px-3 py-2.5"
-                  >
+                  <li key={name} className="flex items-center gap-2 px-3 py-2.5">
                     <span className="min-w-0 flex-1 truncate text-sm text-white">
                       {name}
                     </span>
@@ -562,12 +814,41 @@ export function ImportChartButton({
                 ))}
               </ul>
             )}
-          </div>
+          </section>
 
-          <div className="space-y-3 border-t border-white/10 pt-3">
-            <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">
-              Debug
-            </p>
+          <section
+            id="settings-debug"
+            className={cn(
+              "scroll-mt-2 space-y-3 rounded-2xl border p-3 transition-[border-color,box-shadow] duration-200",
+              activeSettingsSection === "settings-debug"
+                ? "border-sky-400/40 bg-card shadow-[0_0_0_1px_rgba(56,189,248,0.18)]"
+                : "border-white/10 bg-card/80",
+            )}
+          >
+            <SettingsSectionTitle>Debug</SettingsSectionTitle>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={debugDays}
+              aria-label="Show number of days instead of expiry dates"
+              onClick={() => writeDebugDays(!debugDays)}
+              className={cn(
+                "flex h-12 w-full items-center justify-between rounded-xl border px-3 text-left text-base text-white",
+                debugDays
+                  ? "border-sky-400/40 bg-sky-500/15"
+                  : "border-white/10 bg-card",
+              )}
+            >
+              <span>Show days/hours instead of dates</span>
+              <span
+                className={cn(
+                  "text-xs font-semibold uppercase tracking-wide",
+                  debugDays ? "text-sky-300" : "text-stone-500",
+                )}
+              >
+                {debugDays ? "On" : "Off"}
+              </span>
+            </button>
             <button
               type="button"
               role="switch"
@@ -590,11 +871,76 @@ export function ImportChartButton({
               </span>
             </button>
             {debug ? <TextConvertTable desk={desk} /> : null}
-          </div>
+          </section>
 
-          <div className="space-y-3 border-t border-white/10 pt-3">
-            <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">
-              App
+          <section
+            id="settings-app"
+            className={cn(
+              "scroll-mt-2 space-y-3 rounded-2xl border p-3 transition-[border-color,box-shadow] duration-200",
+              activeSettingsSection === "settings-app"
+                ? "border-sky-400/40 bg-card shadow-[0_0_0_1px_rgba(56,189,248,0.18)]"
+                : "border-white/10 bg-card/80",
+            )}
+          >
+            <SettingsSectionTitle>App</SettingsSectionTitle>
+            <dl className="space-y-2.5 rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-sm">
+              <div className="flex items-baseline justify-between gap-3">
+                <dt className="text-stone-500">Name</dt>
+                <dd className="text-right font-medium text-stone-100">
+                  Domino&apos;s Stock Shelf Life
+                </dd>
+              </div>
+              <div className="flex items-baseline justify-between gap-3">
+                <dt className="text-stone-500">Version</dt>
+                <dd className="font-mono text-right text-stone-200">
+                  {appVersionLabel()}
+                </dd>
+              </div>
+              <div className="flex items-baseline justify-between gap-3">
+                <dt className="text-stone-500">Chart</dt>
+                <dd className="text-right text-stone-200">
+                  {desk.imported
+                    ? `${desk.pack.rules.length} items loaded`
+                    : "None loaded"}
+                </dd>
+              </div>
+              {desk.imported && desk.pack.chart.title ? (
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt className="text-stone-500">Chart title</dt>
+                  <dd className="max-w-[60%] text-right text-stone-200 [overflow-wrap:anywhere]">
+                    {desk.pack.chart.title}
+                  </dd>
+                </div>
+              ) : null}
+              {desk.imported && desk.pack.chart.version ? (
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt className="text-stone-500">Chart version</dt>
+                  <dd className="text-right text-stone-200">
+                    {desk.pack.chart.version}
+                  </dd>
+                </div>
+              ) : null}
+              {desk.imported && desk.pack.chart.validUntil ? (
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt className="text-stone-500">Valid until</dt>
+                  <dd className="text-right text-stone-200">
+                    {formatCompactDate(desk.pack.chart.validUntil)}
+                  </dd>
+                </div>
+              ) : null}
+              {desk.imported && desk.sourceUrl ? (
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt className="shrink-0 text-stone-500">Source</dt>
+                  <dd className="max-w-[65%] truncate text-right text-xs text-stone-400">
+                    {desk.sourceUrl}
+                  </dd>
+                </div>
+              ) : null}
+            </dl>
+            <p className="text-xs leading-relaxed text-stone-500">
+              Checks the hosted build against this install. If a newer version
+              is available, the app reloads to pick it up. Chart data on this
+              device is kept.
             </p>
             <Button
               type="button"
@@ -603,29 +949,73 @@ export function ImportChartButton({
               disabled={busy}
               onClick={() => {
                 setBusy(true);
-                setMessage("Checking for updates…");
-                setError(null);
+                const toastId = toast.loading("Checking for updates…");
                 void reloadAppToLatest().finally(() => {
+                  toast.dismiss(toastId);
                   setBusy(false);
-                  setMessage(null);
                   setOpen(false);
                 });
               }}
             >
               <RefreshCw className="size-4" />
-              Update app
+              Check for updates
             </Button>
+          </section>
           </div>
-
-          {error ? <p className="text-sm text-red-400">{error}</p> : null}
-          {message ? (
-            <p className="rounded-xl bg-emerald-500/15 px-3 py-2 text-sm font-medium text-emerald-200">
-              {message}
-            </p>
-          ) : null}
+          <div
+            data-settings-end-pad
+            aria-hidden
+            className="pointer-events-none shrink-0"
+            style={{ height: settingsEndPad }}
+          />
         </div>
       </DialogContent>
     </Dialog>
+
+    <Dialog open={confirmReset} onOpenChange={setConfirmReset}>
+      <DialogContent
+        showCloseButton={false}
+        overlayClassName="z-[60] bg-black/50"
+        className="z-[60] max-w-sm gap-0 overflow-hidden rounded-2xl p-0"
+      >
+        <DialogHeader className="space-y-2 px-4 pt-4 pb-2">
+          <DialogTitle className="font-display text-xl text-white">
+            Clear the loaded chart?
+          </DialogTitle>
+          <DialogDescription className="text-sm text-stone-400">
+            All product data will be removed from this device. The list stays
+            empty until you upload a chart again.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid grid-cols-2 gap-2 border-t border-white/10 p-4">
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 rounded-xl border-white/15 text-white"
+            onClick={() => setConfirmReset(false)}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            className="h-11 rounded-xl bg-amber-500 text-stone-950 hover:bg-amber-400"
+            onClick={resetChart}
+          >
+            <RotateCcw className="size-4" />
+            Clear chart
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
+  );
+}
+
+function SettingsSectionTitle({ children }: { children: ReactNode }) {
+  return (
+    <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-500">
+      {children}
+    </h3>
   );
 }
 

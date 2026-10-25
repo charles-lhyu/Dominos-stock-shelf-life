@@ -26,8 +26,12 @@ describe("list use-by dates", () => {
     const frozen = RULES.find((entry) => entry.name === "Pepperoni" && entry.sectionId === "frozen");
     assert.ok(frozen);
     assert.equal(calculatedLifeKind(frozen), "stock");
+    assert.deepEqual(lifeKindsForRule(frozen), ["stock", "prepped"]);
     const preview = datePreview(frozen, "2026-10-01", "stock", today);
     assert.equal(preview.when, "Tue 13 Oct 2026");
+    // Prepped reuses the chart's from-delivery life (no invented in-use field).
+    const prepped = datePreview(frozen, "2026-10-01", "prepped", today);
+    assert.equal(prepped.when, "Tue 13 Oct 2026");
     assert.equal(item.name, "Pepperoni");
   });
 
@@ -42,5 +46,12 @@ describe("list use-by dates", () => {
     const at = new Date(2026, 9, 24, 14, 30);
     const preview = datePreview(item, "2026-10-24", "ambient", at, "14:30");
     assert.equal(preview.when, formatDateTime(addHoursToLocal("2026-10-24T14:30", 12)));
+    assert.equal(preview.asHours, true);
+  });
+
+  it("keeps day lives on days in debug mode, not hours", () => {
+    const item = rule("Pineapple");
+    const preview = datePreview(item, "2026-10-24", "prepped", today);
+    assert.equal(preview.asHours, false);
   });
 });

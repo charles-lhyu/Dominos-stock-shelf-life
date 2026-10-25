@@ -698,29 +698,16 @@ export function StockDesk() {
                 <label
                   htmlFor="product-search"
                   className={cn(
-                    "relative flex min-w-0 flex-1 items-center border border-white/10 bg-card shadow-[4px_4px_0_0_rgba(0,0,0,0.35)] transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] focus-within:border-white/25 focus-within:ring-3 focus-within:ring-white/15",
-                    headerCollapsed ? "h-10 rounded-xl" : "h-14 rounded-2xl",
+                    "relative flex min-w-0 flex-1 items-center rounded-xl border border-white/10 bg-card shadow-[4px_4px_0_0_rgba(0,0,0,0.35)] transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] focus-within:border-white/25 focus-within:ring-3 focus-within:ring-white/15",
+                    headerCollapsed ? "h-9" : "h-10",
                   )}
                 >
                   <span
-                    className={cn(
-                      "pointer-events-none flex items-center text-stone-400 transition-all duration-300",
-                      headerCollapsed ? "gap-1.5 pl-2.5" : "gap-2.5 pl-3.5",
-                    )}
+                    className="pointer-events-none flex items-center gap-1.5 pl-2.5 text-stone-400"
                     aria-hidden
                   >
-                    <Search
-                      className={cn(
-                        "shrink-0 transition-all duration-300",
-                        headerCollapsed ? "size-3.5" : "size-4",
-                      )}
-                    />
-                    <span
-                      className={cn(
-                        "w-px bg-white/20 transition-all duration-300",
-                        headerCollapsed ? "h-4" : "h-5",
-                      )}
-                    />
+                    <Search className="size-3.5 shrink-0" />
+                    <span className="h-4 w-px bg-white/20" />
                   </span>
                   <Input
                     id="product-search"
@@ -735,10 +722,8 @@ export function StockDesk() {
                       headerCollapsed && !searchExpanded ? "Search…" : placeholder
                     }
                     className={cn(
-                      "flex-1 border-0 bg-transparent text-white shadow-none placeholder:text-stone-500 focus-visible:border-0 focus-visible:ring-0 transition-all duration-300",
-                      headerCollapsed
-                        ? "h-10 rounded-xl px-2 text-sm"
-                        : "h-14 rounded-2xl px-3 text-base",
+                      "flex-1 rounded-xl border-0 bg-transparent px-2 text-sm text-white shadow-none placeholder:text-stone-500 focus-visible:border-0 focus-visible:ring-0 transition-all duration-300",
+                      headerCollapsed ? "h-9" : "h-10",
                     )}
                     onFocus={() => setSearchFocused(true)}
                     onBlur={() => setSearchFocused(false)}
@@ -758,13 +743,13 @@ export function StockDesk() {
                     type="button"
                     variant="outline"
                     className={cn(
-                      "shrink-0 border-white/10 bg-card px-0 text-white transition-all duration-300",
-                      headerCollapsed ? "h-10 w-10 rounded-xl" : "h-14 w-14 rounded-2xl",
+                      "size-10 shrink-0 rounded-xl border-white/10 bg-card px-0 text-white transition-all duration-300",
+                      headerCollapsed ? "h-9 w-9" : "h-10 w-10",
                     )}
                     aria-label="Clear search"
                     onClick={clearSearch}
                   >
-                    <X className={headerCollapsed ? "size-4" : undefined} />
+                    <X className="size-4" />
                   </Button>
                 ) : null}
               </div>

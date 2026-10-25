@@ -6,6 +6,7 @@ import {
   formatLongDate,
   readExpiry,
 } from "./dates";
+import { splitPreppedAmbientFields } from "./storage-life";
 import type { ShelfRule, StockStatus } from "./types";
 
 export type Clock = {
@@ -152,20 +153,35 @@ export function clocksFor(rule: ShelfRule): Clock[] {
     return [clockFromValue("bb", "BB date on the pack", "BB date on pack")];
   }
 
+  // Divided prepped cells: "chilled" → prepped (chilled), "ambient" → ambient.
+  const split = splitPreppedAmbientFields(rule.prepped, rule.ambientUse);
+
+  // Ambient N/A means it cannot be stored ambient — omit that clock entirely.
+  const ambient =
+    split.ambientUse && !/^n\/a$/i.test(split.ambientUse.trim())
+      ? split.ambientUse
+      : undefined;
+
   const fields: [string, string, string | undefined][] = [
     ["delivery", "From delivery", rule.fromDelivery],
     ["use", "In use", rule.inUse],
     ["unopened", "Unopened", rule.unopened],
-    ["prepped", "Prepped", rule.prepped],
-    ["ambient", "Ambient use", rule.ambientUse],
+    ["prepped", "Prepped", split.prepped],
+    ["ambient", "Ambient use", ambient],
     ["also", rule.also?.label ?? "Also", rule.also?.value],
   ];
 
   return fields
     .filter((field): field is [string, string, string] => Boolean(field[2]))
     .map(([id, label, value]) => {
+      // "Chilled items" and "Chilled — ambient before use": once prepped, life is chilled.
+      // True ambient-section products stay ambient. Ambient-use cells stay ambient.
       const chilledPrep =
-        rule.sectionId === "chilled" && (id === "prepped" || id === "use");
+        id !== "ambient" &&
+        (rule.sectionId === "chilled" ||
+          rule.sectionId === "ready" ||
+          (id === "prepped" && /\bchilled\b/i.test(value))) &&
+        (id === "prepped" || id === "use");
       return clockFromValue(id, label, value, { chilled: chilledPrep });
     });
 }

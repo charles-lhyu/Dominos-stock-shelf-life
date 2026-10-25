@@ -27,4 +27,4 @@ The chart prints a life, not a calendar date. This screen adds that life to the 
 - Hours, including the 48-hour mac and cheese prep and the 15-hour ambient sauces, are added to the time you enter.
 - Where the row says "Date on pack", that printed date is the unopened use-by. If the prepped life runs past it, follow the pack date. Opened and prepped dates must not go past the date on the original packaging.
 
-Both pepperoni rows are kept: 12 days from delivery when it is defrosted from frozen, and date-on-pack plus 12 days prepped when it is a chilled item.
+Pepperoni, Chorizo, and Nduja share one frozen from-delivery life on the chart (Prepped uses that remaining life). Only Pepperoni also has a chilled row (date on pack + 12 days prepped).

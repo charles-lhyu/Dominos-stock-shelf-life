@@ -88,6 +88,8 @@ const chilledOpen =
   "Once open, keep wrapped. This life applies while it stays chilled. If it has been ambient, do not return it to the chill — use it within 24 hours.";
 
 export const RULES: ShelfRule[] = [
+  // Frozen lives match the chart: one from-delivery count unless a separate
+  // in-use column is printed (Bacon 7 days, Mac n Cheese 48 hours).
   ...group("frozen", "Toppings", ["Pepperoni", "Chorizo", "Nduja Sausage"], {
     fromDelivery: "12 days",
   }, { "Nduja Sausage": ["nduja"] }),

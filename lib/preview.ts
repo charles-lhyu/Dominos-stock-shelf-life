@@ -61,6 +61,8 @@ export type DatePreview = {
   kind: LifeKind | null;
   /** Present when the preview is a calculated use-by (supports format toggle). */
   at?: Date;
+  /** Debug days mode: lives under 24 hours show as hours, not days. */
+  asHours?: boolean;
 };
 
 function clockKind(clock: Clock): LifeKind | null {
@@ -70,8 +72,25 @@ function clockKind(clock: Clock): LifeKind | null {
   return null;
 }
 
+/** Chart prints one from-delivery life with no separate in-use column. */
+function usesDeliveryAsPrepped(rule: ShelfRule) {
+  return (
+    rule.sectionId === "frozen" &&
+    Boolean(rule.fromDelivery) &&
+    !rule.inUse &&
+    !rule.prepped
+  );
+}
+
 export function clocksForLifeKind(rule: ShelfRule, kind: LifeKind): Clock[] {
-  return clocksFor(rule).filter((clock) => LIFE_KIND_META[kind].clockIds.includes(clock.id));
+  const clocks = clocksFor(rule).filter((clock) =>
+    LIFE_KIND_META[kind].clockIds.includes(clock.id),
+  );
+  // Merged delivery/in-use cell: Prepped is that remaining delivery life.
+  if (kind === "prepped" && clocks.length === 0 && usesDeliveryAsPrepped(rule)) {
+    return clocksFor(rule).filter((clock) => clock.id === "delivery");
+  }
+  return clocks;
 }
 
 export function lifeKindsForRule(rule: ShelfRule): LifeKind[] {
@@ -80,6 +99,7 @@ export function lifeKindsForRule(rule: ShelfRule): LifeKind[] {
     const kind = clockKind(clock);
     if (kind) present.add(kind);
   }
+  if (usesDeliveryAsPrepped(rule)) present.add("prepped");
   return LIFE_KINDS.filter((kind) => present.has(kind));
 }
 
@@ -261,6 +281,7 @@ export function datePreview(
         life,
         kind,
         at: result.at,
+        asHours: preferred.addHours != null && preferred.addHours < 24,
       };
     }
   }

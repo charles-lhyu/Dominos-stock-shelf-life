@@ -54,7 +54,7 @@ describe("text conversion table", () => {
     assert.equal(garlic.useBy, formatDateTime(addHoursToLocal("2026-10-24T14:30", 12)));
   });
 
-  it("marks a stored life that disagrees with the chart", () => {
+  it("shows the imported pack life as-is", () => {
     const pack = {
       ...BUNDLED_PACK,
       rules: BUNDLED_PACK.rules.map((rule) =>
@@ -66,7 +66,7 @@ describe("text conversion table", () => {
     const row = textConversionTable(pack, delivery, "", today).find(
       (item) => item.name === "Pineapple" && item.field === "Prepped",
     );
-    assert.equal(row?.text, "25 days · chart 10 days");
+    assert.equal(row?.text, "25 days");
     assert.equal(row?.useBy, "Wed 18 Nov 2026 | 23:59");
   });
 });

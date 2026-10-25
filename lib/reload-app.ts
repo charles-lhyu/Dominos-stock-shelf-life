@@ -5,7 +5,7 @@ const JUST_UPDATED_KEY = "app-just-updated";
 const UPDATE_POLL_MS = 60_000;
 
 function localVersion() {
-  return process.env.NEXT_PUBLIC_APP_VERSION ?? "1.4.10";
+  return process.env.NEXT_PUBLIC_APP_VERSION ?? "1.4.11";
 }
 
 /** Header / notice label — `dev` on local preview, real semver in production. */
@@ -70,12 +70,12 @@ export function subscribeAppUpdateAvailable(
 }
 
 /**
- * If the hosted build matches this shell, show “up to date”.
- * Otherwise clear SW/caches and reload so the PWA picks up the new build.
+ * If the hosted build matches this shell (or can’t be read), show “up to date”.
+ * Only reload when the remote version is known and different.
  */
 export async function reloadAppToLatest() {
   const remote = await fetchRemoteVersion();
-  if (remote != null && remote === localVersion()) {
+  if (remote == null || remote === localVersion()) {
     showAppStatus("up-to-date");
     return;
   }

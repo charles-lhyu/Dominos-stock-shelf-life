@@ -1,6 +1,12 @@
 "use client";
 
-import { useState, useSyncExternalStore, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 import {
   ArrowDownAZ,
   ArrowDownWideNarrow,
@@ -182,8 +188,10 @@ export function ChartList({
   onOpen: (name: string, sectionId: SectionId) => void;
   compact?: boolean;
 }) {
-  const [nameSortByKey, setNameSortByKey] = useState<Record<string, DirSort>>({});
-  const [dateSortByKey, setDateSortByKey] = useState<Record<string, DirSort>>({});
+  const [nameSort, setNameSort] = useState<DirSort>("off");
+  const [dateSort, setDateSort] = useState<DirSort>("off");
+  const [activeSortKey, setActiveSortKey] = useState<string | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const hiddenNames = useSyncExternalStore(
     subscribeHidden,
     getHiddenNames,
@@ -247,33 +255,73 @@ export function ChartList({
     }
   }
 
+  const activeLife: LifeKind = lifeFilter === "all" ? "stock" : lifeFilter;
+  const blockSignature = blocks.map((block) => block.key).join("|");
+
+  useEffect(() => {
+    const root = listRef.current;
+    const scroller = root?.closest("main");
+    if (!root || !(scroller instanceof HTMLElement)) return;
+
+    const pickActiveSortHeader = () => {
+      const headers = [
+        ...root.querySelectorAll<HTMLElement>(
+          "[data-section-header][data-sort-key]",
+        ),
+      ];
+      if (headers.length === 0) {
+        setActiveSortKey(null);
+        return;
+      }
+      const scrollerTop = scroller.getBoundingClientRect().top;
+      let best: HTMLElement | null = null;
+      let bestZ = Number.NEGATIVE_INFINITY;
+      for (const header of headers) {
+        const rect = header.getBoundingClientRect();
+        // Cover-stack: the stuck header sits at the scroller top; later
+        // headers slide over earlier ones with a higher z-index.
+        const stuck =
+          rect.top <= scrollerTop + 2 && rect.bottom > scrollerTop + 28;
+        if (!stuck) continue;
+        const z = Number(header.style.zIndex || 0);
+        if (z >= bestZ) {
+          bestZ = z;
+          best = header;
+        }
+      }
+      const key = best?.dataset.sortKey ?? headers[0]?.dataset.sortKey ?? null;
+      setActiveSortKey((prev) => (prev === key ? prev : key));
+    };
+
+    pickActiveSortHeader();
+    scroller.addEventListener("scroll", pickActiveSortHeader, { passive: true });
+    window.addEventListener("resize", pickActiveSortHeader);
+    return () => {
+      scroller.removeEventListener("scroll", pickActiveSortHeader);
+      window.removeEventListener("resize", pickActiveSortHeader);
+    };
+  }, [blockSignature]);
+
   const actions: ListActions = {
     onOpen,
     onPreferredSection,
     onPreferredLife,
     compact,
-    nameSortByKey,
-    dateSortByKey,
-    onToggleNameSort: (key) => {
-      setNameSortByKey((prev) => ({
-        ...prev,
-        [key]: nextDirSort(prev[key] ?? "off"),
-      }));
-      // Prefer one active sort mode at a time.
-      setDateSortByKey((prev) => ({ ...prev, [key]: "off" }));
+    nameSort,
+    dateSort,
+    activeSortKey,
+    onToggleNameSort: () => {
+      setNameSort((prev) => nextDirSort(prev));
+      setDateSort("off");
     },
-    onToggleDateSort: (key) => {
-      setDateSortByKey((prev) => ({
-        ...prev,
-        [key]: nextDirSort(prev[key] ?? "off"),
-      }));
-      setNameSortByKey((prev) => ({ ...prev, [key]: "off" }));
+    onToggleDateSort: () => {
+      setDateSort((prev) => nextDirSort(prev));
+      setNameSort("off");
     },
   };
-  const activeLife: LifeKind = lifeFilter === "all" ? "stock" : lifeFilter;
 
   return (
-    <div className="relative select-none">
+    <div ref={listRef} className="relative select-none">
       {compact ? (
         <div className="sticky top-0 z-50 -mx-4 h-0 w-[calc(100%+2rem)] overflow-visible">
           <div
@@ -306,7 +354,8 @@ export function ChartList({
       {/*
         Nested sections: each sticky parent wraps everything after it, so the
         header stays put while the next header (higher z-index) slides over it.
-        Life tags sit in a single overlay on the topmost sticky header row.
+        Compact: life chips overlay the title only; sort row stays full width
+        so date sort lines up with the use-by column.
       */}
       {renderCoverStack(blocks, 0, actions)}
     </div>
@@ -318,27 +367,71 @@ type ListActions = {
   onPreferredSection: (section: SectionId) => void;
   onPreferredLife: (kind: LifeKind) => void;
   compact: boolean;
-  nameSortByKey: Record<string, DirSort>;
-  dateSortByKey: Record<string, DirSort>;
-  onToggleNameSort: (key: string) => void;
-  onToggleDateSort: (key: string) => void;
+  nameSort: DirSort;
+  dateSort: DirSort;
+  activeSortKey: string | null;
+  onToggleNameSort: () => void;
+  onToggleDateSort: () => void;
 };
 
-function CategoryNameSortButton({
-  sortKey,
+/** Sub-header row: A–Z left of the label, date sort on the right.
+ *  Always keeps the same height so sticky category headers slide over
+ *  each other smoothly; only the topmost sticky header shows the controls.
+ */
+function SubHeaderSortRow({
+  label,
+  nameSort,
+  dateSort,
+  onToggleNameSort,
+  onToggleDateSort,
+  showSort,
+  labelClassName,
+}: {
+  label: ReactNode;
+  nameSort: DirSort;
+  dateSort: DirSort;
+  onToggleNameSort: () => void;
+  onToggleDateSort: () => void;
+  showSort: boolean;
+  labelClassName?: string;
+}) {
+  return (
+    <div
+      className="mt-1 flex min-h-8 w-full items-center gap-1.5"
+      role={showSort ? "group" : undefined}
+      aria-label={showSort ? "List sort" : undefined}
+    >
+      {showSort ? (
+        <NameSortButton sort={nameSort} onToggle={onToggleNameSort} />
+      ) : (
+        <div className="size-8 shrink-0" aria-hidden />
+      )}
+      <div className={cn("min-w-0 flex-1", labelClassName)}>{label}</div>
+      {/* Same column edge as list use-by dates (far right). */}
+      <div className="flex w-[46%] shrink-0 justify-end">
+        {showSort ? (
+          <DateSortButton sort={dateSort} onToggle={onToggleDateSort} />
+        ) : (
+          <div className="size-8" aria-hidden />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function NameSortButton({
   sort,
   onToggle,
 }: {
-  sortKey: string;
   sort: DirSort;
-  onToggle: (key: string) => void;
+  onToggle: () => void;
 }) {
   const label =
     sort === "asc"
       ? "Sorted A to Z. Tap for Z to A."
       : sort === "desc"
         ? "Sorted Z to A. Tap for chart order."
-        : "Sort this section A to Z";
+        : "Sort A to Z";
   return (
     <button
       type="button"
@@ -347,7 +440,7 @@ function CategoryNameSortButton({
       aria-pressed={sort !== "off"}
       onClick={(event) => {
         event.stopPropagation();
-        onToggle(sortKey);
+        onToggle();
       }}
       className={cn(
         "inline-flex size-8 shrink-0 items-center justify-center rounded-lg ring-1 transition-colors",
@@ -365,21 +458,19 @@ function CategoryNameSortButton({
   );
 }
 
-function CategoryDateSortButton({
-  sortKey,
+function DateSortButton({
   sort,
   onToggle,
 }: {
-  sortKey: string;
   sort: DirSort;
-  onToggle: (key: string) => void;
+  onToggle: () => void;
 }) {
   const label =
     sort === "asc"
       ? "Sorted by date, soonest first. Tap for latest first."
       : sort === "desc"
         ? "Sorted by date, latest first. Tap for chart order."
-        : "Sort this section by use-by date";
+        : "Sort by use-by date";
   return (
     <button
       type="button"
@@ -388,7 +479,7 @@ function CategoryDateSortButton({
       aria-pressed={sort !== "off"}
       onClick={(event) => {
         event.stopPropagation();
-        onToggle(sortKey);
+        onToggle();
       }}
       className={cn(
         "inline-flex size-8 shrink-0 items-center justify-center rounded-lg ring-1 transition-colors",
@@ -406,14 +497,6 @@ function CategoryDateSortButton({
   );
 }
 
-/**
- * Toppings sticky title row only (pt-1 + text-lg). Subgroup labels stick at this
- * offset so they sit in the reserved merge slot under the title.
- */
-const TOPPINGS_TITLE_TOP = "1.75rem";
-/** mt-1 + 11px/leading-5 label + pb-1.5 — matches the reserved slot under Toppings. */
-const TOPPINGS_SUB_SLOT = "2.125rem";
-
 function renderCoverStack(
   blocks: StickyBlock[],
   index: number,
@@ -422,8 +505,8 @@ function renderCoverStack(
   const block = blocks[index];
   if (!block) return null;
 
-  // Consecutive Toppings subgroups share one sticky “Toppings” title with a
-  // reserved sub-slot; Meats / Veg / Other merge into that slot when stuck.
+  // Consecutive Toppings subgroups share one sticky header; the sub-row
+  // (sorts + Meats/Veg/Other) stays fixed — only the label text updates.
   if (block.category === "Toppings" && block.label) {
     let end = index;
     while (
@@ -434,101 +517,58 @@ function renderCoverStack(
       end += 1;
     }
     const groups = blocks.slice(index, end);
-    const zBase = 10 + index;
-
-    const toppingsNameSort = actions.nameSortByKey.Toppings ?? "off";
-    const toppingsDateSort = actions.dateSortByKey.Toppings ?? "off";
-
     return (
-      <div key="toppings" data-section-root="">
-        <div
-          data-section-header=""
-          className={cn(
-            "sticky top-0 -mx-4 flex w-[calc(100%+2rem)] items-start gap-2 border-b border-white/10 bg-[#0f1624] px-4 pt-1 pb-1.5",
-            actions.compact && "pr-[11.5rem]",
-          )}
-          style={{ zIndex: zBase }}
-        >
-          <div className="flex min-w-0 flex-1 items-start gap-1.5">
-            <button
-              type="button"
-              aria-label="Go to Toppings"
-              onClick={(event) => {
-                const section = sectionRootFromEvent(event);
-                if (section) scrollSectionToTop(section);
-              }}
-              className="min-w-0 flex-1 text-left"
-            >
-              <h2 className="font-display text-lg leading-tight text-white">Toppings</h2>
-              {/* Invisible slot — subgroup stickies overlay this when merged. */}
-            <p
-              className="mt-1 h-5 text-[11px] leading-5 font-semibold uppercase tracking-wider invisible"
-              aria-hidden
-            >
-              Meats
-            </p>
-            </button>
-            <CategoryNameSortButton
-              sortKey="Toppings"
-              sort={toppingsNameSort}
-              onToggle={actions.onToggleNameSort}
-            />
-          </div>
-          <div className="flex max-w-[46%] shrink-0 justify-end pt-0.5">
-            <CategoryDateSortButton
-              sortKey="Toppings"
-              sort={toppingsDateSort}
-              onToggle={actions.onToggleDateSort}
-            />
-          </div>
-        </div>
-        {renderToppingGroupStack(groups, 0, actions, zBase)}
-        {renderCoverStack(blocks, end, actions)}
-      </div>
+      <ToppingsSection
+        key="toppings"
+        groups={groups}
+        actions={actions}
+        zIndex={10 + index}
+        preferSort={index === 0}
+        after={renderCoverStack(blocks, end, actions)}
+      />
     );
   }
 
-  const nameSort = actions.nameSortByKey[block.key] ?? "off";
-  const dateSort = actions.dateSortByKey[block.key] ?? "off";
-  const rows = sortSectionRows(block.rows, nameSort, dateSort);
+  const rows = sortSectionRows(block.rows, actions.nameSort, actions.dateSort);
+  const sortKey = block.key;
+  const showSort =
+    actions.activeSortKey == null
+      ? index === 0
+      : actions.activeSortKey === sortKey;
 
   return (
     <div key={block.key} data-section-root="">
       <div
         data-section-header=""
-        className={cn(
-          "sticky top-0 -mx-4 flex w-[calc(100%+2rem)] items-center gap-2 border-b border-white/10 bg-[#0f1624] px-4 pt-1 pb-1.5",
-          actions.compact && "pr-[11.5rem]",
-        )}
+        data-sort-key={sortKey}
+        className="sticky top-0 -mx-4 w-[calc(100%+2rem)] overflow-visible border-b border-white/10 bg-[#0f1624] px-4 pt-1 pb-1.5"
         style={{ zIndex: 10 + index }}
       >
-        <div className="flex min-w-0 flex-1 items-center gap-1.5">
-          <button
-            type="button"
-            aria-label={`Go to ${block.category}`}
-            onClick={(event) => {
-              const section = sectionRootFromEvent(event);
-              if (section) scrollSectionToTop(section);
-            }}
-            className="min-w-0 flex-1 text-left"
-          >
-            <h2 className="font-display text-lg leading-tight text-white">
-              {block.category}
-            </h2>
-          </button>
-          <CategoryNameSortButton
-            sortKey={block.key}
-            sort={nameSort}
-            onToggle={actions.onToggleNameSort}
-          />
-        </div>
-        <div className="flex max-w-[46%] shrink-0 justify-end">
-          <CategoryDateSortButton
-            sortKey={block.key}
-            sort={dateSort}
-            onToggle={actions.onToggleDateSort}
-          />
-        </div>
+        <button
+          type="button"
+          aria-label={`Go to ${block.category}`}
+          onClick={(event) => {
+            const section = sectionRootFromEvent(event);
+            if (section) scrollSectionToTop(section);
+          }}
+          className={cn(
+            "w-full min-w-0 text-left",
+            // Leave room for the compact life-chip overlay on the title only.
+            actions.compact && "pr-[11.5rem]",
+          )}
+        >
+          <h2 className="font-display truncate text-lg leading-tight text-white">
+            {block.category}
+          </h2>
+        </button>
+        <SubHeaderSortRow
+          label={<span className="sr-only">Sort {block.category}</span>}
+          nameSort={actions.nameSort}
+          dateSort={actions.dateSort}
+          onToggleNameSort={actions.onToggleNameSort}
+          onToggleDateSort={actions.onToggleDateSort}
+          showSort={showSort}
+        />
       </div>
       <ul className="divide-y divide-white/10">
         {rows.map((row) => (
@@ -547,54 +587,135 @@ function renderCoverStack(
   );
 }
 
-function renderToppingGroupStack(
-  groups: StickyBlock[],
-  index: number,
-  actions: ListActions,
-  zBase: number,
-): ReactNode {
-  const group = groups[index];
-  if (!group) return null;
+function ToppingsSection({
+  groups,
+  actions,
+  zIndex,
+  preferSort,
+  after,
+}: {
+  groups: StickyBlock[];
+  actions: ListActions;
+  zIndex: number;
+  preferSort: boolean;
+  after: ReactNode;
+}) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const groupKey = groups.map((group) => group.label ?? group.key).join("|");
+  const [activeLabel, setActiveLabel] = useState(groups[0]?.label ?? "Meats");
 
-  const nameSort = actions.nameSortByKey.Toppings ?? "off";
-  const dateSort = actions.dateSortByKey.Toppings ?? "off";
-  const rows = sortSectionRows(group.rows, nameSort, dateSort);
+  const firstLabel = groups[0]?.label ?? "Meats";
+  useEffect(() => {
+    setActiveLabel(firstLabel);
+  }, [firstLabel]);
+
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const scroller = root.closest("main");
+    if (!(scroller instanceof HTMLElement)) return;
+    const markers = [
+      ...root.querySelectorAll<HTMLElement>("[data-topping-group]"),
+    ];
+    if (markers.length === 0) return;
+
+    const header = root.querySelector<HTMLElement>("[data-section-header]");
+    const headerH = header?.offsetHeight ?? 56;
+
+    const pickLabel = () => {
+      const scrollerTop = scroller.getBoundingClientRect().top;
+      const line = scrollerTop + headerH + 8;
+      let current = markers[0]?.dataset.toppingGroup ?? "Meats";
+      for (const marker of markers) {
+        const top = marker.getBoundingClientRect().top;
+        if (top <= line) {
+          current = marker.dataset.toppingGroup ?? current;
+        } else {
+          break;
+        }
+      }
+      setActiveLabel(current);
+    };
+
+    pickLabel();
+    scroller.addEventListener("scroll", pickLabel, { passive: true });
+    return () => scroller.removeEventListener("scroll", pickLabel);
+  }, [groupKey]);
+
+  const showSort =
+    actions.activeSortKey == null
+      ? preferSort
+      : actions.activeSortKey === "toppings";
 
   return (
-    <div key={group.key} data-section-root="">
-      <button
-        type="button"
+    <div ref={rootRef} data-section-root="">
+      <div
         data-section-header=""
-        aria-label={`Go to Toppings, ${group.label}`}
-        onClick={(event) => {
-          const section = sectionRootFromEvent(event);
-          if (section) scrollSectionToTop(section);
-        }}
-        className="sticky -mx-4 block w-[calc(100%+2rem)] border-b border-white/10 bg-[#0f1624] px-4 pb-1.5 text-left"
-        style={{
-          top: TOPPINGS_TITLE_TOP,
-          zIndex: zBase + 1 + index,
-          // First group pulls up into the reserved slot so the list isn’t doubled.
-          ...(index === 0 ? { marginTop: `calc(-1 * ${TOPPINGS_SUB_SLOT})` } : {}),
-        }}
+        data-sort-key="toppings"
+        className="sticky top-0 -mx-4 w-[calc(100%+2rem)] overflow-visible border-b border-white/10 bg-[#0f1624] px-4 pt-1 pb-1.5"
+        style={{ zIndex }}
       >
-        <p className="mt-1 h-5 text-[11px] leading-5 font-semibold uppercase tracking-wider text-stone-400">
-          {group.label}
-        </p>
-      </button>
-      <ul className="divide-y divide-white/10">
-        {rows.map((row) => (
-          <ProductRow
-            key={`${group.key}:${row.name}`}
-            row={row}
-            compact={actions.compact}
-            onOpen={actions.onOpen}
-            onPreferredSection={actions.onPreferredSection}
-            onPreferredLife={actions.onPreferredLife}
-          />
-        ))}
-      </ul>
-      {renderToppingGroupStack(groups, index + 1, actions, zBase)}
+        <button
+          type="button"
+          aria-label="Go to Toppings"
+          onClick={(event) => {
+            const section = sectionRootFromEvent(event);
+            if (section) scrollSectionToTop(section);
+          }}
+          className={cn(
+            "w-full min-w-0 text-left",
+            // Leave room for the compact life-chip overlay on the title only.
+            actions.compact && "pr-[11.5rem]",
+          )}
+        >
+          <h2 className="font-display truncate text-lg leading-tight text-white">
+            Toppings
+          </h2>
+        </button>
+        <SubHeaderSortRow
+          label={
+            <p className="text-[11px] leading-5 font-semibold uppercase tracking-wider text-stone-400">
+              {activeLabel}
+            </p>
+          }
+          nameSort={actions.nameSort}
+          dateSort={actions.dateSort}
+          onToggleNameSort={actions.onToggleNameSort}
+          onToggleDateSort={actions.onToggleDateSort}
+          showSort={showSort}
+        />
+      </div>
+      {groups.map((group, groupIndex) => {
+        const rows = sortSectionRows(group.rows, actions.nameSort, actions.dateSort);
+        return (
+          <div
+            key={group.key}
+            data-topping-group={group.label ?? undefined}
+            data-section-root=""
+          >
+            {/* In-list separators scroll with the list. Skip the first — sticky
+                subheader already shows that label at the top. */}
+            {groupIndex > 0 ? (
+              <p className="border-b border-white/10 px-0.5 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-stone-500">
+                {group.label}
+              </p>
+            ) : null}
+            <ul className="divide-y divide-white/10">
+              {rows.map((row) => (
+                <ProductRow
+                  key={`${group.key}:${row.name}`}
+                  row={row}
+                  compact={actions.compact}
+                  onOpen={actions.onOpen}
+                  onPreferredSection={actions.onPreferredSection}
+                  onPreferredLife={actions.onPreferredLife}
+                />
+              ))}
+            </ul>
+          </div>
+        );
+      })}
+      {after}
     </div>
   );
 }
@@ -646,6 +767,7 @@ function ProductRow({
           <WhenDate
             when={preview.when}
             at={preview.at}
+            asHours={preview.asHours}
             className={cn(
               "max-w-[46%] shrink truncate touch-pan-y text-right text-sm leading-snug",
               preview.tone === "neutral" ? "text-stone-400" : "text-emerald-300",
