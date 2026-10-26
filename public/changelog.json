@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.4.15",
+    "notes": [
+      "Compact storage chips keep their colour on selectable tags",
+      "Compact life and storage chips share the same height"
+    ]
+  },
+  {
     "version": "1.4.14",
     "notes": [
       "Keep screen on while the app is open (Settings → Display)",

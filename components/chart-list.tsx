@@ -123,11 +123,17 @@ const SECTION_TONE: Record<SectionId, string> = {
 };
 
 const SECTION_ACTIVE: Record<SectionId, string> = {
-  frozen: "bg-sky-400 text-sky-950 ring-sky-300",
-  chilled: "bg-teal-400 text-teal-950 ring-teal-300",
-  ready: "bg-amber-400 text-amber-950 ring-amber-300",
-  ambient: "bg-orange-400 text-orange-950 ring-orange-300",
-  pack: "bg-stone-200 text-stone-950 ring-stone-100",
+  // dark:bg-* beats SelectTrigger’s dark:bg-input/30 so chip fills stay solid.
+  frozen:
+    "bg-sky-400 text-sky-950 ring-sky-300 dark:bg-sky-400 dark:text-sky-950 dark:hover:bg-sky-300",
+  chilled:
+    "bg-teal-400 text-teal-950 ring-teal-300 dark:bg-teal-400 dark:text-teal-950 dark:hover:bg-teal-300",
+  ready:
+    "bg-amber-400 text-amber-950 ring-amber-300 dark:bg-amber-400 dark:text-amber-950 dark:hover:bg-amber-300",
+  ambient:
+    "bg-orange-400 text-orange-950 ring-orange-300 dark:bg-orange-400 dark:text-orange-950 dark:hover:bg-orange-300",
+  pack:
+    "bg-stone-200 text-stone-950 ring-stone-100 dark:bg-stone-200 dark:text-stone-950 dark:hover:bg-stone-100",
 };
 
 const LIFE_ACTIVE: Record<LifeKind, string> = {
@@ -345,7 +351,7 @@ export function ChartList({
                   aria-pressed={selected}
                   onClick={() => onLifeFilter(kind)}
                   className={cn(
-                    "shrink-0 rounded-md px-1.5 py-1 text-[10px] font-semibold tracking-wide ring-1",
+                    "inline-flex h-6 shrink-0 items-center rounded-md px-1.5 text-[10px] font-semibold tracking-wide ring-1",
                     selected
                       ? LIFE_ACTIVE[kind]
                       : "bg-card text-stone-300 ring-white/15",
@@ -861,7 +867,7 @@ function CompactStorageTag({
     return (
       <span
         className={cn(
-          "shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide ring-1",
+          "inline-flex h-6 shrink-0 items-center rounded-md px-1.5 text-[11px] font-semibold uppercase tracking-wide ring-1",
           tone,
         )}
       >
@@ -872,7 +878,7 @@ function CompactStorageTag({
 
   return (
     <div
-      className="relative inline-flex shrink-0"
+      className="relative inline-flex h-6 shrink-0 items-center"
       onClick={(event) => event.stopPropagation()}
       onKeyDown={(event) => event.stopPropagation()}
     >
@@ -890,8 +896,9 @@ function CompactStorageTag({
       >
         <SelectTrigger
           aria-label="Storage"
+          size="sm"
           className={cn(
-            "h-6 max-w-[7.5rem] gap-0.5 rounded-md border-0 px-1.5 py-0 text-[11px] font-semibold uppercase tracking-wide shadow-none focus-visible:ring-1 focus-visible:ring-white/25 dark:bg-transparent dark:hover:bg-transparent [&_svg]:size-3 [&_svg]:opacity-80 [&_[data-slot=select-value]]:min-w-0 [&_[data-slot=select-value]]:truncate",
+            "h-6 max-w-[7.5rem] gap-0.5 rounded-md border-0 px-1.5 py-0 text-[11px] font-semibold uppercase tracking-wide shadow-none ring-1 focus-visible:ring-2 focus-visible:ring-white/30 data-[size=sm]:h-6 dark:border-0 [&_svg]:size-3 [&_svg]:text-current [&_svg]:opacity-80 [&_[data-slot=select-value]]:min-w-0 [&_[data-slot=select-value]]:truncate",
             tone,
           )}
         >
