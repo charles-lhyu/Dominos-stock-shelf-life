@@ -1,9 +1,7 @@
 {
-  "version": "1.4.13",
+  "version": "1.4.14",
   "notes": [
-    "Dark themed settings and filter dropdowns",
-    "Settings section picker merges with chips and highlights the current item",
-    "Search clear control sits inside the field with red hover states",
-    "Floating desk buttons stay hidden while Settings is open or closing"
+    "Keep screen on while the app is open (Settings → Display)",
+    "Toggle off to allow the phone to sleep and save battery"
   ]
 }

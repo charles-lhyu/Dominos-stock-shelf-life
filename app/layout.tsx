@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Fraunces, Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "next-themes";
+import { KeepAwake } from "@/components/keep-awake";
 import { LockPortrait } from "@/components/lock-portrait";
 import { RegisterSW } from "@/components/register-sw";
 import { Toaster } from "@/components/ui/sonner";
@@ -78,6 +79,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="flex h-dvh flex-col overflow-hidden">
         <ThemeProvider forcedTheme="dark" attribute="class" enableSystem={false}>
           <LockPortrait>{children}</LockPortrait>
+          <KeepAwake />
           <UpdateNotice />
           <RegisterSW />
           <Toaster position="bottom-center" closeButton className="!z-[100]" />

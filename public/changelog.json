@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.4.14",
+    "notes": [
+      "Keep screen on while the app is open (Settings → Display)",
+      "Toggle off to allow the phone to sleep and save battery"
+    ]
+  },
+  {
     "version": "1.4.13",
     "notes": [
       "Dark themed settings and filter dropdowns",

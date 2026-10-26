@@ -22,6 +22,7 @@ import {
   RotateCcw,
   ScrollText,
   Settings,
+  Sun,
   Unlock,
   X,
 } from "lucide-react";
@@ -77,6 +78,13 @@ import {
 import { textConversionTable } from "@/lib/text-conversion";
 import { fetchRemoteChart } from "@/lib/remote-chart";
 import type { ChartPack } from "@/lib/types";
+import {
+  getKeepAwake,
+  getKeepAwakeServer,
+  hydrateKeepAwakeStore,
+  setKeepAwake,
+  subscribeKeepAwake,
+} from "@/lib/keep-awake-store";
 import {
   DEFAULT_ROTATION_PREF,
   getRotationPref,
@@ -168,6 +176,14 @@ export function ImportChartButton({
       return getRotationPref();
     },
     () => DEFAULT_ROTATION_PREF,
+  );
+  const keepAwake = useSyncExternalStore(
+    subscribeKeepAwake,
+    () => {
+      hydrateKeepAwakeStore();
+      return getKeepAwake();
+    },
+    getKeepAwakeServer,
   );
 
   useEffect(() => () => stopScan(), []);
@@ -835,6 +851,38 @@ export function ImportChartButton({
             <p className="text-xs text-stone-500">
               Pick portrait or landscape, then lock so phones stay in that view. Wide
               desktops never rotate.
+            </p>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={keepAwake}
+              aria-label={
+                keepAwake ? "Allow the screen to sleep" : "Keep the screen on"
+              }
+              onClick={() => setKeepAwake(!keepAwake)}
+              className={cn(
+                "flex h-12 w-full items-center justify-between rounded-xl border px-3 text-left text-base text-white",
+                keepAwake
+                  ? "border-emerald-400/40 bg-emerald-500/15"
+                  : "border-white/10 bg-card",
+              )}
+            >
+              <span className="inline-flex items-center gap-2">
+                <Sun className="size-4 opacity-80" aria-hidden />
+                Keep screen on
+              </span>
+              <span
+                className={cn(
+                  "text-xs font-semibold uppercase tracking-wide",
+                  keepAwake ? "text-emerald-300" : "text-stone-500",
+                )}
+              >
+                {keepAwake ? "On" : "Off"}
+              </span>
+            </button>
+            <p className="text-xs text-stone-500">
+              Stops the phone sleeping while this tab is open. Turn off to save
+              battery. Needs a modern browser (Chrome / Edge / installed app).
             </p>
           </section>
 
