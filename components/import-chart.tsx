@@ -46,9 +46,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  adoptStoreForCampaign,
+  hydrateCampaignLibrary,
+  listCampaigns,
+  listCampaignsServer,
+  reloadCampaign,
+  subscribeCampaignLibrary,
+} from "@/lib/campaign-library";
 import { CHANGELOG } from "@/lib/changelog";
 import { parseChartPack } from "@/lib/chart-pack";
-import { formatCompactDate, formatLongDate } from "@/lib/dates";
+import { formatCompactDate, formatLongDate, formatShortDate } from "@/lib/dates";
 import {
   readDebug,
   readDebugDays,
@@ -222,6 +230,14 @@ export function ImportChartButton({
     },
     getStoreIdServer,
   );
+  const campaigns = useSyncExternalStore(
+    subscribeCampaignLibrary,
+    () => {
+      hydrateCampaignLibrary();
+      return listCampaigns();
+    },
+    listCampaignsServer,
+  );
 
   useEffect(() => () => stopScan(), []);
 
@@ -268,8 +284,10 @@ export function ImportChartButton({
       return;
     }
     setStoreIdError(null);
+    const previous = getStoreId();
     setStoreId(next);
     setStoreDraft(next);
+    adoptStoreForCampaign(previous, next);
   }
 
   function resetChart() {
@@ -418,7 +436,7 @@ export function ImportChartButton({
 
   const settingsNav = [
     { id: "settings-app" as const, label: "App" },
-    { id: "settings-chart" as const, label: "Chart" },
+    { id: "settings-chart" as const, label: "Import data" },
     { id: "settings-display" as const, label: "Display" },
     {
       id: "settings-hidden" as const,
@@ -591,7 +609,7 @@ export function ImportChartButton({
         <DialogHeader className="shrink-0 border-b border-white/10 px-4 py-3 pr-14">
           <DialogTitle className="font-display text-2xl text-white">Settings</DialogTitle>
           <DialogDescription className="sr-only">
-            Store, chart, display, hidden products, debug, and system.
+            Store, import data, display, hidden products, debug, and system.
           </DialogDescription>
           <button
             type="button"
@@ -730,8 +748,8 @@ export function ImportChartButton({
                 {storeIdError
                   ? storeIdError
                   : storeId
-                    ? `This phone is set to store ${storeId}.`
-                    : "Number for this store. It stays on this phone."}
+                    ? `Store ${storeId}. Hidden items and item types for this campaign stay with this store.`
+                    : "Number for this store. Setting it saves hidden items and item types with the campaign."}
               </p>
             </div>
           </section>
@@ -744,7 +762,56 @@ export function ImportChartButton({
                 : "border-white/10 bg-card/80",
             )}
           >
-            <SettingsSectionTitle>Chart</SettingsSectionTitle>
+            <SettingsSectionTitle>Import data</SettingsSectionTitle>
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-stone-300">Saved charts</p>
+              {campaigns.length === 0 ? (
+                <p className="text-xs text-stone-500">
+                  Imported charts are kept here with their issued and valid dates.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {campaigns.map((item) => {
+                    const loaded =
+                      desk.imported &&
+                      desk.pack.chart.issued === item.issued &&
+                      desk.pack.chart.validUntil === item.validUntil;
+                    const issuedLabel = formatShortDate(item.issued);
+                    const validLabel = formatShortDate(item.validUntil);
+                    return (
+                      <button
+                        key={`${item.issued}|${item.validUntil}`}
+                        type="button"
+                        aria-pressed={loaded}
+                        aria-label={`${item.title || "Shelf life chart"}, issued ${issuedLabel}, valid until ${validLabel}${loaded ? ", loaded" : ""}`}
+                        disabled={busy}
+                        onClick={() => reloadCampaign(item.issued, item.validUntil)}
+                        className={cn(
+                          "w-full rounded-xl border px-3 py-2.5 text-left",
+                          loaded
+                            ? "border-sky-400/50 bg-sky-500/15"
+                            : "border-white/10 bg-black/20 hover:border-white/20",
+                        )}
+                      >
+                        <span className="flex items-center justify-between gap-2">
+                          <span className="min-w-0 truncate text-sm font-medium text-white">
+                            {item.title || "Shelf life chart"}
+                          </span>
+                          {loaded ? (
+                            <span className="shrink-0 text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-sky-300">
+                              Loaded
+                            </span>
+                          ) : null}
+                        </span>
+                        <span className="mt-0.5 block text-xs text-stone-400">
+                          Issued {issuedLabel} · Valid until {validLabel}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
 
             <input
               ref={photoRef}
@@ -1069,7 +1136,7 @@ export function ImportChartButton({
             {hiddenNames.length === 0 ? (
               <p className="text-sm text-stone-500">
                 Hide a product from its detail card. It leaves the list until you show
-                it again here.
+                it again here. With a store ID, this list is kept for the loaded campaign.
               </p>
             ) : (
               <ul className="divide-y divide-white/10 rounded-xl border border-white/10 bg-card">

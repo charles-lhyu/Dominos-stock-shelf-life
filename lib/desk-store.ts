@@ -1,6 +1,5 @@
 import { BUNDLED_PACK, EMPTY_PACK, parseChartPack } from "./chart-pack";
 import { toIsoDate } from "./dates";
-import { clearHiddenNames } from "./hidden-store";
 import type { ChartPack, ShelfRule } from "./types";
 
 const STORAGE_KEY = "shelf-life-desk-v1";
@@ -139,6 +138,16 @@ function todayIso() {
 let state: DeskState = DEFAULT_STATE;
 let hydrated = false;
 const listeners = new Set<() => void>();
+let afterImport: ((pack: ChartPack, sourceUrl: string) => void) | null = null;
+let afterClear: (() => void) | null = null;
+
+export function onPackImported(listener: (pack: ChartPack, sourceUrl: string) => void) {
+  afterImport = listener;
+}
+
+export function onPackCleared(listener: () => void) {
+  afterClear = listener;
+}
 
 function emit() {
   for (const listener of listeners) listener();
@@ -242,8 +251,6 @@ export function setPrepTime(prepTime: string) {
 }
 
 export function setImportedPack(pack: ChartPack, sourceUrl: string) {
-  // New campaign / chart — bring every product back into the list.
-  clearHiddenNames();
   state = {
     ...state,
     pack: repairPack(pack),
@@ -251,11 +258,11 @@ export function setImportedPack(pack: ChartPack, sourceUrl: string) {
     sourceUrl,
   };
   writeStored(state);
+  afterImport?.(state.pack, state.sourceUrl);
   emit();
 }
 
 export function clearImportedPack() {
-  clearHiddenNames();
   state = {
     ...state,
     pack: EMPTY_PACK,
@@ -263,5 +270,6 @@ export function clearImportedPack() {
     sourceUrl: "",
   };
   writeStored(state);
+  afterClear?.();
   emit();
 }

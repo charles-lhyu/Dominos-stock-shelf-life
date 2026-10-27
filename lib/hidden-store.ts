@@ -64,3 +64,20 @@ export function clearHiddenNames() {
   cached = [];
   writeNames(cached);
 }
+
+export function replaceHiddenNames(next: string[]) {
+  const cleaned = [
+    ...new Set(
+      next
+        .filter((item) => typeof item === "string")
+        .map((item) => item.trim())
+        .filter((item) => item !== ""),
+    ),
+  ].sort((a, b) => a.localeCompare(b));
+  const current = names();
+  if (current.length === cleaned.length && current.every((item, index) => item === cleaned[index])) {
+    return;
+  }
+  cached = cleaned;
+  writeNames(cached);
+}

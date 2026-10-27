@@ -25,6 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { captureActiveCampaign } from "@/lib/campaign-library";
 import { formatAppVersion } from "@/lib/changelog";
 import {
   daysBetween,
@@ -45,6 +46,18 @@ import {
   getHiddenNamesServer,
   subscribeHidden,
 } from "@/lib/hidden-store";
+import {
+  getItemPreset,
+  getItemPresetServer,
+  hydrateItemPresetStore,
+  setPreferredLife,
+  setPreferredSection,
+  setPresetCategory,
+  setPresetLifeFilter,
+  setPresetSectionFilter,
+  subscribeItemPreset,
+} from "@/lib/item-preset-store";
+import { hydrateStoreIdStore } from "@/lib/store-id-store";
 import {
   appVersionLabel,
   localAppVersion,
@@ -72,8 +85,6 @@ import { rulesForName, searchNames, shouldExpand } from "@/lib/search";
 import type { SectionId, ShelfRule } from "@/lib/types";
 import { cn } from "cn";
 
-const LAST_SECTION_KEY = "shelf-life-last-section";
-const LAST_LIFE_KEY = "shelf-life-last-life";
 /** Warn when delivery/prep is further than this many days from today. */
 const FAR_DATE_DAYS = 14;
 
@@ -120,43 +131,22 @@ function randomCategoryPlaceholder(rules: ShelfRule[], avoid?: string) {
   return `${groups[0]!.slice(0, 3).join(", ")}…`;
 }
 
-function readLastSection(): SectionId | null {
-  try {
-    const value = window.localStorage.getItem(LAST_SECTION_KEY);
-    if (
-      value === "frozen" ||
-      value === "chilled" ||
-      value === "ready" ||
-      value === "ambient" ||
-      value === "pack"
-    ) {
-      return value;
-    }
-  } catch {
-    // Ignore.
-  }
-  return null;
-}
-
-function readLastLife(): LifeKind | null {
-  try {
-    const value = window.localStorage.getItem(LAST_LIFE_KEY);
-    if (value === "stock" || value === "prepped" || value === "ambient") return value;
-  } catch {
-    // Ignore.
-  }
-  return null;
-}
-
 export function StockDesk() {
   const desk = useSyncExternalStore(subscribeDesk, getDeskState, getDeskState);
   const [query, setQuery] = useState("");
   const [picked, setPicked] = useState<string | null>(null);
-  const [category, setCategory] = useState<string | "all">("all");
-  const [sectionFilter, setSectionFilter] = useState<SectionId | "all">("all");
-  const [lifeFilter, setLifeFilter] = useState<LifeKind | "all">("all");
-  const [preferredSection, setPreferredSection] = useState<SectionId | null>(null);
-  const [preferredLife, setPreferredLife] = useState<LifeKind | null>(null);
+  const preset = useSyncExternalStore(
+    subscribeItemPreset,
+    () => {
+      hydrateItemPresetStore();
+      return getItemPreset();
+    },
+    getItemPresetServer,
+  );
+  const category = preset.category;
+  const sectionFilter = preset.sectionFilter;
+  const preferredSection = preset.section;
+  const preferredLife = preset.life;
   const [placeholder, setPlaceholder] = useState("Pepperoni, Chorizo, Nduja Sausage…");
   const [today, setToday] = useState<Date | null>(null);
   const [appUpdate, setAppUpdate] = useState<AppUpdateInfo>({
@@ -174,6 +164,8 @@ export function StockDesk() {
   const [listScrollable, setListScrollable] = useState(false);
   const [showGoTop, setShowGoTop] = useState(false);
   const [compactList, setCompactList] = useState(false);
+  const lifeFilter =
+    compactList && preset.lifeFilter === "all" ? "stock" : preset.lifeFilter;
   const [settingsOpen, setSettingsOpen] = useState(false);
   /** Keep FABs unmounted until Settings finish closing so they don't jump. */
   const [overlayButtonsReady, setOverlayButtonsReady] = useState(true);
@@ -191,8 +183,6 @@ export function StockDesk() {
   /** List place to restore when clearing a product opened from the chart. */
   const savedListScrollRef = useRef(0);
   const savedListCollapsedRef = useRef(false);
-  /** Life filter before compact mode — restored when leaving compact. */
-  const lifeFilterBeforeCompactRef = useRef<LifeKind | "all">("all");
   const { pack, deliveryDate, prepTime, imported } = desk;
   const { chart, footnotes, rules } = pack;
   const hiddenNames = useSyncExternalStore(
@@ -216,8 +206,9 @@ export function StockDesk() {
 
   useEffect(() => {
     hydrateDeskStore();
-    setPreferredSection(readLastSection());
-    setPreferredLife(readLastLife());
+    hydrateStoreIdStore();
+    hydrateItemPresetStore();
+    captureActiveCampaign();
     setToday(new Date());
   }, []);
 
@@ -454,14 +445,14 @@ export function StockDesk() {
 
   useEffect(() => {
     if (category !== "all" && !categories.includes(category)) {
-      setCategory("all");
+      setPresetCategory("all");
     }
   }, [categories, category]);
 
   useEffect(() => {
     const counts = sectionNameCounts(rules, category);
     if (sectionFilter !== "all" && (counts.bySection[sectionFilter] ?? 0) === 0) {
-      setSectionFilter("all");
+      setPresetSectionFilter("all");
     }
   }, [sectionFilter, rules, category]);
 
@@ -481,26 +472,8 @@ export function StockDesk() {
   );
   const others = expanded ? hits.filter((hit) => hit.name !== expanded) : hits;
 
-  function rememberSection(sectionId: SectionId) {
-    setPreferredSection(sectionId);
-    try {
-      window.localStorage.setItem(LAST_SECTION_KEY, sectionId);
-    } catch {
-      // Ignore.
-    }
-  }
-
-  function rememberLife(kind: LifeKind) {
-    setPreferredLife(kind);
-    try {
-      window.localStorage.setItem(LAST_LIFE_KEY, kind);
-    } catch {
-      // Ignore.
-    }
-  }
-
   function choose(name: string, sectionId?: SectionId) {
-    if (sectionId) rememberSection(sectionId);
+    if (sectionId) setPreferredSection(sectionId);
     // Remember list place before the chart unmounts for this product.
     savedListScrollRef.current = mainRef.current?.scrollTop ?? 0;
     savedListCollapsedRef.current = headerCollapsedRef.current;
@@ -856,7 +829,7 @@ export function StockDesk() {
                   <DragScroll role="group" aria-label="Product categories">
                     <FilterChip
                       selected={category === "all"}
-                      onClick={() => setCategory("all")}
+                      onClick={() => setPresetCategory("all")}
                     >
                       All <ChipCount value={categoryTotal} />
                     </FilterChip>
@@ -864,7 +837,7 @@ export function StockDesk() {
                       <FilterChip
                         key={item}
                         selected={category === item}
-                        onClick={() => setCategory(item)}
+                        onClick={() => setPresetCategory(item)}
                       >
                         {item} <ChipCount value={categoryCounts[item] ?? 0} />
                       </FilterChip>
@@ -873,7 +846,7 @@ export function StockDesk() {
                   <DragScroll role="group" aria-label="Storage filters">
                     <FilterChip
                       selected={sectionFilter === "all"}
-                      onClick={() => setSectionFilter("all")}
+                      onClick={() => setPresetSectionFilter("all")}
                     >
                       Any <ChipCount value={storageCounts.all} />
                     </FilterChip>
@@ -885,8 +858,8 @@ export function StockDesk() {
                           key={id}
                           selected={sectionFilter === id}
                           onClick={() => {
-                            setSectionFilter(id);
-                            rememberSection(id);
+                            setPresetSectionFilter(id);
+                            setPreferredSection(id);
                           }}
                         >
                           {SECTION_TAG[id]} <ChipCount value={count} />
@@ -898,7 +871,7 @@ export function StockDesk() {
                     <DragScroll role="group" aria-label="Life date filters">
                       <FilterChip
                         selected={lifeFilter === "all"}
-                        onClick={() => setLifeFilter("all")}
+                        onClick={() => setPresetLifeFilter("all")}
                       >
                         Any
                       </FilterChip>
@@ -907,8 +880,8 @@ export function StockDesk() {
                           key={kind}
                           selected={lifeFilter === kind}
                           onClick={() => {
-                            setLifeFilter(kind);
-                            rememberLife(kind);
+                            setPresetLifeFilter(kind);
+                            setPreferredLife(kind);
                           }}
                         >
                           {LIFE_KIND_META[kind].filter}
@@ -938,7 +911,7 @@ export function StockDesk() {
                     <FilterSelect
                       aria-label="Product category"
                       value={category}
-                      onChange={(value) => setCategory(value as string | "all")}
+                      onChange={(value) => setPresetCategory(value as string | "all")}
                       options={[
                         { value: "all", label: `All (${categoryTotal})` },
                         ...categories.map((item) => ({
@@ -952,8 +925,8 @@ export function StockDesk() {
                       value={sectionFilter}
                       onChange={(value) => {
                         const next = value as SectionId | "all";
-                        setSectionFilter(next);
-                        if (next !== "all") rememberSection(next);
+                        setPresetSectionFilter(next);
+                        if (next !== "all") setPreferredSection(next);
                       }}
                       options={[
                         {
@@ -978,8 +951,8 @@ export function StockDesk() {
                         value={lifeFilter}
                         onChange={(value) => {
                           const next = value as LifeKind | "all";
-                          setLifeFilter(next);
-                          if (next !== "all") rememberLife(next);
+                          setPresetLifeFilter(next);
+                          if (next !== "all") setPreferredLife(next);
                         }}
                         options={[
                           { value: "all", label: "Any" },
@@ -1013,7 +986,7 @@ export function StockDesk() {
           >
             <span className="font-display text-2xl text-white">No chart loaded</span>
             <span className="mt-2 block text-sm text-stone-400">
-              Tap here to open settings and upload a chart.
+              Tap here to open settings and import a chart.
             </span>
           </button>
         ) : null}
@@ -1038,7 +1011,7 @@ export function StockDesk() {
                       key={variant.sectionId}
                       type="button"
                       aria-pressed={selected}
-                      onClick={() => rememberSection(variant.sectionId)}
+                      onClick={() => setPreferredSection(variant.sectionId)}
                       className={cn(
                         "shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-wide ring-1",
                         selected
@@ -1061,7 +1034,7 @@ export function StockDesk() {
                       key={kind}
                       type="button"
                       aria-pressed={selected}
-                      onClick={() => rememberLife(kind)}
+                      onClick={() => setPreferredLife(kind)}
                       className={cn(
                         "shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold tracking-wide ring-1",
                         selected
@@ -1131,11 +1104,11 @@ export function StockDesk() {
             lifeFilter={lifeFilter}
             preferredSection={preferredSection}
             preferredLife={preferredLife}
-            onPreferredSection={rememberSection}
-            onPreferredLife={rememberLife}
+            onPreferredSection={setPreferredSection}
+            onPreferredLife={setPreferredLife}
             onLifeFilter={(kind) => {
-              setLifeFilter(kind);
-              rememberLife(kind);
+              setPresetLifeFilter(kind);
+              setPreferredLife(kind);
             }}
             onOpen={choose}
             compact={compactList}
@@ -1157,18 +1130,7 @@ export function StockDesk() {
           data-go-top=""
           aria-label={compactList ? "Show tags" : "Compact list without tags"}
           aria-pressed={compactList}
-          onClick={() => {
-            const enabling = !compactList;
-            if (enabling) {
-              lifeFilterBeforeCompactRef.current = lifeFilter;
-              setCompactList(true);
-              // Compact has no "Any" — default to Delivery without overwriting preference.
-              if (lifeFilter === "all") setLifeFilter("stock");
-            } else {
-              setCompactList(false);
-              setLifeFilter(lifeFilterBeforeCompactRef.current);
-            }
-          }}
+          onClick={() => setCompactList((on) => !on)}
           className={cn(
             "absolute right-4 z-20 flex size-11 items-center justify-center rounded-full text-stone-950 shadow-[0_8px_24px_rgba(0,0,0,0.25)] ring-1 backdrop-blur-sm transition-[background-color,opacity,box-shadow] duration-200",
             "bottom-[calc(max(1rem,env(safe-area-inset-bottom))+3.25rem)]",
