@@ -95,6 +95,14 @@ import {
   subscribeRotation,
 } from "@/lib/rotation-store";
 import {
+  getStoreId,
+  getStoreIdServer,
+  hydrateStoreIdStore,
+  normalizeStoreId,
+  setStoreId,
+  subscribeStoreId,
+} from "@/lib/store-id-store";
+import {
   getTextSize,
   getTextSizeServer,
   hydrateTextSizeStore,
@@ -110,7 +118,8 @@ type SettingsSectionId =
   | "settings-display"
   | "settings-hidden"
   | "settings-debug"
-  | "settings-app";
+  | "settings-app"
+  | "settings-system";
 
 const SETTINGS_SECTION_IDS: SettingsSectionId[] = [
   "settings-chart",
@@ -118,6 +127,7 @@ const SETTINGS_SECTION_IDS: SettingsSectionId[] = [
   "settings-hidden",
   "settings-debug",
   "settings-app",
+  "settings-system",
 ];
 
 type BarcodeDetectorLike = {
@@ -155,6 +165,8 @@ export function ImportChartButton({
     notes: string[];
   } | null>(null);
   const [scanning, setScanning] = useState(false);
+  const [storeDraft, setStoreDraft] = useState("");
+  const [storeIdError, setStoreIdError] = useState<string | null>(null);
   const [activeSettingsSection, setActiveSettingsSection] =
     useState<SettingsSectionId>("settings-chart");
   const [settingsEndPad, setSettingsEndPad] = useState(0);
@@ -202,11 +214,29 @@ export function ImportChartButton({
     },
     getTextSizeServer,
   );
+  const storeId = useSyncExternalStore(
+    subscribeStoreId,
+    () => {
+      hydrateStoreIdStore();
+      return getStoreId();
+    },
+    getStoreIdServer,
+  );
 
   useEffect(() => () => stopScan(), []);
 
+  useEffect(() => {
+    if (!open) return;
+    hydrateStoreIdStore();
+    setStoreDraft(getStoreId());
+    setStoreIdError(null);
+  }, [open]);
+
   function handleOpenChange(next: boolean) {
     if (next) {
+      hydrateStoreIdStore();
+      setStoreDraft(getStoreId());
+      setStoreIdError(null);
       setUrl(desk.sourceUrl);
       setConfirmReset(false);
       setChangelogOpen(false);
@@ -224,6 +254,17 @@ export function ImportChartButton({
       settingsJumpLock.current = false;
     }
     setOpen(next);
+  }
+
+  function commitStoreDraft() {
+    const next = normalizeStoreId(storeDraft);
+    if (next == null) {
+      setStoreIdError("Store ID is numbers only, up to 8 digits.");
+      return;
+    }
+    setStoreIdError(null);
+    setStoreId(next);
+    setStoreDraft(next);
   }
 
   function resetChart() {
@@ -379,6 +420,7 @@ export function ImportChartButton({
     },
     { id: "settings-debug" as const, label: "Debug" },
     { id: "settings-app" as const, label: "App" },
+    { id: "settings-system" as const, label: "System" },
   ];
 
   const activeSettingsLabel =
@@ -454,9 +496,9 @@ export function ImportChartButton({
   }
 
   function measureSettingsEndPad(body: HTMLElement): number {
-    const last = body.querySelector<HTMLElement>("#settings-app");
+    const last = body.querySelector<HTMLElement>("#settings-system");
     if (!last || body.clientHeight <= 0) return 0;
-    // Pane is a fixed viewport — pad so App's top can sit at the pane top.
+    // Pane is a fixed viewport — pad so System's top can sit at the pane top.
     return Math.max(0, Math.round(body.clientHeight - last.offsetHeight));
   }
 
@@ -488,8 +530,8 @@ export function ImportChartButton({
         onScroll();
       });
       resizeObserver.observe(body);
-      const app = body.querySelector("#settings-app");
-      if (app) resizeObserver.observe(app);
+      const system = body.querySelector("#settings-system");
+      if (system) resizeObserver.observe(system);
       syncEndPad();
       requestAnimationFrame(() => {
         if (!cancelled) syncEndPad();
@@ -544,7 +586,7 @@ export function ImportChartButton({
         <DialogHeader className="shrink-0 border-b border-white/10 px-4 py-3 pr-14">
           <DialogTitle className="font-display text-2xl text-white">Settings</DialogTitle>
           <DialogDescription className="sr-only">
-            Chart, display, hidden products, debug, and app updates.
+            Chart, display, hidden products, debug, store, and system.
           </DialogDescription>
           <button
             type="button"
@@ -1057,6 +1099,63 @@ export function ImportChartButton({
             )}
           >
             <SettingsSectionTitle>App</SettingsSectionTitle>
+            <div className="space-y-2">
+              <label htmlFor="store-id" className="text-sm font-medium text-stone-300">
+                Store ID
+              </label>
+              <div className="flex gap-2">
+                <Input
+                  id="store-id"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  maxLength={12}
+                  placeholder="12345"
+                  value={storeDraft}
+                  aria-invalid={storeIdError ? true : undefined}
+                  onChange={(event) => {
+                    setStoreDraft(event.target.value);
+                    if (storeIdError) setStoreIdError(null);
+                  }}
+                  onBlur={commitStoreDraft}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      commitStoreDraft();
+                    }
+                  }}
+                  className="h-12 rounded-xl border-white/10 bg-black/30 text-base text-white placeholder:text-stone-500"
+                />
+                <Button
+                  type="button"
+                  className="h-12 shrink-0 rounded-xl px-3"
+                  disabled={normalizeStoreId(storeDraft) === storeId}
+                  onClick={commitStoreDraft}
+                >
+                  Save
+                </Button>
+              </div>
+              <p className={cn("text-xs", storeIdError ? "text-red-300" : "text-stone-500")}>
+                {storeIdError
+                  ? storeIdError
+                  : storeId
+                    ? `This phone is set to store ${storeId}.`
+                    : "Number for this store. It stays on this phone."}
+              </p>
+            </div>
+          </section>
+
+          <section
+            id="settings-system"
+            className={cn(
+              "scroll-mt-2 space-y-3 rounded-2xl border p-3 transition-[border-color,box-shadow] duration-200",
+              activeSettingsSection === "settings-system"
+                ? "border-sky-400/40 bg-card shadow-[0_0_0_1px_rgba(56,189,248,0.18)]"
+                : "border-white/10 bg-card/80",
+            )}
+          >
+            <SettingsSectionTitle>System</SettingsSectionTitle>
             <dl className="space-y-2.5 rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-sm">
               <div className="flex items-baseline justify-between gap-3">
                 <dt className="text-stone-500">Name</dt>
