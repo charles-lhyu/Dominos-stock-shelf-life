@@ -122,11 +122,11 @@ type SettingsSectionId =
   | "settings-system";
 
 const SETTINGS_SECTION_IDS: SettingsSectionId[] = [
+  "settings-app",
   "settings-chart",
   "settings-display",
   "settings-hidden",
   "settings-debug",
-  "settings-app",
   "settings-system",
 ];
 
@@ -168,7 +168,7 @@ export function ImportChartButton({
   const [storeDraft, setStoreDraft] = useState("");
   const [storeIdError, setStoreIdError] = useState<string | null>(null);
   const [activeSettingsSection, setActiveSettingsSection] =
-    useState<SettingsSectionId>("settings-chart");
+    useState<SettingsSectionId>("settings-app");
   const [settingsEndPad, setSettingsEndPad] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -230,6 +230,11 @@ export function ImportChartButton({
     hydrateStoreIdStore();
     setStoreDraft(getStoreId());
     setStoreIdError(null);
+    setActiveSettingsSection("settings-app");
+    const raf = window.requestAnimationFrame(() => {
+      settingsBodyRef.current?.scrollTo({ top: 0 });
+    });
+    return () => window.cancelAnimationFrame(raf);
   }, [open]);
 
   function handleOpenChange(next: boolean) {
@@ -241,7 +246,7 @@ export function ImportChartButton({
       setConfirmReset(false);
       setChangelogOpen(false);
       setUpdateConfirmOpen(false);
-      setActiveSettingsSection("settings-chart");
+      setActiveSettingsSection("settings-app");
     } else {
       stopScan();
       setConfirmReset(false);
@@ -412,6 +417,7 @@ export function ImportChartButton({
   }
 
   const settingsNav = [
+    { id: "settings-app" as const, label: "App" },
     { id: "settings-chart" as const, label: "Chart" },
     { id: "settings-display" as const, label: "Display" },
     {
@@ -419,13 +425,12 @@ export function ImportChartButton({
       label: `Hidden${hiddenNames.length ? ` (${hiddenNames.length})` : ""}`,
     },
     { id: "settings-debug" as const, label: "Debug" },
-    { id: "settings-app" as const, label: "App" },
     { id: "settings-system" as const, label: "System" },
   ];
 
   const activeSettingsLabel =
     settingsNav.find((item) => item.id === activeSettingsSection)?.label ??
-    "Chart";
+    "App";
 
   const settingsSelectLabels = Object.fromEntries(
     settingsNav.map((item) => [item.id, item.label]),
@@ -586,7 +591,7 @@ export function ImportChartButton({
         <DialogHeader className="shrink-0 border-b border-white/10 px-4 py-3 pr-14">
           <DialogTitle className="font-display text-2xl text-white">Settings</DialogTitle>
           <DialogDescription className="sr-only">
-            Chart, display, hidden products, debug, store, and system.
+            Store, chart, display, hidden products, debug, and system.
           </DialogDescription>
           <button
             type="button"
@@ -674,6 +679,62 @@ export function ImportChartButton({
           className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pt-3 pb-0"
         >
           <div className="flex flex-col gap-3">
+          <section
+            id="settings-app"
+            className={cn(
+              "scroll-mt-2 space-y-3 rounded-2xl border p-3 transition-[border-color,box-shadow] duration-200",
+              activeSettingsSection === "settings-app"
+                ? "border-sky-400/40 bg-card shadow-[0_0_0_1px_rgba(56,189,248,0.18)]"
+                : "border-white/10 bg-card/80",
+            )}
+          >
+            <SettingsSectionTitle>App</SettingsSectionTitle>
+            <div className="space-y-2">
+              <label htmlFor="store-id" className="text-sm font-medium text-stone-300">
+                Store ID
+              </label>
+              <div className="flex gap-2">
+                <Input
+                  id="store-id"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  maxLength={12}
+                  placeholder="12345"
+                  value={storeDraft}
+                  aria-invalid={storeIdError ? true : undefined}
+                  onChange={(event) => {
+                    setStoreDraft(event.target.value);
+                    if (storeIdError) setStoreIdError(null);
+                  }}
+                  onBlur={commitStoreDraft}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      commitStoreDraft();
+                    }
+                  }}
+                  className="h-12 rounded-xl border-white/10 bg-black/30 text-base text-white placeholder:text-stone-500"
+                />
+                <Button
+                  type="button"
+                  className="h-12 shrink-0 rounded-xl px-3"
+                  disabled={normalizeStoreId(storeDraft) === storeId}
+                  onClick={commitStoreDraft}
+                >
+                  Save
+                </Button>
+              </div>
+              <p className={cn("text-xs", storeIdError ? "text-red-300" : "text-stone-500")}>
+                {storeIdError
+                  ? storeIdError
+                  : storeId
+                    ? `This phone is set to store ${storeId}.`
+                    : "Number for this store. It stays on this phone."}
+              </p>
+            </div>
+          </section>
           <section
             id="settings-chart"
             className={cn(
@@ -1087,63 +1148,6 @@ export function ImportChartButton({
               </span>
             </button>
             {debug ? <TextConvertTable desk={desk} /> : null}
-          </section>
-
-          <section
-            id="settings-app"
-            className={cn(
-              "scroll-mt-2 space-y-3 rounded-2xl border p-3 transition-[border-color,box-shadow] duration-200",
-              activeSettingsSection === "settings-app"
-                ? "border-sky-400/40 bg-card shadow-[0_0_0_1px_rgba(56,189,248,0.18)]"
-                : "border-white/10 bg-card/80",
-            )}
-          >
-            <SettingsSectionTitle>App</SettingsSectionTitle>
-            <div className="space-y-2">
-              <label htmlFor="store-id" className="text-sm font-medium text-stone-300">
-                Store ID
-              </label>
-              <div className="flex gap-2">
-                <Input
-                  id="store-id"
-                  inputMode="numeric"
-                  autoComplete="off"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  maxLength={12}
-                  placeholder="12345"
-                  value={storeDraft}
-                  aria-invalid={storeIdError ? true : undefined}
-                  onChange={(event) => {
-                    setStoreDraft(event.target.value);
-                    if (storeIdError) setStoreIdError(null);
-                  }}
-                  onBlur={commitStoreDraft}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      commitStoreDraft();
-                    }
-                  }}
-                  className="h-12 rounded-xl border-white/10 bg-black/30 text-base text-white placeholder:text-stone-500"
-                />
-                <Button
-                  type="button"
-                  className="h-12 shrink-0 rounded-xl px-3"
-                  disabled={normalizeStoreId(storeDraft) === storeId}
-                  onClick={commitStoreDraft}
-                >
-                  Save
-                </Button>
-              </div>
-              <p className={cn("text-xs", storeIdError ? "text-red-300" : "text-stone-500")}>
-                {storeIdError
-                  ? storeIdError
-                  : storeId
-                    ? `This phone is set to store ${storeId}.`
-                    : "Number for this store. It stays on this phone."}
-              </p>
-            </div>
           </section>
 
           <section
