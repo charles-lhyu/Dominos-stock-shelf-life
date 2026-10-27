@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import {
   ArrowUp,
   List,
@@ -181,6 +181,8 @@ export function StockDesk() {
   /** List place to restore when clearing a product opened from the chart. */
   const savedListScrollRef = useRef(0);
   const savedListCollapsedRef = useRef(false);
+  /** Set inside choose() so the next layout scrolls that product to the top once. */
+  const showItemFromTopRef = useRef(false);
   const { pack, deliveryDate, prepTime, imported } = desk;
   const { chart, footnotes, rules } = pack;
   const hiddenNames = useSyncExternalStore(
@@ -454,6 +456,15 @@ export function StockDesk() {
     }
   }, [sectionFilter, rules, category]);
 
+  // choose() saves the list offset, then this runs after the product is in the
+  // DOM and before paint. Search keystrokes never set the flag.
+  useLayoutEffect(() => {
+    if (!showItemFromTopRef.current) return;
+    showItemFromTopRef.current = false;
+    const scroller = mainRef.current;
+    if (scroller) scroller.scrollTop = 0;
+  });
+
   const hits = searchNames(query, visibleRules);
   const pickedName = picked && hits.some((hit) => hit.name === picked) ? picked : null;
   const expanded = pickedName ?? (shouldExpand(hits) ? hits[0]?.name ?? null : null);
@@ -473,9 +484,13 @@ export function StockDesk() {
 
   function choose(name: string, sectionId?: SectionId) {
     if (sectionId) setProductDefault(name, { section: sectionId });
-    // Remember list place before the chart unmounts for this product.
-    savedListScrollRef.current = mainRef.current?.scrollTop ?? 0;
-    savedListCollapsedRef.current = headerCollapsedRef.current;
+    // Snapshot the list only while it is still showing. A product opened from
+    // "also matches" must not replace that place with the detail's scroll.
+    if (!picked) {
+      savedListScrollRef.current = mainRef.current?.scrollTop ?? 0;
+      savedListCollapsedRef.current = headerCollapsedRef.current;
+    }
+    showItemFromTopRef.current = true;
     setQuery(name);
     setPicked(name);
     inputRef.current?.blur();
