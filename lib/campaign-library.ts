@@ -2,6 +2,7 @@ import {
   campaignKey,
   emptyCampaignLibrary,
   listCampaignSummaries,
+  listStoreCampaigns,
   parseCampaignLibrary,
   planStoreChange,
   readStoreSettings,
@@ -10,6 +11,7 @@ import {
   type CampaignLibrary,
   type CampaignSummary,
   type StoreCampaignSettings,
+  type StoreCampaignView,
 } from "./campaign-records";
 import {
   getDeskState,
@@ -29,14 +31,16 @@ import {
   resetItemPreset,
   subscribeItemPreset,
 } from "./item-preset-store";
-import { getStoreId, hydrateStoreIdStore } from "./store-id-store";
+import { getStoreId, hydrateStoreIdStore, subscribeStoreId } from "./store-id-store";
 import type { ChartPack } from "./types";
 
 const STORAGE_KEY = "campaign-library-v1";
 const EMPTY_CAMPAIGNS: CampaignSummary[] = [];
+const EMPTY_STORED: StoreCampaignView[] = [];
 
 let library: CampaignLibrary = emptyCampaignLibrary();
 let snapshot: CampaignSummary[] = EMPTY_CAMPAIGNS;
+let storedCache = new Map<string, StoreCampaignView[]>();
 let hydrated = false;
 let applying = false;
 const listeners = new Set<() => void>();
@@ -48,6 +52,7 @@ function emit() {
 function refreshSnapshot() {
   const next = listCampaignSummaries(library);
   snapshot = next.length === 0 ? EMPTY_CAMPAIGNS : next;
+  storedCache = new Map();
 }
 
 function commitLibrary(next: CampaignLibrary) {
@@ -87,6 +92,29 @@ export function listCampaignsServer(): CampaignSummary[] {
 export function subscribeCampaignLibrary(listener: () => void) {
   listeners.add(listener);
   return () => listeners.delete(listener);
+}
+
+export function listStoredForStore(storeId: string): StoreCampaignView[] {
+  if (!storeId) return EMPTY_STORED;
+  const cached = storedCache.get(storeId);
+  if (cached) return cached;
+  const next = listStoreCampaigns(library, storeId);
+  const stable = next.length === 0 ? EMPTY_STORED : next;
+  storedCache.set(storeId, stable);
+  return stable;
+}
+
+export function listStoredForStoreServer(): StoreCampaignView[] {
+  return EMPTY_STORED;
+}
+
+export function subscribeStoredStore(listener: () => void) {
+  const stopLibrary = subscribeCampaignLibrary(listener);
+  const stopStore = subscribeStoreId(listener);
+  return () => {
+    stopLibrary();
+    stopStore();
+  };
 }
 
 function currentSettings(): StoreCampaignSettings {

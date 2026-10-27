@@ -51,8 +51,11 @@ import {
   hydrateCampaignLibrary,
   listCampaigns,
   listCampaignsServer,
+  listStoredForStore,
+  listStoredForStoreServer,
   reloadCampaign,
   subscribeCampaignLibrary,
+  subscribeStoredStore,
 } from "@/lib/campaign-library";
 import { CHANGELOG } from "@/lib/changelog";
 import { parseChartPack } from "@/lib/chart-pack";
@@ -78,7 +81,8 @@ import {
 } from "@/lib/desk-store";
 import { clearPdfCrops, replacePdfCrops } from "@/lib/pdf-crop-images";
 import { parsePdfChartFile } from "@/lib/pdf-chart";
-import { prepClockTime } from "@/lib/preview";
+import type { ItemPreset } from "@/lib/item-preset-store";
+import { LIFE_KIND_META, prepClockTime, SECTION_TAG } from "@/lib/preview";
 import {
   appVersionLabel,
   getAppUpdateInfo,
@@ -237,6 +241,15 @@ export function ImportChartButton({
       return listCampaigns();
     },
     listCampaignsServer,
+  );
+  const storedForStore = useSyncExternalStore(
+    subscribeStoredStore,
+    () => {
+      hydrateCampaignLibrary();
+      hydrateStoreIdStore();
+      return listStoredForStore(getStoreId());
+    },
+    listStoredForStoreServer,
   );
 
   useEffect(() => () => stopScan(), []);
@@ -751,6 +764,62 @@ export function ImportChartButton({
                     ? `Store ${storeId}. Hidden items and item types for this campaign stay with this store.`
                     : "Number for this store. Setting it saves hidden items and item types with the campaign."}
               </p>
+            </div>
+            <div className="space-y-2 border-t border-white/10 pt-3">
+              <p className="text-sm font-medium text-stone-300">
+                {storeId ? `Stored for store ${storeId}` : "Stored for this store"}
+              </p>
+              {!storeId ? (
+                <p className="text-xs text-stone-500">
+                  Set a store ID to see the hidden items and item types saved for it.
+                </p>
+              ) : storedForStore.length === 0 ? (
+                <p className="text-xs text-stone-500">
+                  Nothing saved for store {storeId} yet.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {storedForStore.map((item) => {
+                    const onScreen =
+                      desk.imported &&
+                      desk.pack.chart.issued === item.issued &&
+                      desk.pack.chart.validUntil === item.validUntil;
+                    return (
+                      <article
+                        key={`${item.issued}|${item.validUntil}`}
+                        className="rounded-xl border border-white/10 bg-black/20 px-3 py-2.5"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="min-w-0 truncate text-sm font-medium text-white">
+                            {item.title}
+                          </p>
+                          {onScreen ? (
+                            <span className="shrink-0 text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-sky-300">
+                              On screen
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="mt-0.5 text-xs text-stone-400">
+                          Issued {formatShortDate(item.issued)} · Valid until{" "}
+                          {formatShortDate(item.validUntil)}
+                        </p>
+                        <p className="mt-2 text-xs text-stone-500">Hidden</p>
+                        {item.hidden.length === 0 ? (
+                          <p className="text-sm text-stone-200">None</p>
+                        ) : (
+                          <ul className="text-sm text-stone-200">
+                            {item.hidden.map((name) => (
+                              <li key={name}>{name}</li>
+                            ))}
+                          </ul>
+                        )}
+                        <p className="mt-2 text-xs text-stone-500">Item types</p>
+                        <p className="text-sm text-stone-200">{describeItemPreset(item.preset)}</p>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </section>
           <section
@@ -1423,6 +1492,16 @@ export function ImportChartButton({
     </Dialog>
     </>
   );
+}
+
+function describeItemPreset(preset: ItemPreset): string {
+  const category = preset.category === "all" ? "All" : preset.category;
+  const storage = preset.sectionFilter === "all" ? "Any" : SECTION_TAG[preset.sectionFilter];
+  const life = preset.lifeFilter === "all" ? "Any" : LIFE_KIND_META[preset.lifeFilter].filter;
+  const parts = [`Category ${category}`, `Storage ${storage}`, `Life ${life}`];
+  if (preset.section) parts.push(`Last storage ${SECTION_TAG[preset.section]}`);
+  if (preset.life) parts.push(`Last life ${LIFE_KIND_META[preset.life].tag}`);
+  return parts.join(" · ");
 }
 
 function SettingsSectionTitle({ children }: { children: ReactNode }) {

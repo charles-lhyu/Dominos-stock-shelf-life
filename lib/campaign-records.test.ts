@@ -4,6 +4,7 @@ import {
   campaignKey,
   emptyCampaignLibrary,
   listCampaignSummaries,
+  listStoreCampaigns,
   parseCampaignLibrary,
   planStoreChange,
   readStoreSettings,
@@ -198,5 +199,43 @@ describe("campaign library records", () => {
     assert.equal(settings?.preset.section, "pack");
     assert.equal(settings?.preset.lifeFilter, "all");
     assert.equal(parsed.stores.store, undefined);
+  });
+
+  it("lists one store's saved hidden items and item types per campaign", () => {
+    let library = upsertCampaign(
+      emptyCampaignLibrary(),
+      pack("2026-09-07", "2026-11-17", "Campaign 5"),
+      "a.pdf",
+      "t1",
+    );
+    library = upsertCampaign(
+      library,
+      pack("2026-10-01", "2026-12-01", "Campaign 6"),
+      "b.pdf",
+      "t2",
+    );
+    library = writeStoreSettings(library, "12345", "2026-09-07", "2026-11-17", {
+      hidden: ["Olives", "Bacon"],
+      preset,
+    });
+    library = writeStoreSettings(library, "12345", "2026-10-01", "2026-12-01", {
+      hidden: [],
+      preset: { ...preset, category: "Sides", lifeFilter: "prepped" },
+    });
+    library = writeStoreSettings(library, "99", "2026-09-07", "2026-11-17", {
+      hidden: ["Ham"],
+      preset,
+    });
+
+    const rows = listStoreCampaigns(library, "12345");
+    assert.deepEqual(
+      rows.map((row) => row.title),
+      ["Campaign 6", "Campaign 5"],
+    );
+    assert.deepEqual(rows[1]?.hidden, ["Bacon", "Olives"]);
+    assert.equal(rows[0]?.preset.category, "Sides");
+    assert.equal(rows[0]?.preset.lifeFilter, "prepped");
+    assert.deepEqual(listStoreCampaigns(library, "99").map((row) => row.hidden[0]), ["Ham"]);
+    assert.deepEqual(listStoreCampaigns(library, ""), []);
   });
 });

@@ -268,6 +268,42 @@ export function planStoreChange(input: {
   return { library, restore: null };
 }
 
+export type StoreCampaignView = {
+  issued: string;
+  validUntil: string;
+  title: string;
+  hidden: string[];
+  preset: ItemPreset;
+};
+
+/** Settings this store has saved, one row per campaign. */
+export function listStoreCampaigns(library: CampaignLibrary, storeId: string): StoreCampaignView[] {
+  if (!storeId) return [];
+  const saved = library.stores[storeId];
+  if (!saved) return [];
+  const campaigns = new Map(
+    library.campaigns.map((item) => [campaignKey(item.issued, item.validUntil), item]),
+  );
+  const rows: StoreCampaignView[] = [];
+  for (const [key, settings] of Object.entries(saved)) {
+    const [issued = "", validUntil = ""] = key.split("|");
+    if (campaignKey(issued, validUntil) !== key) continue;
+    rows.push({
+      issued,
+      validUntil,
+      title: campaigns.get(key)?.title || "Shelf life chart",
+      hidden: settings.hidden,
+      preset: settings.preset,
+    });
+  }
+  rows.sort((a, b) => {
+    if (a.validUntil !== b.validUntil) return a.validUntil < b.validUntil ? 1 : -1;
+    if (a.issued !== b.issued) return a.issued < b.issued ? 1 : -1;
+    return a.title < b.title ? 1 : -1;
+  });
+  return rows;
+}
+
 export function listCampaignSummaries(library: CampaignLibrary): CampaignSummary[] {
   return [...library.campaigns]
     .sort((a, b) => {
