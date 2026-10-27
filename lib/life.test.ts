@@ -2,12 +2,12 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { RULES } from "./chart";
 import { addDaysToIso, addHoursToLocal } from "./dates";
-import { capAdvice, clocksFor, projectClock } from "./life";
+import { calendarDaysToAdd, capAdvice, clocksFor, projectClock } from "./life";
 
 const today = new Date(2026, 9, 23);
 
 describe("shelf life dates", () => {
-  it("adds the life to the date you enter", () => {
+  it("counts the delivery date as day 1 of a from-delivery life", () => {
     const pepperoni = RULES.find(
       (rule) => rule.name === "Pepperoni" && rule.sectionId === "frozen",
     );
@@ -15,9 +15,11 @@ describe("shelf life dates", () => {
     const delivery = clocksFor(pepperoni).find((clock) => clock.id === "delivery");
     assert.ok(delivery);
     assert.equal(delivery.addDays, 12);
+    assert.equal(delivery.inclusive, true);
+    assert.equal(calendarDaysToAdd(delivery), 11);
     const result = projectClock(delivery, "2026-10-01", today);
-    assert.equal(result?.when, "Tue 13 Oct 2026");
-    assert.equal(addDaysToIso("2026-10-01", 12), "2026-10-13");
+    assert.equal(result?.when, "Mon 12 Oct 2026");
+    assert.equal(addDaysToIso("2026-10-01", 11), "2026-10-12");
     const later = addHoursToLocal("2026-09-10T10:00", 48);
     assert.equal(later.getDate(), 12);
     assert.equal(later.getHours(), 10);
@@ -29,6 +31,7 @@ describe("shelf life dates", () => {
     const clocks = clocksFor(dough);
     assert.equal(clocks.length, 1);
     assert.equal(clocks[0]?.addDays, 1);
+    assert.equal(clocks[0]?.inclusive, undefined);
     const result = projectClock(clocks[0], "2026-10-23", today);
     assert.equal(result?.when, "Sat 24 Oct 2026");
   });
@@ -66,8 +69,8 @@ describe("shelf life dates", () => {
       today,
     );
     assert.ok(pack && prepped);
-    assert.equal(prepped.when, "Tue 13 Oct 2026 | 23:59");
-    assert.match(capAdvice([pack, prepped]) ?? "", /13 Oct 2026/);
+    assert.equal(prepped.when, "Mon 12 Oct 2026 | 23:59");
+    assert.match(capAdvice([pack, prepped]) ?? "", /12 Oct 2026/);
   });
 
   it("adds the 10-day life to the pineapple and olives prep date", () => {
@@ -80,7 +83,7 @@ describe("shelf life dates", () => {
       assert.equal(prepped.value, "10 days (Chilled)");
       assert.equal(prepped.addDays, 10);
       const result = projectClock(prepped, "2026-10-01", today);
-      assert.equal(result?.when, "Sun 11 Oct 2026 | 23:59");
+      assert.equal(result?.when, "Sat 10 Oct 2026 | 23:59");
     }
   });
 
@@ -119,7 +122,7 @@ describe("shelf life dates", () => {
     assert.equal(prepped.value, "16 days (Chilled)");
     assert.equal(prepped.addDays, 16);
     const result = projectClock(prepped, "2026-10-24", today);
-    assert.equal(result?.when, "Mon 9 Nov 2026 | 23:59");
+    assert.equal(result?.when, "Sun 8 Nov 2026 | 23:59");
   });
 
   it("adds pepperdew's 25-day life to the prep date", () => {
@@ -131,6 +134,6 @@ describe("shelf life dates", () => {
     assert.equal(prepped.value, "25 days (Chilled)");
     assert.equal(prepped.addDays, 25);
     const result = projectClock(prepped, "2026-10-24", today);
-    assert.equal(result?.when, "Wed 18 Nov 2026 | 23:59");
+    assert.equal(result?.when, "Tue 17 Nov 2026 | 23:59");
   });
 });

@@ -17,6 +17,11 @@ export type Clock = {
   mode: "date" | "datetime" | "display";
   addDays?: number;
   addHours?: number;
+  /**
+   * Chart day lives count the start date as day 1.
+   * Use-by is the start date plus `addDays - 1`.
+   */
+  inclusive?: boolean;
   cap?: boolean;
   /** Prepped/in-use life that applies while the product stays chilled. */
   chilled?: boolean;
@@ -125,6 +130,7 @@ function clockFromValue(
       prompt: promptFor(label, "date"),
       mode: "date",
       addDays: Number(days[1]),
+      inclusive: true,
       chilled,
     };
   }
@@ -141,6 +147,13 @@ function clockFromValue(
     };
   }
   return { id, label, value: display(trimmed), prompt: "", mode: "display", chilled };
+}
+
+/** Days to add on the calendar. Inclusive lives treat the start date as day 1. */
+export function calendarDaysToAdd(clock: Clock) {
+  if (clock.addDays == null) return null;
+  if (clock.inclusive) return Math.max(0, clock.addDays - 1);
+  return clock.addDays;
 }
 
 export function clocksFor(rule: ShelfRule): Clock[] {
@@ -192,7 +205,8 @@ export function projectClock(clock: Clock, raw: string, today: Date): ClockResul
 
   if (clock.mode === "date") {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
-    const iso = clock.addDays != null ? addDaysToIso(value, clock.addDays) : value;
+    const offset = calendarDaysToAdd(clock);
+    const iso = offset != null ? addDaysToIso(value, offset) : value;
     const readout = readExpiry(iso, today);
     const from = clock.addDays
       ? `From ${formatLongDate(value)}. ${readout.detail}.`

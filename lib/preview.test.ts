@@ -18,7 +18,7 @@ describe("list use-by dates", () => {
     const kind = pickLifeKind(lifeKindsForRule(item), calculatedLifeKind(item));
     const preview = datePreview(item, "2026-10-24", kind, today);
     assert.equal(kind, "prepped");
-    assert.equal(preview.when, "Mon 9 Nov 2026 | 23:59");
+    assert.equal(preview.when, "Sun 8 Nov 2026 | 23:59");
   });
 
   it("keeps a delivery life when that date can be calculated", () => {
@@ -28,10 +28,10 @@ describe("list use-by dates", () => {
     assert.equal(calculatedLifeKind(frozen), "stock");
     assert.deepEqual(lifeKindsForRule(frozen), ["stock", "prepped"]);
     const preview = datePreview(frozen, "2026-10-01", "stock", today);
-    assert.equal(preview.when, "Tue 13 Oct 2026");
+    assert.equal(preview.when, "Mon 12 Oct 2026");
     // Prepped reuses the chart's from-delivery life (no invented in-use field).
     const prepped = datePreview(frozen, "2026-10-01", "prepped", today);
-    assert.equal(prepped.when, "Tue 13 Oct 2026");
+    assert.equal(prepped.when, "Mon 12 Oct 2026");
     assert.equal(item.name, "Pepperoni");
   });
 

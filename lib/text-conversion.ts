@@ -38,7 +38,7 @@ function useByFor(clock: Clock, deliveryDate: string, prepTime: string, today: D
 
 /**
  * Every life string on the imported chart, converted with the current Delivery/Prep Date.
- * Printed pack dates stay on the pack. Day counts are the full number of days.
+ * Printed pack dates stay on the pack. Day counts include the start date as day 1.
  * Hour clocks start at the locked prep time, or at `today` when that time is live.
  */
 export function textConversionTable(

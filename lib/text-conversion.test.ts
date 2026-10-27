@@ -19,10 +19,10 @@ function findRow(name: string, text: string) {
 
 describe("text conversion table", () => {
   it("converts the confirmed prep lives from 24 Oct 2026", () => {
-    assert.equal(findRow("Sliced Gherkins", "16 days").useBy, "Mon 9 Nov 2026 | 23:59");
-    assert.equal(findRow("Pepperdew Piquante Peppers", "25 days").useBy, "Wed 18 Nov 2026 | 23:59");
-    assert.equal(findRow("Pineapple", "10 days").useBy, "Tue 3 Nov 2026 | 23:59");
-    assert.equal(findRow("Olives", "10 days").useBy, "Tue 3 Nov 2026 | 23:59");
+    assert.equal(findRow("Sliced Gherkins", "16 days").useBy, "Sun 8 Nov 2026 | 23:59");
+    assert.equal(findRow("Pepperdew Piquante Peppers", "25 days").useBy, "Tue 17 Nov 2026 | 23:59");
+    assert.equal(findRow("Pineapple", "10 days").useBy, "Mon 2 Nov 2026 | 23:59");
+    assert.equal(findRow("Olives", "10 days").useBy, "Mon 2 Nov 2026 | 23:59");
   });
 
   it("leaves printed pack dates off the prep calendar", () => {
@@ -33,11 +33,11 @@ describe("text conversion table", () => {
     }
   });
 
-  it("adds every plain day count in full", () => {
+  it("counts the start date as day 1 of every plain day life", () => {
     for (const row of rows()) {
       const match = row.text.match(/^(\d+)\s*days$/);
       if (!match) continue;
-      const expected = formatLongDate(addDaysToIso(delivery, Number(match[1])));
+      const expected = formatLongDate(addDaysToIso(delivery, Number(match[1]) - 1));
       assert.ok(
         row.useBy.startsWith(expected),
         `${row.name} ${row.text} → ${row.useBy}, expected ${expected}`,
@@ -67,6 +67,6 @@ describe("text conversion table", () => {
       (item) => item.name === "Pineapple" && item.field === "Prepped",
     );
     assert.equal(row?.text, "25 days");
-    assert.equal(row?.useBy, "Wed 18 Nov 2026 | 23:59");
+    assert.equal(row?.useBy, "Tue 17 Nov 2026 | 23:59");
   });
 });
