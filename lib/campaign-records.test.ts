@@ -20,6 +20,7 @@ const preset: ItemPreset = {
   sectionFilter: "frozen",
   lifeFilter: "stock",
   category: "all",
+  defaults: {},
 };
 
 function pack(issued: string, validUntil: string, title = "Campaign 5"): ChartPack {
@@ -237,5 +238,18 @@ describe("campaign library records", () => {
     assert.equal(rows[0]?.preset.lifeFilter, "prepped");
     assert.deepEqual(listStoreCampaigns(library, "99").map((row) => row.hidden[0]), ["Ham"]);
     assert.deepEqual(listStoreCampaigns(library, ""), []);
+  });
+
+  it("keeps a product default such as pepperoni chilled from delivery", () => {
+    const library = writeStoreSettings(emptyCampaignLibrary(), "12345", "2026-09-07", "2026-11-17", {
+      hidden: [],
+      preset: {
+        ...preset,
+        defaults: { Pepperoni: { section: "chilled", life: "stock" } },
+      },
+    });
+    const saved = readStoreSettings(library, "12345", "2026-09-07", "2026-11-17");
+    assert.equal(saved?.preset.defaults.Pepperoni?.section, "chilled");
+    assert.equal(saved?.preset.defaults.Pepperoni?.life, "stock");
   });
 });

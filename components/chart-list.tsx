@@ -34,6 +34,7 @@ import {
   type LifeKind,
   type ToppingGroup,
 } from "@/lib/preview";
+import type { ProductDefault } from "@/lib/item-preset-store";
 import {
   getHiddenNames,
   getHiddenNamesServer,
@@ -179,10 +180,8 @@ export function ChartList({
   today,
   sectionFilter,
   lifeFilter,
-  preferredSection,
-  preferredLife,
-  onPreferredSection,
-  onPreferredLife,
+  productDefaults,
+  onProductDefault,
   onLifeFilter,
   onOpen,
   compact = false,
@@ -194,10 +193,8 @@ export function ChartList({
   today: Date | null;
   sectionFilter: SectionId | "all";
   lifeFilter: LifeKind | "all";
-  preferredSection: SectionId | null;
-  preferredLife: LifeKind | null;
-  onPreferredSection: (section: SectionId) => void;
-  onPreferredLife: (kind: LifeKind) => void;
+  productDefaults: Record<string, ProductDefault>;
+  onProductDefault: (name: string, section: SectionId, life: LifeKind | null) => void;
   onLifeFilter: (kind: LifeKind) => void;
   onOpen: (name: string, sectionId: SectionId) => void;
   compact?: boolean;
@@ -231,12 +228,14 @@ export function ChartList({
       }
       if (variants.length === 0) return [];
 
-      const sectionPreference = sectionFilter !== "all" ? sectionFilter : preferredSection;
+      const saved = productDefaults[name];
+      const sectionPreference =
+        sectionFilter !== "all" ? sectionFilter : (saved?.section ?? null);
       const active = pickVariant(variants, sectionPreference);
       if (!active) return [];
 
       const kinds = lifeKindsForRule(active.rule);
-      const lifePreference = lifeFilter !== "all" ? lifeFilter : preferredLife;
+      const lifePreference = lifeFilter !== "all" ? lifeFilter : (saved?.life ?? null);
       const activeLife = pickLifeKind(
         kinds,
         lifePreference ?? calculatedLifeKind(active.rule),
@@ -318,8 +317,7 @@ export function ChartList({
 
   const actions: ListActions = {
     onOpen,
-    onPreferredSection,
-    onPreferredLife,
+    onProductDefault,
     compact,
     nameSort,
     dateSort,
@@ -378,8 +376,7 @@ export function ChartList({
 
 type ListActions = {
   onOpen: (name: string, sectionId: SectionId) => void;
-  onPreferredSection: (section: SectionId) => void;
-  onPreferredLife: (kind: LifeKind) => void;
+  onProductDefault: (name: string, section: SectionId, life: LifeKind | null) => void;
   compact: boolean;
   nameSort: DirSort;
   dateSort: DirSort;
@@ -591,8 +588,7 @@ function renderCoverStack(
             row={row}
             compact={actions.compact}
             onOpen={actions.onOpen}
-            onPreferredSection={actions.onPreferredSection}
-            onPreferredLife={actions.onPreferredLife}
+            onProductDefault={actions.onProductDefault}
           />
         ))}
       </ul>
@@ -721,8 +717,7 @@ function ToppingsSection({
                   row={row}
                   compact={actions.compact}
                   onOpen={actions.onOpen}
-                  onPreferredSection={actions.onPreferredSection}
-                  onPreferredLife={actions.onPreferredLife}
+                  onProductDefault={actions.onProductDefault}
                 />
               ))}
             </ul>
@@ -738,14 +733,12 @@ function ProductRow({
   row,
   compact,
   onOpen,
-  onPreferredSection,
-  onPreferredLife,
+  onProductDefault,
 }: {
   row: ListRow;
   compact: boolean;
   onOpen: (name: string, sectionId: SectionId) => void;
-  onPreferredSection: (section: SectionId) => void;
-  onPreferredLife: (kind: LifeKind) => void;
+  onProductDefault: (name: string, section: SectionId, life: LifeKind | null) => void;
 }) {
   const { name, variants, active, kinds, activeLife, preview } = row;
 
@@ -776,7 +769,7 @@ function ProductRow({
               <CompactStorageTag
                 variants={variants}
                 active={active}
-                onPreferredSection={onPreferredSection}
+                onPreferredSection={(sectionId) => onProductDefault(name, sectionId, activeLife)}
               />
             ) : null}
           </div>
@@ -805,7 +798,7 @@ function ProductRow({
                   aria-pressed={selected}
                   onClick={(event) => {
                     event.stopPropagation();
-                    onPreferredSection(variant.sectionId);
+                    onProductDefault(name, variant.sectionId, activeLife);
                   }}
                   className={cn(
                     "touch-pan-y shrink-0 rounded-md px-1.5 py-0.5 text-[0.6875rem] font-semibold uppercase tracking-wide ring-1",
@@ -827,7 +820,7 @@ function ProductRow({
                     event.stopPropagation();
                     const kindIndex = kinds.indexOf(activeLife);
                     const next = kinds[(kindIndex + 1) % kinds.length]!;
-                    onPreferredLife(next);
+                    onProductDefault(name, active.sectionId, next);
                   }}
                   className={cn(
                     "inline-flex touch-pan-y shrink-0 items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[0.6875rem] font-semibold tracking-wide ring-1",

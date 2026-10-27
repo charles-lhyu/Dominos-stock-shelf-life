@@ -82,7 +82,7 @@ import {
 import { clearPdfCrops, replacePdfCrops } from "@/lib/pdf-crop-images";
 import { parsePdfChartFile } from "@/lib/pdf-chart";
 import type { ItemPreset } from "@/lib/item-preset-store";
-import { LIFE_KIND_META, prepClockTime, SECTION_TAG } from "@/lib/preview";
+import { prepClockTime, SECTION_TAG } from "@/lib/preview";
 import {
   appVersionLabel,
   getAppUpdateInfo,
@@ -761,8 +761,8 @@ export function ImportChartButton({
                 {storeIdError
                   ? storeIdError
                   : storeId
-                    ? `Store ${storeId}. Hidden items and item types for this campaign stay with this store.`
-                    : "Number for this store. Setting it saves hidden items and item types with the campaign."}
+                    ? `Store ${storeId}. Hidden items and product defaults stay with this store.`
+                    : "Number for this store. Setting it saves hidden items and product defaults with the campaign."}
               </p>
             </div>
             <div className="space-y-2 border-t border-white/10 pt-3">
@@ -771,7 +771,7 @@ export function ImportChartButton({
               </p>
               {!storeId ? (
                 <p className="text-xs text-stone-500">
-                  Set a store ID to see the hidden items and item types saved for it.
+                  Set a store ID to see the hidden items and product defaults saved for it.
                 </p>
               ) : storedForStore.length === 0 ? (
                 <p className="text-xs text-stone-500">
@@ -813,8 +813,16 @@ export function ImportChartButton({
                             ))}
                           </ul>
                         )}
-                        <p className="mt-2 text-xs text-stone-500">Item types</p>
-                        <p className="text-sm text-stone-200">{describeItemPreset(item.preset)}</p>
+                        <p className="mt-2 text-xs text-stone-500">Defaults</p>
+                        {productDefaultLines(item.preset).length === 0 ? (
+                          <p className="text-sm text-stone-200">None</p>
+                        ) : (
+                          <ul className="text-sm text-stone-200">
+                            {productDefaultLines(item.preset).map((line) => (
+                              <li key={line}>{line}</li>
+                            ))}
+                          </ul>
+                        )}
                       </article>
                     );
                   })}
@@ -1494,14 +1502,23 @@ export function ImportChartButton({
   );
 }
 
-function describeItemPreset(preset: ItemPreset): string {
-  const category = preset.category === "all" ? "All" : preset.category;
-  const storage = preset.sectionFilter === "all" ? "Any" : SECTION_TAG[preset.sectionFilter];
-  const life = preset.lifeFilter === "all" ? "Any" : LIFE_KIND_META[preset.lifeFilter].filter;
-  const parts = [`Category ${category}`, `Storage ${storage}`, `Life ${life}`];
-  if (preset.section) parts.push(`Last storage ${SECTION_TAG[preset.section]}`);
-  if (preset.life) parts.push(`Last life ${LIFE_KIND_META[preset.life].tag}`);
-  return parts.join(" · ");
+function productDefaultLines(preset: ItemPreset): string[] {
+  return Object.entries(preset.defaults)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([name, item]) => {
+      const storage = item.section ? SECTION_TAG[item.section] : null;
+      const life =
+        item.life === "stock"
+          ? "From delivery"
+          : item.life === "prepped"
+            ? "Prepped"
+            : item.life === "ambient"
+              ? "Ambient"
+              : null;
+      if (storage && life) return `${name} default is ${storage}, ${life}`;
+      if (storage) return `${name} default is ${storage}`;
+      return `${name} default is ${life}`;
+    });
 }
 
 function SettingsSectionTitle({ children }: { children: ReactNode }) {

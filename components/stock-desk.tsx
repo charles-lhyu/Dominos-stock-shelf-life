@@ -50,9 +50,8 @@ import {
   getItemPreset,
   getItemPresetServer,
   hydrateItemPresetStore,
-  setPreferredLife,
-  setPreferredSection,
   setPresetCategory,
+  setProductDefault,
   setPresetLifeFilter,
   setPresetSectionFilter,
   subscribeItemPreset,
@@ -145,8 +144,7 @@ export function StockDesk() {
   );
   const category = preset.category;
   const sectionFilter = preset.sectionFilter;
-  const preferredSection = preset.section;
-  const preferredLife = preset.life;
+  const productDefaults = preset.defaults;
   const [placeholder, setPlaceholder] = useState("Pepperoni, Chorizo, Nduja Sausage…");
   const [today, setToday] = useState<Date | null>(null);
   const [appUpdate, setAppUpdate] = useState<AppUpdateInfo>({
@@ -460,20 +458,21 @@ export function StockDesk() {
   const pickedName = picked && hits.some((hit) => hit.name === picked) ? picked : null;
   const expanded = pickedName ?? (shouldExpand(hits) ? hits[0]?.name ?? null : null);
   const expandedVariants = expanded ? variantsForName(expanded, visibleRules, pack) : [];
+  const expandedDefault = expanded ? productDefaults[expanded] : undefined;
   const activeVariant = pickVariant(
     expandedVariants,
-    sectionFilter !== "all" ? sectionFilter : preferredSection,
+    sectionFilter !== "all" ? sectionFilter : (expandedDefault?.section ?? null),
   );
   const expandedKinds = activeVariant ? lifeKindsForRule(activeVariant.rule) : [];
   const activeLife = pickLifeKind(
     expandedKinds,
-    (lifeFilter !== "all" ? lifeFilter : preferredLife) ??
+    (lifeFilter !== "all" ? lifeFilter : (expandedDefault?.life ?? null)) ??
       (activeVariant ? calculatedLifeKind(activeVariant.rule) : null),
   );
   const others = expanded ? hits.filter((hit) => hit.name !== expanded) : hits;
 
   function choose(name: string, sectionId?: SectionId) {
-    if (sectionId) setPreferredSection(sectionId);
+    if (sectionId) setProductDefault(name, { section: sectionId });
     // Remember list place before the chart unmounts for this product.
     savedListScrollRef.current = mainRef.current?.scrollTop ?? 0;
     savedListCollapsedRef.current = headerCollapsedRef.current;
@@ -857,10 +856,7 @@ export function StockDesk() {
                         <FilterChip
                           key={id}
                           selected={sectionFilter === id}
-                          onClick={() => {
-                            setPresetSectionFilter(id);
-                            setPreferredSection(id);
-                          }}
+                          onClick={() => setPresetSectionFilter(id)}
                         >
                           {SECTION_TAG[id]} <ChipCount value={count} />
                         </FilterChip>
@@ -879,10 +875,7 @@ export function StockDesk() {
                         <FilterChip
                           key={kind}
                           selected={lifeFilter === kind}
-                          onClick={() => {
-                            setPresetLifeFilter(kind);
-                            setPreferredLife(kind);
-                          }}
+                          onClick={() => setPresetLifeFilter(kind)}
                         >
                           {LIFE_KIND_META[kind].filter}
                         </FilterChip>
@@ -924,9 +917,7 @@ export function StockDesk() {
                       aria-label="Storage"
                       value={sectionFilter}
                       onChange={(value) => {
-                        const next = value as SectionId | "all";
-                        setPresetSectionFilter(next);
-                        if (next !== "all") setPreferredSection(next);
+                        setPresetSectionFilter(value as SectionId | "all");
                       }}
                       options={[
                         {
@@ -950,9 +941,7 @@ export function StockDesk() {
                         aria-label="Life date"
                         value={lifeFilter}
                         onChange={(value) => {
-                          const next = value as LifeKind | "all";
-                          setPresetLifeFilter(next);
-                          if (next !== "all") setPreferredLife(next);
+                          setPresetLifeFilter(value as LifeKind | "all");
                         }}
                         options={[
                           { value: "all", label: "Any" },
@@ -1011,7 +1000,14 @@ export function StockDesk() {
                       key={variant.sectionId}
                       type="button"
                       aria-pressed={selected}
-                      onClick={() => setPreferredSection(variant.sectionId)}
+                      onClick={() => {
+                        if (expanded) {
+                          setProductDefault(expanded, {
+                            section: variant.sectionId,
+                            life: activeLife,
+                          });
+                        }
+                      }}
                       className={cn(
                         "shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-wide ring-1",
                         selected
@@ -1034,7 +1030,14 @@ export function StockDesk() {
                       key={kind}
                       type="button"
                       aria-pressed={selected}
-                      onClick={() => setPreferredLife(kind)}
+                      onClick={() => {
+                        if (expanded && activeVariant) {
+                          setProductDefault(expanded, {
+                            section: activeVariant.sectionId,
+                            life: kind,
+                          });
+                        }
+                      }}
                       className={cn(
                         "shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold tracking-wide ring-1",
                         selected
@@ -1071,7 +1074,7 @@ export function StockDesk() {
             <ul className="divide-y divide-white/10">
               {others.slice(0, 12).map((hit) => {
                 const variants = variantsForName(hit.name, rules, pack);
-                const preview = pickVariant(variants, preferredSection);
+                const preview = pickVariant(variants, productDefaults[hit.name]?.section ?? null);
                 return (
                   <li key={hit.name}>
                     <button
@@ -1102,14 +1105,9 @@ export function StockDesk() {
             today={today}
             sectionFilter={sectionFilter}
             lifeFilter={lifeFilter}
-            preferredSection={preferredSection}
-            preferredLife={preferredLife}
-            onPreferredSection={setPreferredSection}
-            onPreferredLife={setPreferredLife}
-            onLifeFilter={(kind) => {
-              setPresetLifeFilter(kind);
-              setPreferredLife(kind);
-            }}
+            productDefaults={productDefaults}
+            onProductDefault={(name, section, life) => setProductDefault(name, { section, life })}
+            onLifeFilter={setPresetLifeFilter}
             onOpen={choose}
             compact={compactList}
           />

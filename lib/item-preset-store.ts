@@ -8,13 +8,20 @@ const LAST_LIFE_KEY = "shelf-life-last-life";
 const SECTIONS = new Set<SectionId>(["frozen", "chilled", "ready", "ambient", "pack"]);
 const LIVES = new Set<LifeKind>(["stock", "prepped", "ambient"]);
 
-/** Item-type choices: storage, life, and the list filters. */
+/** One product's chosen storage and life. Life `stock` is from delivery. */
+export type ProductDefault = {
+  section: SectionId | null;
+  life: LifeKind | null;
+};
+
+/** List filters, plus each product's default storage and life. */
 export type ItemPreset = {
   section: SectionId | null;
   life: LifeKind | null;
   sectionFilter: SectionId | "all";
   lifeFilter: LifeKind | "all";
   category: string | "all";
+  defaults: Record<string, ProductDefault>;
 };
 
 export const DEFAULT_ITEM_PRESET: ItemPreset = {
@@ -23,6 +30,7 @@ export const DEFAULT_ITEM_PRESET: ItemPreset = {
   sectionFilter: "all",
   lifeFilter: "all",
   category: "all",
+  defaults: {},
 };
 
 function isSection(value: unknown): value is SectionId {
@@ -31,6 +39,34 @@ function isSection(value: unknown): value is SectionId {
 
 function isLife(value: unknown): value is LifeKind {
   return typeof value === "string" && LIVES.has(value as LifeKind);
+}
+
+function normalizeDefaults(value: unknown): Record<string, ProductDefault> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const defaults: Record<string, ProductDefault> = {};
+  for (const [name, entry] of Object.entries(value as Record<string, unknown>)) {
+    const trimmed = name.trim();
+    if (!trimmed || !entry || typeof entry !== "object") continue;
+    const raw = entry as Record<string, unknown>;
+    const section = isSection(raw.section) ? raw.section : null;
+    const life = isLife(raw.life) ? raw.life : null;
+    if (!section && !life) continue;
+    defaults[trimmed] = { section, life };
+  }
+  return defaults;
+}
+
+function sameDefaults(
+  a: Record<string, ProductDefault>,
+  b: Record<string, ProductDefault>,
+): boolean {
+  const aKeys = Object.keys(a).sort();
+  const bKeys = Object.keys(b).sort();
+  if (aKeys.length !== bKeys.length) return false;
+  return aKeys.every((key, index) => {
+    if (key !== bKeys[index]) return false;
+    return a[key]?.section === b[key]?.section && a[key]?.life === b[key]?.life;
+  });
 }
 
 export function normalizeItemPreset(value: unknown): ItemPreset {
@@ -45,6 +81,7 @@ export function normalizeItemPreset(value: unknown): ItemPreset {
       raw.sectionFilter === "all" || isSection(raw.sectionFilter) ? raw.sectionFilter : "all",
     lifeFilter: raw.lifeFilter === "all" || isLife(raw.lifeFilter) ? raw.lifeFilter : "all",
     category,
+    defaults: normalizeDefaults(raw.defaults),
   };
 }
 
@@ -54,7 +91,8 @@ export function sameItemPreset(a: ItemPreset, b: ItemPreset): boolean {
     a.life === b.life &&
     a.sectionFilter === b.sectionFilter &&
     a.lifeFilter === b.lifeFilter &&
-    a.category === b.category
+    a.category === b.category &&
+    sameDefaults(a.defaults, b.defaults)
   );
 }
 
@@ -149,6 +187,25 @@ export function setPresetLifeFilter(lifeFilter: LifeKind | "all") {
 
 export function setPresetCategory(category: string | "all") {
   update({ category });
+}
+
+/** Remember one product's storage and life, for example Pepperoni as chilled from delivery. */
+export function setProductDefault(
+  name: string,
+  partial: { section?: SectionId | null; life?: LifeKind | null },
+) {
+  hydrateItemPresetStore();
+  const trimmed = name.trim();
+  if (!trimmed) return;
+  const current = preset.defaults[trimmed] ?? { section: null, life: null };
+  const next: ProductDefault = {
+    section: partial.section !== undefined ? partial.section : current.section,
+    life: partial.life !== undefined ? partial.life : current.life,
+  };
+  const defaults = { ...preset.defaults };
+  if (!next.section && !next.life) delete defaults[trimmed];
+  else defaults[trimmed] = next;
+  update({ defaults });
 }
 
 export function replaceItemPreset(value: unknown) {
