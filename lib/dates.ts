@@ -240,7 +240,11 @@ export function addHoursToLocal(value: string, hours: number): Date {
   const [year, month, day] = datePart.split("-").map(Number);
   const [hour, minute] = (timePart ?? "00:00").split(":").map(Number);
   const start = new Date(year, (month || 1) - 1, day || 1, hour || 0, minute || 0, 0, 0);
-  return new Date(start.getTime() + hours * 3_600_000);
+  // Store-clock hours. Adding elapsed milliseconds shifts the label by an hour
+  // when the span crosses the end or start of British Summer Time.
+  const end = new Date(start.getTime());
+  end.setHours(end.getHours() + hours);
+  return end;
 }
 
 export function endOfIsoDay(iso: string): Date {

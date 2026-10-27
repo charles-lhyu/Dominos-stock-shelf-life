@@ -95,8 +95,14 @@ describe("shelf life dates", () => {
     const ambient = clocks.find((clock) => clock.id === "ambient");
     assert.equal(prepped?.chilled, true);
     assert.equal(prepped?.value, "10 days (Chilled)");
+    assert.equal(prepped?.inclusive, true);
     assert.equal(ambient?.chilled, false);
     assert.equal(ambient?.value, "15 hours");
+    assert.equal(ambient?.addHours, 15);
+    const prepResult = projectClock(prepped!, "2026-10-24", today);
+    assert.equal(prepResult?.when, "Mon 2 Nov 2026 | 23:59");
+    const ambientResult = projectClock(ambient!, "2026-10-24T14:30", today);
+    assert.equal(ambientResult?.when, "Sun 25 Oct 2026 | 05:30");
   });
 
   it("keeps true ambient-section prepped life without a chilled state", () => {
@@ -105,6 +111,59 @@ describe("shelf life dates", () => {
     const prepped = clocksFor(sauce).find((clock) => clock.id === "prepped");
     assert.equal(prepped?.chilled, false);
     assert.equal(prepped?.value, "14 days");
+    assert.equal(prepped?.inclusive, true);
+    const result = projectClock(prepped!, "2026-10-01", today);
+    assert.equal(result?.when, "Wed 14 Oct 2026 | 23:59");
+  });
+
+  it("counts the prep date as day 1 of an in-use life", () => {
+    const bacon = RULES.find((rule) => rule.name === "Bacon (FROZEN)");
+    assert.ok(bacon);
+    const inUse = clocksFor(bacon).find((clock) => clock.id === "use");
+    assert.ok(inUse);
+    assert.equal(inUse.addDays, 7);
+    assert.equal(inUse.inclusive, true);
+    const result = projectClock(inUse, "2026-10-01", today);
+    assert.equal(result?.when, "Wed 7 Oct 2026 | 23:59");
+  });
+
+  it("adds prep and ambient hours to the time on the start date", () => {
+    const mac = RULES.find((rule) => rule.name === "Mac n Cheese");
+    assert.ok(mac);
+    const prepHours = clocksFor(mac).find((clock) => clock.id === "use");
+    assert.equal(prepHours?.addHours, 48);
+    assert.equal(prepHours?.inclusive, undefined);
+    const macResult = projectClock(prepHours!, "2026-10-01T10:00", today);
+    assert.equal(macResult?.when, "Sat 3 Oct 2026 | 10:00");
+
+    const bases = RULES.find((rule) => rule.name === "Prepared Double Decadence bases");
+    assert.ok(bases);
+    const clocks = clocksFor(bases);
+    const chilled = clocks.find((clock) => clock.id === "prepped");
+    const ambient = clocks.find((clock) => clock.id === "ambient");
+    assert.equal(chilled?.addHours, 12);
+    assert.equal(ambient?.addHours, 4);
+    assert.equal(projectClock(chilled!, "2026-10-24T09:00", today)?.when, "Sat 24 Oct 2026 | 21:00");
+    assert.equal(projectClock(ambient!, "2026-10-24T09:00", today)?.when, "Sat 24 Oct 2026 | 13:00");
+  });
+
+  it("counts an ambient day life through 23:59 on the last day", () => {
+    const clocks = clocksFor({
+      id: "ambient:sample",
+      sectionId: "ready",
+      category: "Sauces",
+      name: "Sample",
+      aliases: [],
+      sameAs: [],
+      prepped: "10 days",
+      ambientUse: "2 days",
+    });
+    const ambient = clocks.find((clock) => clock.id === "ambient");
+    assert.ok(ambient);
+    assert.equal(ambient.inclusive, true);
+    assert.equal(ambient.addDays, 2);
+    const result = projectClock(ambient, "2026-10-01", today);
+    assert.equal(result?.when, "Fri 2 Oct 2026 | 23:59");
   });
 
   it("adds sliced gherkins' 16-day life to the prep date", () => {

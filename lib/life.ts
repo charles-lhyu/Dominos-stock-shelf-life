@@ -212,11 +212,13 @@ export function projectClock(clock: Clock, raw: string, today: Date): ClockResul
       ? `From ${formatLongDate(value)}. ${readout.detail}.`
       : readout.detail;
     const at = endOfIsoDay(iso);
-    const preppedDay = clock.id === "prepped" || clock.id === "use";
+    // Prep, in-use, and ambient day lives include the whole use-by day.
+    const endsAtClose =
+      clock.inclusive === true &&
+      (clock.id === "prepped" || clock.id === "use" || clock.id === "ambient");
     return {
       id: clock.id,
-      // Day-based prepped / in-use life ends at 23:59 on the use-by day.
-      when: preppedDay ? formatDateTime(at) : formatLongDate(iso),
+      when: endsAtClose ? formatDateTime(at) : formatLongDate(iso),
       detail: from,
       tone: readout.status,
       at,

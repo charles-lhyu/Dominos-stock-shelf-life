@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  addHoursToLocal,
   daysBetween,
   excelSerialToIso,
   formatLongDate,
@@ -62,5 +63,14 @@ describe("readExpiry", () => {
 
   it("formats a date for the ticket", () => {
     assert.equal(formatLongDate("2026-10-23"), "Fri 23 Oct 2026");
+  });
+});
+
+describe("addHoursToLocal", () => {
+  it("adds hours on the store clock when the clocks go back", () => {
+    const later = addHoursToLocal("2026-10-24T14:30", 15);
+    assert.equal(later.getDate(), 25);
+    assert.equal(later.getHours(), 5);
+    assert.equal(later.getMinutes(), 30);
   });
 });

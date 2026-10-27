@@ -320,7 +320,7 @@ export function LifeCard({
         ) : null}
         {clocks.some((clock) => clock.addDays) ? (
           <p className="mt-4 text-xs text-stone-500">
-            The date you enter counts as day 1. 12 days from 1 Oct is 12 Oct.
+            The date you enter counts as day 1 for delivery, prep, and ambient day lives. 12 days from 1 Oct is 12 Oct. Hour lives run from the time on that date.
           </p>
         ) : null}
       </div>

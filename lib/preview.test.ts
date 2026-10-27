@@ -41,6 +41,22 @@ describe("list use-by dates", () => {
     assert.equal(preview.when, "Date on pack");
   });
 
+  it("counts prep and ambient dates from the delivery date", () => {
+    const sauce = RULES.find((item) => item.name === "Pizza Sauce" && item.sectionId === "ready");
+    assert.ok(sauce);
+    const at = new Date(2026, 9, 24, 14, 30);
+    const prepped = datePreview(sauce, "2026-10-24", "prepped", at, "14:30");
+    const ambient = datePreview(sauce, "2026-10-24", "ambient", at, "14:30");
+    assert.equal(prepped.when, "Mon 2 Nov 2026 | 23:59");
+    assert.equal(ambient.when, "Sun 25 Oct 2026 | 05:30");
+    assert.equal(ambient.asHours, true);
+
+    const burger = RULES.find((item) => item.name === "Burger Sauce" && item.sectionId === "ambient");
+    assert.ok(burger);
+    const ambientPrep = datePreview(burger, "2026-10-01", "prepped", today);
+    assert.equal(ambientPrep.when, "Wed 14 Oct 2026 | 23:59");
+  });
+
   it("starts an hour life at the locked prep time", () => {
     const item = rule("Garlic Butter");
     const at = new Date(2026, 9, 24, 14, 30);
