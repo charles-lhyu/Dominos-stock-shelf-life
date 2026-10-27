@@ -116,6 +116,46 @@
   }
 }
 
+/* Settings → Display text size (also set inline by TextSizeControl). */
+html[data-text-size="sm"] {
+  font-size: 15px;
+}
+html[data-text-size="md"] {
+  font-size: 16px;
+}
+html[data-text-size="lg"] {
+  font-size: 18px;
+}
+
+/* Product names that don’t fit: pause, scroll to end, pause, return. */
+@keyframes auto-scroll-text {
+  0%,
+  12% {
+    transform: translateX(0);
+  }
+  45%,
+  62% {
+    transform: translateX(var(--auto-scroll-distance, 0));
+  }
+  95%,
+  100% {
+    transform: translateX(0);
+  }
+}
+
+.auto-scroll-text {
+  animation-name: auto-scroll-text;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auto-scroll-text {
+    animation: none;
+  }
+}
+
 .date-field {
   box-sizing: border-box;
   width: 100%;

@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.4.16",
+    "notes": [
+      "Text size control in Settings → Display (Small / Medium / Large)",
+      "Long product names auto-scroll when they don’t fit"
+    ]
+  },
+  {
     "version": "1.4.15",
     "notes": [
       "Compact storage chips keep their colour on selectable tags",

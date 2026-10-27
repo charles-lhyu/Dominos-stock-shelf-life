@@ -4,6 +4,7 @@ import { ThemeProvider } from "next-themes";
 import { KeepAwake } from "@/components/keep-awake";
 import { LockPortrait } from "@/components/lock-portrait";
 import { RegisterSW } from "@/components/register-sw";
+import { TextSizeControl } from "@/components/text-size";
 import { Toaster } from "@/components/ui/sonner";
 import { UpdateNotice } from "@/components/update-notice";
 import { withBasePath } from "@/lib/base-path";
@@ -80,6 +81,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <ThemeProvider forcedTheme="dark" attribute="class" enableSystem={false}>
           <LockPortrait>{children}</LockPortrait>
           <KeepAwake />
+          <TextSizeControl />
           <UpdateNotice />
           <RegisterSW />
           <Toaster position="bottom-center" closeButton className="!z-[100]" />

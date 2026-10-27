@@ -23,6 +23,7 @@ import {
   ScrollText,
   Settings,
   Sun,
+  Type,
   Unlock,
   X,
 } from "lucide-react";
@@ -93,6 +94,14 @@ import {
   setRotationLocked,
   subscribeRotation,
 } from "@/lib/rotation-store";
+import {
+  getTextSize,
+  getTextSizeServer,
+  hydrateTextSizeStore,
+  setTextSize,
+  subscribeTextSize,
+  TEXT_SIZE_OPTIONS,
+} from "@/lib/text-size-store";
 import { cn } from "cn";
 import { toast } from "sonner";
 
@@ -184,6 +193,14 @@ export function ImportChartButton({
       return getKeepAwake();
     },
     getKeepAwakeServer,
+  );
+  const textSize = useSyncExternalStore(
+    subscribeTextSize,
+    () => {
+      hydrateTextSizeStore();
+      return getTextSize();
+    },
+    getTextSizeServer,
   );
 
   useEffect(() => () => stopScan(), []);
@@ -775,6 +792,43 @@ export function ImportChartButton({
             )}
           >
             <SettingsSectionTitle>Display</SettingsSectionTitle>
+            <div className="space-y-2">
+              <p className="inline-flex items-center gap-1.5 text-xs font-medium text-stone-400">
+                <Type className="size-3.5 opacity-80" aria-hidden />
+                Text size
+              </p>
+              <div
+                role="group"
+                aria-label="Text size"
+                className="grid grid-cols-3 gap-2"
+              >
+                {TEXT_SIZE_OPTIONS.map(({ id, label }) => {
+                  const active = textSize === id;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() => setTextSize(id)}
+                      className={cn(
+                        "flex h-12 flex-col items-center justify-center rounded-xl border font-medium text-white",
+                        id === "sm" && "text-xs",
+                        id === "md" && "text-sm",
+                        id === "lg" && "text-base",
+                        active
+                          ? "border-sky-400/50 bg-sky-500/20"
+                          : "border-white/10 bg-card text-stone-300",
+                      )}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-stone-500">
+                Scales product names, dates, and chips on the desk.
+              </p>
+            </div>
             <div
               role="group"
               aria-label="Preferred orientation"

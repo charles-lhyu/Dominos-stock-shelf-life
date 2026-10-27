@@ -14,6 +14,7 @@ import {
   ArrowUpWideNarrow,
   ChevronDown,
 } from "lucide-react";
+import { AutoScrollText } from "@/components/auto-scroll-text";
 import { WhenDate } from "@/components/when-date";
 import {
   categoriesInPack,
@@ -351,7 +352,7 @@ export function ChartList({
                   aria-pressed={selected}
                   onClick={() => onLifeFilter(kind)}
                   className={cn(
-                    "inline-flex h-6 shrink-0 items-center rounded-md px-1.5 text-[10px] font-semibold tracking-wide ring-1",
+                    "inline-flex h-6 shrink-0 items-center rounded-md px-1.5 text-[0.625rem] font-semibold tracking-wide ring-1",
                     selected
                       ? LIFE_ACTIVE[kind]
                       : "bg-card text-stone-300 ring-white/15",
@@ -687,7 +688,7 @@ function ToppingsSection({
         </button>
         <SubHeaderSortRow
           label={
-            <p className="text-[11px] leading-5 font-semibold uppercase tracking-wider text-stone-400">
+            <p className="text-[0.6875rem] leading-5 font-semibold uppercase tracking-wider text-stone-400">
               {activeLabel}
             </p>
           }
@@ -709,7 +710,7 @@ function ToppingsSection({
             {/* In-list separators scroll with the list. Skip the first — sticky
                 subheader already shows that label at the top. */}
             {groupIndex > 0 ? (
-              <p className="border-b border-white/10 px-0.5 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-stone-500">
+              <p className="border-b border-white/10 px-0.5 py-1.5 text-[0.6875rem] font-semibold uppercase tracking-wider text-stone-500">
                 {group.label}
               </p>
             ) : null}
@@ -768,7 +769,9 @@ function ProductRow({
       >
         <div className="flex w-full min-w-0 items-center gap-2 overflow-hidden">
           <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
-            <span className="min-w-0 truncate font-medium text-white">{name}</span>
+            <AutoScrollText className="w-0 min-w-0 flex-1 font-medium text-white">
+              {name}
+            </AutoScrollText>
             {compact ? (
               <CompactStorageTag
                 variants={variants}
@@ -805,7 +808,7 @@ function ProductRow({
                     onPreferredSection(variant.sectionId);
                   }}
                   className={cn(
-                    "touch-pan-y shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide ring-1",
+                    "touch-pan-y shrink-0 rounded-md px-1.5 py-0.5 text-[0.6875rem] font-semibold uppercase tracking-wide ring-1",
                     selected
                       ? SECTION_ACTIVE[variant.sectionId]
                       : SECTION_TONE[variant.sectionId],
@@ -827,7 +830,7 @@ function ProductRow({
                     onPreferredLife(next);
                   }}
                   className={cn(
-                    "inline-flex touch-pan-y shrink-0 items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[11px] font-semibold tracking-wide ring-1",
+                    "inline-flex touch-pan-y shrink-0 items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[0.6875rem] font-semibold tracking-wide ring-1",
                     LIFE_ACTIVE[activeLife],
                   )}
                 >
@@ -837,7 +840,7 @@ function ProductRow({
               ) : (
                 <span
                   className={cn(
-                    "shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-semibold tracking-wide ring-1",
+                    "shrink-0 rounded-md px-1.5 py-0.5 text-[0.6875rem] font-semibold tracking-wide ring-1",
                     LIFE_ACTIVE[activeLife],
                   )}
                 >
@@ -867,7 +870,7 @@ function CompactStorageTag({
     return (
       <span
         className={cn(
-          "inline-flex h-6 shrink-0 items-center rounded-md px-1.5 text-[11px] font-semibold uppercase tracking-wide ring-1",
+          "inline-flex h-6 shrink-0 items-center rounded-md px-1.5 text-[0.6875rem] font-semibold uppercase tracking-wide ring-1",
           tone,
         )}
       >
@@ -898,7 +901,7 @@ function CompactStorageTag({
           aria-label="Storage"
           size="sm"
           className={cn(
-            "h-6 max-w-[7.5rem] gap-0.5 rounded-md border-0 px-1.5 py-0 text-[11px] font-semibold uppercase tracking-wide shadow-none ring-1 focus-visible:ring-2 focus-visible:ring-white/30 data-[size=sm]:h-6 dark:border-0 [&_svg]:size-3 [&_svg]:text-current [&_svg]:opacity-80 [&_[data-slot=select-value]]:min-w-0 [&_[data-slot=select-value]]:truncate",
+            "h-6 max-w-[7.5rem] gap-0.5 rounded-md border-0 px-1.5 py-0 text-[0.6875rem] font-semibold uppercase tracking-wide shadow-none ring-1 focus-visible:ring-2 focus-visible:ring-white/30 data-[size=sm]:h-6 dark:border-0 [&_svg]:size-3 [&_svg]:text-current [&_svg]:opacity-80 [&_[data-slot=select-value]]:min-w-0 [&_[data-slot=select-value]]:truncate",
             tone,
           )}
         >
@@ -909,7 +912,7 @@ function CompactStorageTag({
             <SelectItem
               key={variant.sectionId}
               value={variant.sectionId}
-              className="text-[11px] font-semibold uppercase tracking-wide"
+              className="text-[0.6875rem] font-semibold uppercase tracking-wide"
             >
               {variant.tag}
             </SelectItem>
