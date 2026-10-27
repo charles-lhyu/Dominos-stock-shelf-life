@@ -1,5 +1,13 @@
 [
   {
+    "version": "1.4.17",
+    "notes": [
+      "Delivery, prep, and ambient day lives count the date you enter as day 1",
+      "12 days from 1 Oct is 12 Oct, through 23:59 on that day",
+      "Hour lives follow the store clock, including when the clocks go back"
+    ]
+  },
+  {
     "version": "1.4.16",
     "notes": [
       "Text size control in Settings → Display (Small / Medium / Large)",
