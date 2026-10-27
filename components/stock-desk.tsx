@@ -1058,10 +1058,7 @@ export function StockDesk() {
               deliveryDate={deliveryDate}
               prepTime={prepTime}
               focusKind={activeLife}
-              onHidden={() => {
-                setPicked(null);
-                setQuery("");
-              }}
+              onHidden={clearSearch}
             />
           </div>
         ) : null}
