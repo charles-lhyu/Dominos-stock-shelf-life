@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.4.28",
+    "notes": [
+      "The store ID dropdown filters as you type, and a valid ID previews that store's saved data before you confirm"
+    ]
+  },
+  {
     "version": "1.4.27",
     "notes": [
       "The store ID field is a dropdown of stores saved on this device"

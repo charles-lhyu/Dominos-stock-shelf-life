@@ -580,6 +580,16 @@ export function ImportChartButton({
   );
   const otherStored = deviceStored.filter((item) => item.storeId !== storeId);
   const storedStoreIds = [...new Set(deviceStored.map((item) => item.storeId))];
+  const storeQuery = storeDraft.trim().replace(/\s+/g, "");
+  const filteredStoreIds = storeQuery
+    ? storedStoreIds.filter((id) => id.startsWith(storeQuery))
+    : storedStoreIds;
+  const draftStoreId = normalizeStoreId(storeDraft);
+  const previewStoreId = draftStoreId && draftStoreId !== storeId ? draftStoreId : null;
+  const previewRows = previewStoreId
+    ? deviceStored.filter((item) => item.storeId === previewStoreId)
+    : [];
+  const storeMenuVisible = storeMenuOpen && filteredStoreIds.length > 0;
   const selectedOther =
     otherStored.find((item) => deviceStoredKey(item) === otherStoredKey) ??
     otherStored[0] ??
@@ -928,7 +938,7 @@ export function ImportChartButton({
               <label htmlFor="store-id" className="text-sm font-medium text-stone-300">
                 Store ID
               </label>
-              <div className={cn("flex gap-2", storeMenuOpen && "relative z-20")}>
+              <div className={cn("flex gap-2", storeMenuVisible && "relative z-20")}>
                 <div ref={storeFieldRef} className="relative min-w-0 flex-1">
                   <Input
                     id="store-id"
@@ -941,7 +951,7 @@ export function ImportChartButton({
                     value={storeDraft}
                     aria-invalid={storeIdError ? true : undefined}
                     aria-expanded={storedStoreIds.length > 0 ? storeMenuOpen : undefined}
-                    aria-controls={storeMenuOpen ? "store-id-list" : undefined}
+                    aria-controls={storeMenuVisible ? "store-id-list" : undefined}
                     aria-autocomplete={storedStoreIds.length > 0 ? "list" : undefined}
                     onChange={(event) => {
                       setStoreDraft(event.target.value);
@@ -965,7 +975,7 @@ export function ImportChartButton({
                     className={cn(
                       "h-12 rounded-xl border-white/10 bg-black/30 text-base text-white placeholder:text-stone-500",
                       storedStoreIds.length > 0 && "pr-11",
-                      storeMenuOpen && "rounded-b-none",
+                      storeMenuVisible && "rounded-b-none",
                     )}
                   />
                   {storedStoreIds.length > 0 ? (
@@ -983,14 +993,14 @@ export function ImportChartButton({
                       />
                     </button>
                   ) : null}
-                  {storeMenuOpen && storedStoreIds.length > 0 ? (
+                  {storeMenuVisible ? (
                     <ul
                       id="store-id-list"
                       role="listbox"
                       aria-label="Stored store IDs"
                       className="absolute top-full right-0 left-0 z-30 max-h-60 overflow-y-auto rounded-b-xl border border-t-0 border-white/10 bg-popover py-1 shadow-lg shadow-black/40"
                     >
-                      {storedStoreIds.map((id) => {
+                      {filteredStoreIds.map((id) => {
                         const selected = id === storeDraft;
                         return (
                           <li key={id}>
@@ -1026,6 +1036,41 @@ export function ImportChartButton({
                   Confirm
                 </Button>
               </div>
+              {previewStoreId ? (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-stone-400">
+                    Preview for store {previewStoreId}
+                  </p>
+                  {previewRows.length === 0 ? (
+                    <p className="text-xs text-stone-500">
+                      Nothing saved for store {previewStoreId} yet.
+                    </p>
+                  ) : (
+                    previewRows.map((item) => (
+                      <article
+                        key={deviceStoredKey(item)}
+                        className="rounded-xl border border-white/10 bg-black/20 px-3 py-2.5"
+                      >
+                        <p className="min-w-0 truncate text-sm font-medium text-white">
+                          {item.title}
+                        </p>
+                        <p className="mt-0.5 text-xs text-stone-400">
+                          Issued {formatShortDate(item.issued)} · Valid until{" "}
+                          {formatShortDate(item.validUntil)}
+                        </p>
+                        <StoredCampaignDetails
+                          item={item}
+                          editing={false}
+                          onRemoveHidden={() => {}}
+                          onRemoveDefault={() => {}}
+                          onRemoveAllHidden={() => {}}
+                          onRemoveAllDefaults={() => {}}
+                        />
+                      </article>
+                    ))
+                  )}
+                </div>
+              ) : null}
               <p className={cn("text-xs", storeIdError ? "text-red-300" : "text-stone-500")}>
                 {storeIdError
                   ? storeIdError
