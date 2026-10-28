@@ -3,6 +3,8 @@ import { describe, it } from "node:test";
 import {
   campaignKey,
   emptyCampaignLibrary,
+  dropStoredDefault,
+  dropStoredHidden,
   listCampaignSummaries,
   listDeviceStored,
   listStoreCampaigns,
@@ -357,6 +359,26 @@ describe("campaign library records", () => {
     assert.equal(shown?.Pepperoni?.section, "chilled");
     assert.equal(shown?.Pepperoni?.life, "stock");
     assert.equal(shown?.Dough, undefined);
+  });
+
+  it("drops one hidden name or one product default from saved settings", () => {
+    const settings = {
+      hidden: ["Bacon", "Olives"],
+      preset: {
+        ...preset,
+        defaults: {
+          Pepperoni: { section: "chilled" as const, life: "stock" as const },
+          Ham: { section: "frozen" as const, life: "prepped" as const },
+        },
+      },
+    };
+    const hidden = dropStoredHidden(settings, "Olives");
+    assert.deepEqual(hidden.hidden, ["Bacon"]);
+    assert.equal(dropStoredHidden(hidden, "Missing"), hidden);
+    const defaults = dropStoredDefault(settings, "Pepperoni");
+    assert.equal(defaults.preset.defaults.Pepperoni, undefined);
+    assert.equal(defaults.preset.defaults.Ham?.section, "frozen");
+    assert.equal(dropStoredDefault(defaults, "Pepperoni"), defaults);
   });
 
   it("keeps a product default such as pepperoni chilled from delivery", () => {

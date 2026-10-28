@@ -4,6 +4,8 @@ import {
   listCampaignSummaries,
   listDeviceStored,
   listStoreCampaigns,
+  dropStoredDefault,
+  dropStoredHidden,
   parseCampaignLibrary,
   planStoreChange,
   readStoreSettings,
@@ -131,6 +133,38 @@ export function readSavedCampaignSettings(
 ): StoreCampaignSettings | null {
   hydrateCampaignLibrary();
   return readStoreSettings(library, storeId, issued, validUntil);
+}
+
+function updateSavedCampaign(
+  storeId: string,
+  issued: string,
+  validUntil: string,
+  change: (current: StoreCampaignSettings) => StoreCampaignSettings,
+) {
+  hydrateCampaignLibrary();
+  const saved = readStoreSettings(library, storeId, issued, validUntil);
+  if (!saved) return;
+  const next = change(saved);
+  if (next === saved) return;
+  commitLibrary(writeStoreSettings(library, storeId, issued, validUntil, next));
+}
+
+export function forgetSavedHidden(
+  storeId: string,
+  issued: string,
+  validUntil: string,
+  name: string,
+) {
+  updateSavedCampaign(storeId, issued, validUntil, (saved) => dropStoredHidden(saved, name));
+}
+
+export function forgetSavedDefault(
+  storeId: string,
+  issued: string,
+  validUntil: string,
+  name: string,
+) {
+  updateSavedCampaign(storeId, issued, validUntil, (saved) => dropStoredDefault(saved, name));
 }
 
 export function subscribeStoredStore(listener: () => void) {

@@ -1,9 +1,7 @@
 {
-  "version": "1.4.21",
+  "version": "1.4.22",
   "notes": [
-    "Hidden products are managed in Settings → App",
-    "Changing the store ID asks whether to keep hidden items and product defaults",
-    "Stored data shows the current store; other stores on this device open in a popup",
-    "The Import section is renamed from Import data"
+    "Hidden items sit in stored data",
+    "Edit turns on a red cross to remove a hidden item or a product default"
   ]
 }

@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.4.22",
+    "notes": [
+      "Hidden items sit in stored data",
+      "Edit turns on a red cross to remove a hidden item or a product default"
+    ]
+  },
+  {
     "version": "1.4.21",
     "notes": [
       "Hidden products are managed in Settings → App",

@@ -10,7 +10,6 @@ import {
 } from "react";
 import {
   Camera,
-  Eye,
   FileText,
   ImageUp,
   Link2,
@@ -48,6 +47,8 @@ import {
 } from "@/components/ui/select";
 import {
   adoptStoreForCampaign,
+  forgetSavedDefault,
+  forgetSavedHidden,
   hydrateCampaignLibrary,
   listCampaigns,
   listCampaignsServer,
@@ -71,7 +72,6 @@ import {
   writeDebugDays,
 } from "@/lib/debug-store";
 import {
-  clearHiddenNames,
   getHiddenNames,
   getHiddenNamesServer,
   subscribeHidden,
@@ -84,7 +84,15 @@ import {
 } from "@/lib/desk-store";
 import { clearPdfCrops, replacePdfCrops } from "@/lib/pdf-crop-images";
 import { parsePdfChartFile } from "@/lib/pdf-chart";
-import { getItemPreset, hydrateItemPresetStore, type ItemPreset } from "@/lib/item-preset-store";
+import {
+  getItemPreset,
+  getItemPresetServer,
+  hydrateItemPresetStore,
+  retainProductDefaults,
+  setProductDefault,
+  subscribeItemPreset,
+  type ItemPreset,
+} from "@/lib/item-preset-store";
 import { prepClockTime, SECTION_TAG } from "@/lib/preview";
 import {
   appVersionLabel,
@@ -188,6 +196,7 @@ export function ImportChartButton({
   );
   const [otherStoredOpen, setOtherStoredOpen] = useState(false);
   const [otherStoredKey, setOtherStoredKey] = useState<string | null>(null);
+  const [storedEditing, setStoredEditing] = useState(false);
   const storePromptRef = useRef<string | null>(null);
   const [activeSettingsSection, setActiveSettingsSection] =
     useState<SettingsSectionId>("settings-app");
@@ -211,6 +220,14 @@ export function ImportChartButton({
     subscribeHidden,
     getHiddenNames,
     getHiddenNamesServer,
+  );
+  const itemPreset = useSyncExternalStore(
+    subscribeItemPreset,
+    () => {
+      hydrateItemPresetStore();
+      return getItemPreset();
+    },
+    getItemPresetServer,
   );
   const rotation = useSyncExternalStore(
     subscribeRotation,
@@ -277,6 +294,7 @@ export function ImportChartButton({
     hydrateStoreIdStore();
     setStoreDraft(getStoreId());
     setStoreIdError(null);
+    setStoredEditing(false);
     setActiveSettingsSection("settings-app");
     const raf = window.requestAnimationFrame(() => {
       settingsBodyRef.current?.scrollTo({ top: 0 });
@@ -307,6 +325,7 @@ export function ImportChartButton({
       storePromptRef.current = null;
       setStorePrompt(null);
       setStoreDraft(getStoreId());
+      setStoredEditing(false);
       setOtherStoredOpen(false);
     }
     setOpen(next);
@@ -533,6 +552,65 @@ export function ImportChartButton({
     otherStored.find((item) => deviceStoredKey(item) === otherStoredKey) ??
     otherStored[0] ??
     null;
+
+  function chartOnScreen(issued: string, validUntil: string) {
+    return (
+      desk.imported &&
+      desk.pack.chart.issued === issued &&
+      desk.pack.chart.validUntil === validUntil
+    );
+  }
+
+  function withLiveSettings<T extends { hidden: string[]; preset: ItemPreset }>(item: T): T {
+    return {
+      ...item,
+      hidden: hiddenNames,
+      preset: {
+        ...itemPreset,
+        defaults: retainProductDefaults(itemPreset.defaults, desk.pack.rules, hiddenNames),
+      },
+    };
+  }
+
+  const savedRows = storedForStore.map((item) =>
+    chartOnScreen(item.issued, item.validUntil) ? withLiveSettings(item) : item,
+  );
+  const storedRows =
+    storeId &&
+    desk.imported &&
+    desk.pack.chart.issued &&
+    desk.pack.chart.validUntil &&
+    !savedRows.some((item) => chartOnScreen(item.issued, item.validUntil))
+      ? [
+          withLiveSettings({
+            issued: desk.pack.chart.issued,
+            validUntil: desk.pack.chart.validUntil,
+            title: desk.pack.chart.title || "Shelf life chart",
+            hidden: hiddenNames,
+            preset: itemPreset,
+          }),
+          ...savedRows,
+        ]
+      : savedRows;
+  const canEditStored = storedRows.some(
+    (item) => item.hidden.length > 0 || Object.keys(item.preset.defaults).length > 0,
+  );
+
+  function removeHidden(issued: string, validUntil: string, name: string, onScreen: boolean) {
+    if (onScreen) {
+      unhideProductName(name);
+      return;
+    }
+    forgetSavedHidden(storeId, issued, validUntil, name);
+  }
+
+  function removeDefault(issued: string, validUntil: string, name: string, onScreen: boolean) {
+    if (onScreen) {
+      setProductDefault(name, { section: null, life: null });
+      return;
+    }
+    forgetSavedDefault(storeId, issued, validUntil, name);
+  }
 
   function syncNavCard(id: SettingsSectionId) {
     const nav = settingsNavRef.current;
@@ -846,61 +924,27 @@ export function ImportChartButton({
             <div className="space-y-2 border-t border-white/10 pt-3">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-sm font-medium text-stone-300">
-                  Hidden ({hiddenNames.length})
+                  {storeId ? `Stored for store ${storeId}` : "Stored for this store"}
                 </p>
-                {hiddenNames.length > 0 ? (
-                  <button
-                    type="button"
-                    onClick={() => clearHiddenNames()}
-                    className="text-xs font-medium text-stone-400 underline-offset-2 hover:text-white hover:underline"
-                  >
-                    Show all
-                  </button>
+                {storedEditing || canEditStored ? (
+                  <StoredEditButton
+                    editing={storedEditing}
+                    onToggle={() => setStoredEditing((on) => !on)}
+                  />
                 ) : null}
               </div>
-              {hiddenNames.length === 0 ? (
-                <p className="text-sm text-stone-500">
-                  Hide a product from its detail card. It leaves the list until you show it
-                  again here.
-                </p>
-              ) : (
-                <ul className="divide-y divide-white/10 rounded-xl border border-white/10 bg-black/20">
-                  {hiddenNames.map((name) => (
-                    <li key={name} className="flex items-center gap-2 px-3 py-2.5">
-                      <span className="min-w-0 flex-1 truncate text-sm text-white">{name}</span>
-                      <button
-                        type="button"
-                        onClick={() => unhideProductName(name)}
-                        className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-white/5 px-2 py-1.5 text-xs font-semibold text-stone-200 ring-1 ring-white/15 transition-colors hover:bg-white/10 hover:text-white"
-                        aria-label={`Show ${name} in the list again`}
-                      >
-                        <Eye className="size-3.5" aria-hidden />
-                        Show
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            <div className="space-y-2 border-t border-white/10 pt-3">
-              <p className="text-sm font-medium text-stone-300">
-                {storeId ? `Stored for store ${storeId}` : "Stored for this store"}
-              </p>
               {!storeId ? (
                 <p className="text-xs text-stone-500">
                   Set a store ID to see the hidden items and product defaults saved for it.
                 </p>
-              ) : storedForStore.length === 0 ? (
+              ) : storedRows.length === 0 ? (
                 <p className="text-xs text-stone-500">
                   Nothing saved for store {storeId} yet.
                 </p>
               ) : (
                 <div className="space-y-2">
-                  {storedForStore.map((item) => {
-                    const onScreen =
-                      desk.imported &&
-                      desk.pack.chart.issued === item.issued &&
-                      desk.pack.chart.validUntil === item.validUntil;
+                  {storedRows.map((item) => {
+                    const onScreen = chartOnScreen(item.issued, item.validUntil);
                     return (
                       <article
                         key={`${item.issued}|${item.validUntil}`}
@@ -920,7 +964,16 @@ export function ImportChartButton({
                           Issued {formatShortDate(item.issued)} · Valid until{" "}
                           {formatShortDate(item.validUntil)}
                         </p>
-                        <StoredCampaignDetails item={item} />
+                        <StoredCampaignDetails
+                          item={item}
+                          editing={storedEditing}
+                          onRemoveHidden={(name) =>
+                            removeHidden(item.issued, item.validUntil, name, onScreen)
+                          }
+                          onRemoveDefault={(name) =>
+                            removeDefault(item.issued, item.validUntil, name, onScreen)
+                          }
+                        />
                       </article>
                     );
                   })}
@@ -1636,9 +1689,38 @@ export function ImportChartButton({
           })}
           {selectedOther ? (
             <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2.5">
-              <p className="text-sm font-medium text-white">Store {selectedOther.storeId}</p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-medium text-white">Store {selectedOther.storeId}</p>
+                {storedEditing ||
+                selectedOther.hidden.length > 0 ||
+                Object.keys(selectedOther.preset.defaults).length > 0 ? (
+                  <StoredEditButton
+                    editing={storedEditing}
+                    onToggle={() => setStoredEditing((on) => !on)}
+                  />
+                ) : null}
+              </div>
               <p className="text-sm text-stone-200">{selectedOther.title}</p>
-              <StoredCampaignDetails item={selectedOther} />
+              <StoredCampaignDetails
+                item={selectedOther}
+                editing={storedEditing}
+                onRemoveHidden={(name) =>
+                  forgetSavedHidden(
+                    selectedOther.storeId,
+                    selectedOther.issued,
+                    selectedOther.validUntil,
+                    name,
+                  )
+                }
+                onRemoveDefault={(name) =>
+                  forgetSavedDefault(
+                    selectedOther.storeId,
+                    selectedOther.issued,
+                    selectedOther.validUntil,
+                    name,
+                  )
+                }
+              />
             </div>
           ) : (
             <p className="text-sm text-stone-500">Nothing else is saved on this device.</p>
@@ -1682,10 +1764,51 @@ function deviceStoredKey(item: { storeId: string; issued: string; validUntil: st
   return `${item.storeId}|${item.issued}|${item.validUntil}`;
 }
 
+function StoredEditButton({
+  editing,
+  onToggle,
+}: {
+  editing: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={editing}
+      onClick={onToggle}
+      className={cn(
+        "shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold",
+        editing ? "bg-red-500/15 text-red-300" : "text-stone-200 ring-1 ring-white/15",
+      )}
+    >
+      {editing ? "Done" : "Edit"}
+    </button>
+  );
+}
+
+function RemoveMark({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      onClick={onClick}
+      className="inline-flex size-6 shrink-0 items-center justify-center text-red-500"
+    >
+      <X className="size-4" strokeWidth={2.5} />
+    </button>
+  );
+}
+
 function StoredCampaignDetails({
   item,
+  editing,
+  onRemoveHidden,
+  onRemoveDefault,
 }: {
   item: { hidden: string[]; preset: ItemPreset };
+  editing: boolean;
+  onRemoveHidden: (name: string) => void;
+  onRemoveDefault: (name: string) => void;
 }) {
   const defaults = productDefaultLines(item.preset);
   return (
@@ -1696,7 +1819,12 @@ function StoredCampaignDetails({
       ) : (
         <ul className="text-sm text-stone-200">
           {item.hidden.map((name) => (
-            <li key={name}>{name}</li>
+            <li key={name} className="flex items-center justify-between gap-2">
+              <span className="min-w-0 truncate">{name}</span>
+              {editing ? (
+                <RemoveMark label={`Remove ${name}`} onClick={() => onRemoveHidden(name)} />
+              ) : null}
+            </li>
           ))}
         </ul>
       )}
@@ -1705,8 +1833,16 @@ function StoredCampaignDetails({
         <p className="text-sm text-stone-200">None</p>
       ) : (
         <ul className="text-sm text-stone-200">
-          {defaults.map((line) => (
-            <li key={line}>{line}</li>
+          {defaults.map((entry) => (
+            <li key={entry.name} className="flex items-center justify-between gap-2">
+              <span className="min-w-0">{entry.line}</span>
+              {editing ? (
+                <RemoveMark
+                  label={`Remove ${entry.name} default`}
+                  onClick={() => onRemoveDefault(entry.name)}
+                />
+              ) : null}
+            </li>
           ))}
         </ul>
       )}
@@ -1714,7 +1850,7 @@ function StoredCampaignDetails({
   );
 }
 
-function productDefaultLines(preset: ItemPreset): string[] {
+function productDefaultLines(preset: ItemPreset): { name: string; line: string }[] {
   return Object.entries(preset.defaults)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([name, item]) => {
@@ -1727,9 +1863,13 @@ function productDefaultLines(preset: ItemPreset): string[] {
             : item.life === "ambient"
               ? "Ambient"
               : null;
-      if (storage && life) return `${name} default is ${storage}, ${life}`;
-      if (storage) return `${name} default is ${storage}`;
-      return `${name} default is ${life}`;
+      const line =
+        storage && life
+          ? `${name} default is ${storage}, ${life}`
+          : storage
+            ? `${name} default is ${storage}`
+            : `${name} default is ${life}`;
+      return { name, line };
     });
 }
 

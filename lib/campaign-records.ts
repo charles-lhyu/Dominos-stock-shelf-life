@@ -225,6 +225,26 @@ export function writeStoreSettings(
   };
 }
 
+export function dropStoredHidden(
+  settings: StoreCampaignSettings,
+  name: string,
+): StoreCampaignSettings {
+  const trimmed = name.trim();
+  if (!trimmed || !settings.hidden.includes(trimmed)) return settings;
+  return { ...settings, hidden: settings.hidden.filter((item) => item !== trimmed) };
+}
+
+export function dropStoredDefault(
+  settings: StoreCampaignSettings,
+  name: string,
+): StoreCampaignSettings {
+  const trimmed = name.trim();
+  if (!trimmed || !settings.preset.defaults[trimmed]) return settings;
+  const defaults = { ...settings.preset.defaults };
+  delete defaults[trimmed];
+  return { ...settings, preset: { ...settings.preset, defaults } };
+}
+
 const EMPTY_SETTINGS: StoreCampaignSettings = {
   hidden: [],
   preset: DEFAULT_ITEM_PRESET,
