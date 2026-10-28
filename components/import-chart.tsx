@@ -482,11 +482,16 @@ export function ImportChartButton({
       applyStoreChange(previous, next);
       return;
     }
+    // An existing store loads its saved copy; only ask when that store has none.
+    if (saved) {
+      applyStoreChange(previous, next, false);
+      return;
+    }
     storePromptRef.current = next;
     setStoreDraft(next);
     setChangesOpen(false);
     setChangeChoices([]);
-    setStorePrompt({ next, hasSaved: saved != null });
+    setStorePrompt({ next, hasSaved: false });
   }
 
   function resetChart() {

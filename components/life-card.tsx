@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { Bug, ChevronDown, ChevronUp, EyeOff, Minus, Plus, X } from "lucide-react";
+import { Bug, EyeOff, Minus, Plus, X } from "lucide-react";
 import { DateField, TimeField } from "@/components/date-field";
 import {
   Dialog,
@@ -125,7 +125,6 @@ export function LifeCard({
   const section = sectionFromPack(pack, rule.sectionId);
   const debugOn = useSyncExternalStore(subscribeDebug, readDebug, () => false);
   const [debugOpen, setDebugOpen] = useState(false);
-  const [detailsOpen, setDetailsOpen] = useState(false);
   const [hideConfirmOpen, setHideConfirmOpen] = useState(false);
   const [values, setValues] = useState<Record<string, string>>({});
   const [checkedAt, setCheckedAt] = useState<Date | null>(null);
@@ -138,7 +137,6 @@ export function LifeCard({
 
   useEffect(() => {
     setDebugOpen(false);
-    setDetailsOpen(false);
   }, [rule.id]);
 
   const results = checkedAt
@@ -246,8 +244,7 @@ export function LifeCard({
 
   return (
     <article className="ticket-in max-w-full min-w-0 overflow-hidden rounded-2xl bg-card shadow-[6px_6px_0_0_rgba(0,0,0,0.35)] ring-1 ring-white/10">
-      {detailsOpen ? (
-        <div className="flex flex-wrap items-center gap-2 px-4 pt-4">
+      <div className="flex flex-wrap items-center gap-2 px-4 pt-4">
         <span className={cn("rounded-full px-2.5 py-1 text-xs font-semibold uppercase tracking-wide", SECTION_TONE[rule.sectionId])}>
           {section.short}
         </span>
@@ -288,30 +285,9 @@ export function LifeCard({
             </button>
           ) : null}
         </div>
-        </div>
-      ) : null}
-      <div className={cn("min-w-0 px-4 pb-3", detailsOpen ? "pt-3" : "py-3")}>
-        <div className="flex items-center gap-2">
-          {detailsOpen ? null : (
-            <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide", SECTION_TONE[rule.sectionId])}>
-              {section.short}
-            </span>
-          )}
-          <h2 className={cn("min-w-0 flex-1 font-display leading-tight text-white", detailsOpen ? "text-3xl" : "truncate text-base")}>
-            {rule.name}
-          </h2>
-          <button
-            type="button"
-            aria-expanded={detailsOpen}
-            aria-label={detailsOpen ? `Minimize ${rule.name}` : `Show details for ${rule.name}`}
-            onClick={() => setDetailsOpen((open) => !open)}
-            className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-white/5 text-stone-300 ring-1 ring-white/15"
-          >
-            {detailsOpen ? <ChevronUp className="size-4" aria-hidden /> : <ChevronDown className="size-4" aria-hidden />}
-          </button>
-        </div>
-        {detailsOpen ? (
-          <>
+      </div>
+      <div className="min-w-0 px-4 pt-3 pb-5">
+        <h2 className="font-display text-3xl leading-tight text-white">{rule.name}</h2>
         {debugOn && debugOpen ? <ItemDebugPanel rule={rule} clocks={clocks} /> : null}
         {rule.sameAs.length > 0 ? (
           <p className="mt-2 text-sm text-stone-400">
@@ -346,8 +322,6 @@ export function LifeCard({
           <p className="mt-4 text-xs text-stone-500">
             The date you enter counts as day 1 for delivery, prep, and ambient day lives. 12 days from 1 Oct is 12 Oct. Hour lives run from the time on that date.
           </p>
-        ) : null}
-          </>
         ) : null}
       </div>
 

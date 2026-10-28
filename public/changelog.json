@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.4.37",
+    "notes": [
+      "Confirming an existing store loads its saved data",
+      "Item details open fully again"
+    ]
+  },
+  {
     "version": "1.4.36",
     "notes": [
       "Stored data for other stores is opened from the store ID field"
