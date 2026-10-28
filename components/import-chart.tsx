@@ -2969,135 +2969,137 @@ export function ImportChartButton({
                             <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">
                               Store settings
                             </p>
-                            {editingPreview ? (
-                              <StoreNameField
-                                value={nameFor(previewStore.storeId)}
-                                onChange={(value) =>
-                                  changeStoreName(previewStore.storeId, value)
-                                }
-                              />
-                            ) : (
-                              <div className="space-y-0.5">
-                                <p className="text-xs text-stone-500">Name</p>
-                                <p className="truncate text-sm text-stone-200">
-                                  {nameFor(previewStore.storeId) ||
-                                    previewStore.name ||
-                                    "Not set"}
-                                </p>
-                              </div>
-                            )}
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2.5">
                               {editingPreview ? (
-                                <>
-                                  <label className="block min-w-0 space-y-1">
-                                    <span className="text-xs text-stone-500">
-                                      Dates
-                                    </span>
-                                    <Select
-                                      value={previewDatesValue}
-                                      items={STORE_DATES_LABELS}
-                                      onValueChange={(value) => {
-                                        if (
-                                          value === "full" ||
-                                          value === "short"
-                                        ) {
-                                          changeStoreDates(
-                                            previewStore.storeId,
-                                            value,
-                                          );
-                                        } else if (
-                                          value === "days" &&
-                                          debugDays
-                                        ) {
-                                          changeStoreDates(
-                                            previewStore.storeId,
-                                            value,
-                                          );
-                                        }
-                                      }}
-                                    >
-                                      <SelectTrigger
-                                        aria-label="Dates display"
-                                        className="h-11 w-full min-w-0 rounded-xl border-white/10 bg-black/30 px-3 text-white hover:bg-black/40 focus-visible:border-white/20 focus-visible:ring-white/15 dark:bg-black/30 [&_svg]:text-stone-400"
-                                      >
-                                        <SelectValue />
-                                      </SelectTrigger>
-                                      <SelectContent
-                                        align="start"
-                                        alignItemWithTrigger={false}
-                                        className="z-[120] rounded-xl border-white/10 bg-popover p-1"
-                                      >
-                                        {storeDatesModes.map((mode) => (
-                                          <SelectItem key={mode} value={mode}>
-                                            {STORE_DATES_LABELS[mode]}
-                                          </SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                  </label>
-                                  <label className="block min-w-0 space-y-1">
-                                    <span className="text-xs text-stone-500">
-                                      List
-                                    </span>
-                                    <Select
-                                      value={previewListValue}
-                                      items={STORE_LIST_LABELS}
-                                      onValueChange={(value) => {
-                                        if (
-                                          value === "tags" ||
-                                          value === "compact"
-                                        ) {
-                                          changeStoreList(
-                                            previewStore.storeId,
-                                            value,
-                                          );
-                                        }
-                                      }}
-                                    >
-                                      <SelectTrigger
-                                        aria-label="List display"
-                                        className="h-11 w-full min-w-0 rounded-xl border-white/10 bg-black/30 px-3 text-white hover:bg-black/40 focus-visible:border-white/20 focus-visible:ring-white/15 dark:bg-black/30 [&_svg]:text-stone-400"
-                                      >
-                                        <SelectValue />
-                                      </SelectTrigger>
-                                      <SelectContent
-                                        align="start"
-                                        alignItemWithTrigger={false}
-                                        className="z-[120] rounded-xl border-white/10 bg-popover p-1"
-                                      >
-                                        {(
-                                          Object.keys(
-                                            STORE_LIST_LABELS,
-                                          ) as StoreListMode[]
-                                        ).map((mode) => (
-                                          <SelectItem key={mode} value={mode}>
-                                            {STORE_LIST_LABELS[mode]}
-                                          </SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                  </label>
-                                </>
+                                <StoreNameField
+                                  value={nameFor(previewStore.storeId)}
+                                  onChange={(value) =>
+                                    changeStoreName(previewStore.storeId, value)
+                                  }
+                                />
                               ) : (
-                                <>
-                                  <div className="space-y-0.5">
-                                    <p className="text-xs text-stone-500">
-                                      Dates
-                                    </p>
-                                    <p className="text-sm text-stone-200">
-                                      {previewDatesLabel}
-                                    </p>
-                                  </div>
-                                  <div className="space-y-0.5">
-                                    <p className="text-xs text-stone-500">
-                                      List
-                                    </p>
-                                    <p className="text-sm text-stone-200">
-                                      {previewListLabel}
-                                    </p>
-                                  </div>
-                                </>
+                                <div className="space-y-0.5">
+                                  <p className="text-xs text-stone-500">Name</p>
+                                  <p className="truncate text-sm text-stone-200">
+                                    {nameFor(previewStore.storeId) ||
+                                      previewStore.name ||
+                                      "Not set"}
+                                  </p>
+                                </div>
                               )}
+                              <div className="grid grid-cols-2 gap-3">
+                                {editingPreview ? (
+                                  <>
+                                    <label className="block min-w-0 space-y-1">
+                                      <span className="text-xs text-stone-500">
+                                        Dates
+                                      </span>
+                                      <Select
+                                        value={previewDatesValue}
+                                        items={STORE_DATES_LABELS}
+                                        onValueChange={(value) => {
+                                          if (
+                                            value === "full" ||
+                                            value === "short"
+                                          ) {
+                                            changeStoreDates(
+                                              previewStore.storeId,
+                                              value,
+                                            );
+                                          } else if (
+                                            value === "days" &&
+                                            debugDays
+                                          ) {
+                                            changeStoreDates(
+                                              previewStore.storeId,
+                                              value,
+                                            );
+                                          }
+                                        }}
+                                      >
+                                        <SelectTrigger
+                                          aria-label="Dates display"
+                                          className="h-11 w-full min-w-0 rounded-xl border-white/10 bg-black/30 px-3 text-white hover:bg-black/40 focus-visible:border-white/20 focus-visible:ring-white/15 dark:bg-black/30 [&_svg]:text-stone-400"
+                                        >
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent
+                                          align="start"
+                                          alignItemWithTrigger={false}
+                                          className="z-[120] rounded-xl border-white/10 bg-popover p-1"
+                                        >
+                                          {storeDatesModes.map((mode) => (
+                                            <SelectItem key={mode} value={mode}>
+                                              {STORE_DATES_LABELS[mode]}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </label>
+                                    <label className="block min-w-0 space-y-1">
+                                      <span className="text-xs text-stone-500">
+                                        List
+                                      </span>
+                                      <Select
+                                        value={previewListValue}
+                                        items={STORE_LIST_LABELS}
+                                        onValueChange={(value) => {
+                                          if (
+                                            value === "tags" ||
+                                            value === "compact"
+                                          ) {
+                                            changeStoreList(
+                                              previewStore.storeId,
+                                              value,
+                                            );
+                                          }
+                                        }}
+                                      >
+                                        <SelectTrigger
+                                          aria-label="List display"
+                                          className="h-11 w-full min-w-0 rounded-xl border-white/10 bg-black/30 px-3 text-white hover:bg-black/40 focus-visible:border-white/20 focus-visible:ring-white/15 dark:bg-black/30 [&_svg]:text-stone-400"
+                                        >
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent
+                                          align="start"
+                                          alignItemWithTrigger={false}
+                                          className="z-[120] rounded-xl border-white/10 bg-popover p-1"
+                                        >
+                                          {(
+                                            Object.keys(
+                                              STORE_LIST_LABELS,
+                                            ) as StoreListMode[]
+                                          ).map((mode) => (
+                                            <SelectItem key={mode} value={mode}>
+                                              {STORE_LIST_LABELS[mode]}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </label>
+                                  </>
+                                ) : (
+                                  <>
+                                    <div className="space-y-0.5">
+                                      <p className="text-xs text-stone-500">
+                                        Dates
+                                      </p>
+                                      <p className="text-sm text-stone-200">
+                                        {previewDatesLabel}
+                                      </p>
+                                    </div>
+                                    <div className="space-y-0.5">
+                                      <p className="text-xs text-stone-500">
+                                        List
+                                      </p>
+                                      <p className="text-sm text-stone-200">
+                                        {previewListLabel}
+                                      </p>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
                             </div>
                           </div>
                           <div className="space-y-2">
