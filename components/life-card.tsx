@@ -286,67 +286,55 @@ export function LifeCard({
     onPreferredLife(next);
   }
 
+  const tagClass =
+    "inline-flex max-w-full shrink items-center gap-0.5 truncate rounded-md px-1.5 py-0.5 text-[0.6875rem] font-semibold tracking-wide ring-1";
+
   return (
     <article className="ticket-in max-w-full min-w-0 overflow-hidden rounded-2xl bg-card shadow-[6px_6px_0_0_rgba(0,0,0,0.35)] ring-1 ring-white/10">
-      <div className="flex flex-wrap items-center gap-2 px-4 pt-4">
-        {storageOptions && storageOptions.length > 1 && onPreferredSection ? (
-          <button
-            type="button"
-            aria-label={`Storage: ${section.short}. Tap to cycle.`}
-            onClick={cycleStorage}
-            className={cn(
-              "inline-flex items-center gap-0.5 rounded-md px-2 py-1 text-xs font-semibold uppercase tracking-wide ring-1",
-              SECTION_ACTIVE[rule.sectionId],
-            )}
-          >
-            {section.short}
-            <ChevronDown className="size-3.5 opacity-80" aria-hidden />
-          </button>
-        ) : (
-          <span
-            className={cn(
-              "rounded-md px-2 py-1 text-xs font-semibold uppercase tracking-wide ring-1",
-              SECTION_ACTIVE[rule.sectionId],
-            )}
-          >
-            {section.short}
-          </span>
-        )}
-        {activeLife ? (
-          lifeOptions.length > 1 && onPreferredLife ? (
+      <div className="flex items-center gap-1.5 px-4 pt-4">
+        <div className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden">
+          {storageOptions && storageOptions.length > 1 && onPreferredSection ? (
             <button
               type="button"
-              aria-label={`Life: ${LIFE_KIND_META[activeLife].tag}. Tap to cycle.`}
-              onClick={cycleLife}
-              className={cn(
-                "inline-flex items-center gap-0.5 rounded-md px-2 py-1 text-xs font-semibold tracking-wide ring-1",
-                LIFE_ACTIVE[activeLife],
-              )}
+              aria-label={`Storage: ${section.short}. Tap to cycle.`}
+              onClick={cycleStorage}
+              className={cn(tagClass, "uppercase", SECTION_ACTIVE[rule.sectionId])}
             >
-              {LIFE_KIND_META[activeLife].tag}
-              <ChevronDown className="size-3.5 opacity-80" aria-hidden />
+              <span className="truncate">{section.short}</span>
+              <ChevronDown className="size-3 shrink-0 opacity-80" aria-hidden />
             </button>
           ) : (
-            <span
-              className={cn(
-                "rounded-md px-2 py-1 text-xs font-semibold tracking-wide ring-1",
-                LIFE_ACTIVE[activeLife],
-              )}
-            >
-              {LIFE_KIND_META[activeLife].tag}
+            <span className={cn(tagClass, "uppercase", SECTION_ACTIVE[rule.sectionId])}>
+              <span className="truncate">{section.short}</span>
             </span>
-          )
-        ) : null}
-        <div className="ml-auto flex shrink-0 items-center gap-1.5">
+          )}
+          {activeLife ? (
+            lifeOptions.length > 1 && onPreferredLife ? (
+              <button
+                type="button"
+                aria-label={`Life: ${LIFE_KIND_META[activeLife].tag}. Tap to cycle.`}
+                onClick={cycleLife}
+                className={cn(tagClass, LIFE_ACTIVE[activeLife])}
+              >
+                <span className="truncate">{LIFE_KIND_META[activeLife].tag}</span>
+                <ChevronDown className="size-3 shrink-0 opacity-80" aria-hidden />
+              </button>
+            ) : (
+              <span className={cn(tagClass, LIFE_ACTIVE[activeLife])}>
+                <span className="truncate">{LIFE_KIND_META[activeLife].tag}</span>
+              </span>
+            )
+          ) : null}
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
           <button
             type="button"
             onClick={() => setHideConfirmOpen(true)}
             aria-label={`Hide ${rule.name} from the list`}
             title="Hide from list"
-            className="inline-flex h-9 items-center gap-1.5 rounded-full bg-white/5 px-2.5 text-xs font-semibold tracking-wide text-stone-300 ring-1 ring-white/15 transition-colors hover:bg-white/10 hover:text-white"
+            className="inline-flex size-8 items-center justify-center rounded-full bg-white/5 text-stone-300 ring-1 ring-white/15 transition-colors hover:bg-white/10 hover:text-white"
           >
             <EyeOff className="size-3.5" aria-hidden />
-            Hide
           </button>
           {debugOn ? (
             <button
@@ -356,13 +344,13 @@ export function LifeCard({
               aria-label={debugOpen ? "Hide item debug" : "Show item debug"}
               title="Item debug"
               className={cn(
-                "inline-flex size-9 shrink-0 items-center justify-center rounded-full ring-1 transition-colors",
+                "inline-flex size-8 shrink-0 items-center justify-center rounded-full ring-1 transition-colors",
                 debugOpen
                   ? "bg-sky-500/25 text-sky-100 ring-sky-300/50"
                   : "bg-white/5 text-stone-300 ring-white/15 hover:bg-white/10",
               )}
             >
-              <Bug className="size-4" aria-hidden />
+              <Bug className="size-3.5" aria-hidden />
             </button>
           ) : null}
         </div>

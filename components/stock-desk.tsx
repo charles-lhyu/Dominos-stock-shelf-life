@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import {
+  ArrowLeft,
   ArrowUp,
   List,
   RefreshCw,
@@ -1152,6 +1153,80 @@ export function StockDesk() {
 
         {activeVariant ? (
           <div className="mt-4 space-y-3" aria-live="polite">
+            <div className="flex min-w-0 items-center gap-2">
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+                {expandedVariants.length > 1 ? (
+                  <DragScroll role="group" aria-label="Storage tags" className="gap-1.5">
+                    {expandedVariants.map((variant) => {
+                      const selected = variant.sectionId === activeVariant.sectionId;
+                      return (
+                        <button
+                          key={variant.sectionId}
+                          type="button"
+                          aria-pressed={selected}
+                          onClick={() => {
+                            if (expanded) {
+                              setProductDefault(expanded, {
+                                section: variant.sectionId,
+                                life: activeLife,
+                              });
+                            }
+                          }}
+                          className={cn(
+                            "shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-wide ring-1",
+                            selected
+                              ? "bg-white text-stone-950 ring-white"
+                              : "bg-card text-stone-200 ring-white/15",
+                          )}
+                        >
+                          {variant.tag}
+                        </button>
+                      );
+                    })}
+                  </DragScroll>
+                ) : null}
+                {expandedKinds.length > 1 ? (
+                  <DragScroll role="group" aria-label="Life date tags" className="gap-1.5">
+                    {expandedKinds.map((kind) => {
+                      const selected = kind === activeLife;
+                      return (
+                        <button
+                          key={kind}
+                          type="button"
+                          aria-pressed={selected}
+                          onClick={() => {
+                            if (expanded && activeVariant) {
+                              setProductDefault(expanded, {
+                                section: activeVariant.sectionId,
+                                life: kind,
+                              });
+                            }
+                          }}
+                          className={cn(
+                            "shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold tracking-wide ring-1",
+                            selected
+                              ? "bg-violet-300 text-violet-950 ring-violet-200"
+                              : "bg-card text-stone-200 ring-white/15",
+                          )}
+                        >
+                          {LIFE_KIND_META[kind].tag}
+                        </button>
+                      );
+                    })}
+                  </DragScroll>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                onClick={clearSearch}
+                aria-label="Back to list"
+                title="Back"
+                className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-white/5 px-3 text-xs font-semibold tracking-wide text-stone-200 ring-1 ring-white/15 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                <ArrowLeft className="size-3.5" strokeWidth={2.25} aria-hidden />
+                Back
+              </button>
+            </div>
             <LifeCard
               key={`${activeVariant.rule.id}:${deliveryDate}:${prepTime}:${activeLife ?? "all"}`}
               rule={activeVariant.rule}

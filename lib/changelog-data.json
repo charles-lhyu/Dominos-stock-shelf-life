@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.4.50",
+    "notes": [
+      "Item details keep storage and life chips above the card with a Back button",
+      "Card tags and Hide stay on one row"
+    ]
+  },
+  {
     "version": "1.4.49",
     "notes": [
       "Item details put the category above the name",
