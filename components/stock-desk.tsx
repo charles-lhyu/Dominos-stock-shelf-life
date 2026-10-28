@@ -45,7 +45,6 @@ import {
 import {
   getDeskState,
   hydrateDeskStore,
-  lockPrepTimeIfLive,
   setDeliveryDate,
   setPrepTime,
   subscribeDesk,
@@ -201,7 +200,6 @@ export function StockDesk() {
     closeSettings: () => {},
     leaveItem: () => {},
   });
-  const savedListCollapsedRef = useRef(false);
   /** Set inside choose() so the next layout scrolls that product to the top once. */
   const showItemFromTopRef = useRef(false);
   const { pack, deliveryDate, prepTime, imported } = desk;
@@ -361,8 +359,6 @@ export function StockDesk() {
       listScrollableRef.current = false;
       setListScrollable(false);
       setHeaderCollapsed(collapsed);
-      // Collapsed strip freezes prep time so hour lives stop drifting with the live clock.
-      if (collapsed) lockPrepTimeIfLive();
       if (collapsed && !query.trim()) inputRef.current?.blur();
       if (!collapsed) setShowGoTop(false);
 
@@ -534,10 +530,9 @@ export function StockDesk() {
     // "also matches" must not replace that place with the detail's scroll.
     if (!picked) {
       savedListScrollRef.current = mainRef.current?.scrollTop ?? 0;
-      savedListCollapsedRef.current = headerCollapsedRef.current;
     }
-    // Lock prep time so item details use a stable clock (esp. when collapsed).
-    lockPrepTimeIfLive();
+    // Item details keep the compact header (Campaign title strip stays hidden).
+    setHeaderModeRef.current(true);
     showItemFromTopRef.current = true;
     setQuery(name);
     setPicked(name);
@@ -546,23 +541,21 @@ export function StockDesk() {
   }
 
   function clearSearch() {
-    // Keep the prep time frozen after leaving details (list may stay collapsed).
-    lockPrepTimeIfLive();
     setQuery("");
     setPicked(null);
     inputRef.current?.blur();
     setSearchFocused(false);
 
-    const collapsed = savedListCollapsedRef.current;
+    // Stay collapsed after leaving details — do not reopen the Campaign title strip.
     const top = savedListScrollRef.current;
     window.clearTimeout(settleTimerRef.current);
     collapseProgressRef.current = 0;
     animatingRef.current = false;
-    headerCollapsedRef.current = collapsed;
-    listScrollableRef.current = collapsed;
-    setHeaderCollapsed(collapsed);
-    setListScrollable(collapsed);
-    setShowGoTop(collapsed || top > 48);
+    headerCollapsedRef.current = true;
+    listScrollableRef.current = true;
+    setHeaderCollapsed(true);
+    setListScrollable(true);
+    setShowGoTop(top > 48);
 
     // Wait for ChartList to mount, then jump back to the saved spot.
     requestAnimationFrame(() => {
@@ -903,7 +896,6 @@ export function StockDesk() {
                     const next = event.target.value;
                     if (!query.trim() && next.trim()) {
                       savedListScrollRef.current = mainRef.current?.scrollTop ?? 0;
-                      savedListCollapsedRef.current = headerCollapsedRef.current;
                     }
                     setQuery(next);
                     setPicked(null);

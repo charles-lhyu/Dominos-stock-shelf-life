@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.4.46",
+    "notes": [
+      "Opening or leaving an item keeps the header collapsed with the Campaign title hidden"
+    ]
+  },
+  {
     "version": "1.4.45",
     "notes": [
       "Prep time locks when you open or leave an item, and when the header collapses"

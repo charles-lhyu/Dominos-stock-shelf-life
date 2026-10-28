@@ -250,15 +250,6 @@ export function setPrepTime(prepTime: string) {
   emit();
 }
 
-/** Freeze the live clock to the current minute. No-op when already locked. */
-export function lockPrepTimeIfLive() {
-  if (isPrepTime(state.prepTime)) return;
-  const now = new Date();
-  setPrepTime(
-    `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`,
-  );
-}
-
 export function setImportedPack(pack: ChartPack, sourceUrl: string) {
   state = {
     ...state,
