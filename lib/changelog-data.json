@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.4.34",
+    "notes": [
+      "A store preview can be edited before you confirm, including its name, hidden items, and product defaults"
+    ]
+  },
+  {
     "version": "1.4.33",
     "notes": [
       "A cleared store ID field hints the store that is loaded",

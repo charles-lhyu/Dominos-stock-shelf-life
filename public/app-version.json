@@ -1,7 +1,6 @@
 {
-  "version": "1.4.33",
+  "version": "1.4.34",
   "notes": [
-    "A cleared store ID field hints the store that is loaded",
-    "Editing stored data can set a store name, shown on the store bar and the chart title"
+    "A store preview can be edited before you confirm, including its name, hidden items, and product defaults"
   ]
 }

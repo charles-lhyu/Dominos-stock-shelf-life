@@ -739,36 +739,58 @@ export function ImportChartButton({
     });
   }
 
-  function removeHidden(issued: string, validUntil: string, name: string, onScreen: boolean) {
+  function removeHidden(
+    targetStoreId: string,
+    issued: string,
+    validUntil: string,
+    name: string,
+    onScreen: boolean,
+  ) {
     if (onScreen) {
       unhideProductName(name);
       return;
     }
-    forgetSavedHidden(storeId, issued, validUntil, name);
+    forgetSavedHidden(targetStoreId, issued, validUntil, name);
   }
 
-  function removeDefault(issued: string, validUntil: string, name: string, onScreen: boolean) {
+  function removeDefault(
+    targetStoreId: string,
+    issued: string,
+    validUntil: string,
+    name: string,
+    onScreen: boolean,
+  ) {
     if (onScreen) {
       setProductDefault(name, { section: null, life: null });
       return;
     }
-    forgetSavedDefault(storeId, issued, validUntil, name);
+    forgetSavedDefault(targetStoreId, issued, validUntil, name);
   }
 
-  function removeAllHidden(issued: string, validUntil: string, onScreen: boolean) {
+  function removeAllHidden(
+    targetStoreId: string,
+    issued: string,
+    validUntil: string,
+    onScreen: boolean,
+  ) {
     if (onScreen) {
       clearHiddenNames();
       return;
     }
-    clearSavedHidden(storeId, issued, validUntil);
+    clearSavedHidden(targetStoreId, issued, validUntil);
   }
 
-  function removeAllDefaults(issued: string, validUntil: string, onScreen: boolean) {
+  function removeAllDefaults(
+    targetStoreId: string,
+    issued: string,
+    validUntil: string,
+    onScreen: boolean,
+  ) {
     if (onScreen) {
       clearProductDefaults();
       return;
     }
-    clearSavedDefaults(storeId, issued, validUntil);
+    clearSavedDefaults(targetStoreId, issued, validUntil);
   }
 
   function syncNavCard(id: SettingsSectionId) {
@@ -1166,14 +1188,14 @@ export function ImportChartButton({
                 <p className="min-w-0 truncate text-sm font-medium text-stone-300">
                   {storedHeading(previewStoreId ?? storeId, nameFor(previewStoreId ?? storeId))}
                 </p>
-                {!previewStoreId && storeId ? (
+                {previewStoreId ?? storeId ? (
                   <StoredEditButton editing={storedEditing} onToggle={toggleStoredEditing} />
                 ) : null}
               </div>
-              {!previewStoreId && storedEditing && storeId ? (
+              {storedEditing && (previewStoreId ?? storeId) ? (
                 <StoreNameField
-                  value={nameFor(storeId)}
-                  onChange={(value) => changeStoreName(storeId, value)}
+                  value={nameFor(previewStoreId ?? storeId)}
+                  onChange={(value) => changeStoreName(previewStoreId ?? storeId, value)}
                 />
               ) : null}
               {otherStored.length > 0 ? (
@@ -1220,18 +1242,40 @@ export function ImportChartButton({
                         </p>
                         <StoredCampaignDetails
                           item={item}
-                          editing={!previewStoreId && storedEditing}
+                          editing={storedEditing}
                           onRemoveHidden={(name) =>
-                            removeHidden(item.issued, item.validUntil, name, onScreen)
+                            removeHidden(
+                              previewStoreId ?? storeId,
+                              item.issued,
+                              item.validUntil,
+                              name,
+                              onScreen,
+                            )
                           }
                           onRemoveDefault={(name) =>
-                            removeDefault(item.issued, item.validUntil, name, onScreen)
+                            removeDefault(
+                              previewStoreId ?? storeId,
+                              item.issued,
+                              item.validUntil,
+                              name,
+                              onScreen,
+                            )
                           }
                           onRemoveAllHidden={() =>
-                            removeAllHidden(item.issued, item.validUntil, onScreen)
+                            removeAllHidden(
+                              previewStoreId ?? storeId,
+                              item.issued,
+                              item.validUntil,
+                              onScreen,
+                            )
                           }
                           onRemoveAllDefaults={() =>
-                            removeAllDefaults(item.issued, item.validUntil, onScreen)
+                            removeAllDefaults(
+                              previewStoreId ?? storeId,
+                              item.issued,
+                              item.validUntil,
+                              onScreen,
+                            )
                           }
                         />
                       </article>
