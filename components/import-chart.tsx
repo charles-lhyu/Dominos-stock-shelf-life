@@ -101,11 +101,16 @@ import {
 import { clearPdfCrops, replacePdfCrops } from "@/lib/pdf-crop-images";
 import { parsePdfChartFile } from "@/lib/pdf-chart";
 import {
+  listInvalidProductDefaults,
+  type InvalidProductDefault,
+} from "@/lib/invalid-presets";
+import {
+  applyProductDefaultUpdate,
   clearProductDefaults,
   getItemPreset,
   getItemPresetServer,
   hydrateItemPresetStore,
-  retainProductDefaults,
+  removeProductDefault,
   setProductDefault,
   subscribeItemPreset,
   type ItemPreset,
@@ -703,11 +708,32 @@ export function ImportChartButton({
       compactDates,
       showDayCounts: debugDays,
       compactList,
-      preset: {
-        ...itemPreset,
-        defaults: retainProductDefaults(itemPreset.defaults, desk.pack.rules, hiddenNames),
-      },
+      // Keep raw defaults so invalid old labels still show in Stored data.
+      preset: itemPreset,
     };
+  }
+
+  const invalidDefaults = desk.imported
+    ? listInvalidProductDefaults(itemPreset.defaults, desk.pack.rules)
+    : [];
+
+  function updateInvalidDefault(item: InvalidProductDefault) {
+    if (!item.update) return;
+    applyProductDefaultUpdate(item.name, item.update);
+  }
+
+  function removeInvalidDefault(item: InvalidProductDefault) {
+    removeProductDefault(item.name);
+  }
+
+  function updateAllInvalidDefaults() {
+    for (const item of invalidDefaults) {
+      if (item.update) applyProductDefaultUpdate(item.name, item.update);
+    }
+  }
+
+  function removeAllInvalidDefaults() {
+    for (const item of invalidDefaults) removeProductDefault(item.name);
   }
 
   const savedRows = storedForStore.map((item) =>
@@ -1198,6 +1224,15 @@ export function ImportChartButton({
               </p>
             </div>
             <div className="space-y-2 border-t border-white/10 pt-3">
+              {invalidDefaults.length > 0 ? (
+                <InvalidDefaultsWarning
+                  items={invalidDefaults}
+                  onUpdate={updateInvalidDefault}
+                  onRemove={removeInvalidDefault}
+                  onUpdateAll={updateAllInvalidDefaults}
+                  onRemoveAll={removeAllInvalidDefaults}
+                />
+              ) : null}
               <div className="flex items-center justify-between gap-2">
                 <div className="flex min-w-0 items-center gap-2">
                   <p className="text-sm font-medium text-stone-300">Stored data</p>
@@ -1264,6 +1299,7 @@ export function ImportChartButton({
                         <StoredCampaignDetails
                           item={item}
                           editing={storedEditing}
+                          invalidDefaults={onScreen ? invalidDefaults : []}
                           onOpenHidden={(name) =>
                             openStoredProduct(name, item.issued, item.validUntil)
                           }
@@ -1285,6 +1321,10 @@ export function ImportChartButton({
                               onScreen,
                             )
                           }
+                          onUpdateInvalidDefault={(name) => {
+                            const hit = invalidDefaults.find((row) => row.name === name);
+                            if (hit) updateInvalidDefault(hit);
+                          }}
                           onRemoveAllHidden={() =>
                             removeAllHidden(
                               previewStoreId ?? storeId,
@@ -2191,12 +2231,98 @@ function storedRowClass(index: number) {
   );
 }
 
+function InvalidDefaultsWarning({
+  items,
+  onUpdate,
+  onRemove,
+  onUpdateAll,
+  onRemoveAll,
+}: {
+  items: InvalidProductDefault[];
+  onUpdate: (item: InvalidProductDefault) => void;
+  onRemove: (item: InvalidProductDefault) => void;
+  onUpdateAll: () => void;
+  onRemoveAll: () => void;
+}) {
+  const canUpdateAny = items.some((item) => item.update);
+  return (
+    <div
+      role="status"
+      className="space-y-2 rounded-xl border border-amber-400/35 bg-amber-500/10 px-3 py-2.5"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-amber-100">
+            {items.length === 1
+              ? "1 saved default does not match this chart"
+              : `${items.length} saved defaults do not match this chart`}
+          </p>
+          <p className="mt-0.5 text-xs text-amber-100/75">
+            Update to the current product name, or remove the saved default.
+          </p>
+        </div>
+      </div>
+      <ul className="space-y-1.5">
+        {items.map((item) => (
+          <li
+            key={item.name}
+            className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-black/20 px-2.5 py-2"
+          >
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium text-stone-100">{item.name}</p>
+              <p className="text-xs text-amber-100/70">{item.detail}</p>
+            </div>
+            <div className="flex shrink-0 items-center gap-1.5">
+              {item.update ? (
+                <button
+                  type="button"
+                  onClick={() => onUpdate(item)}
+                  className="rounded-lg bg-amber-400/20 px-2.5 py-1 text-xs font-semibold text-amber-100"
+                >
+                  Update
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => onRemove(item)}
+                className="rounded-lg px-2.5 py-1 text-xs font-semibold text-red-300 ring-1 ring-red-400/30"
+              >
+                Remove
+              </button>
+            </div>
+          </li>
+        ))}
+      </ul>
+      <div className="flex flex-wrap gap-2 pt-0.5">
+        {canUpdateAny ? (
+          <button
+            type="button"
+            onClick={onUpdateAll}
+            className="rounded-lg bg-amber-400/20 px-2.5 py-1.5 text-xs font-semibold text-amber-100"
+          >
+            Update all
+          </button>
+        ) : null}
+        <button
+          type="button"
+          onClick={onRemoveAll}
+          className="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-red-300 ring-1 ring-red-400/30"
+        >
+          Remove all
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function StoredCampaignDetails({
   item,
   editing,
+  invalidDefaults = [],
   onOpenHidden,
   onRemoveHidden,
   onRemoveDefault,
+  onUpdateInvalidDefault,
   onRemoveAllHidden,
   onRemoveAllDefaults,
 }: {
@@ -2208,13 +2334,16 @@ function StoredCampaignDetails({
     compactList?: boolean;
   };
   editing: boolean;
+  invalidDefaults?: InvalidProductDefault[];
   onOpenHidden: (name: string) => void;
   onRemoveHidden: (name: string) => void;
   onRemoveDefault: (name: string) => void;
+  onUpdateInvalidDefault?: (name: string) => void;
   onRemoveAllHidden: () => void;
   onRemoveAllDefaults: () => void;
 }) {
   const defaults = productDefaultLines(item.preset);
+  const invalidByName = new Map(invalidDefaults.map((row) => [row.name, row]));
   const dateLabel = item.showDayCounts ? "Days and hours" : item.compactDates ? "Short" : "Full";
   return (
     <>
@@ -2276,17 +2405,51 @@ function StoredCampaignDetails({
         <p className="px-2 text-sm text-stone-200">None</p>
       ) : (
         <ul className="text-sm text-stone-200">
-          {defaults.map((entry, index) => (
-            <li key={entry.name} className={storedRowClass(index)}>
-              <span className="min-w-0">{entry.line}</span>
-              {editing ? (
-                <RemoveMark
-                  label={`Remove ${entry.name} default`}
-                  onClick={() => onRemoveDefault(entry.name)}
-                />
-              ) : null}
-            </li>
-          ))}
+          {defaults.map((entry, index) => {
+            const invalid = invalidByName.get(entry.name);
+            return (
+              <li
+                key={entry.name}
+                className={cn(
+                  storedRowClass(index),
+                  invalid && "ring-1 ring-inset ring-amber-400/35",
+                )}
+              >
+                <div className="min-w-0 flex-1">
+                  <span className={cn("block truncate", invalid && "text-amber-100")}>
+                    {entry.line}
+                  </span>
+                  {invalid ? (
+                    <span className="block truncate text-[0.7rem] text-amber-100/70">
+                      {invalid.detail}
+                    </span>
+                  ) : null}
+                </div>
+                {invalid ? (
+                  <div className="flex shrink-0 items-center gap-1">
+                    {invalid.update && onUpdateInvalidDefault ? (
+                      <button
+                        type="button"
+                        onClick={() => onUpdateInvalidDefault(entry.name)}
+                        className="rounded-md px-2 py-0.5 text-[0.65rem] font-semibold text-amber-100 ring-1 ring-amber-400/35"
+                      >
+                        Update
+                      </button>
+                    ) : null}
+                    <RemoveMark
+                      label={`Remove ${entry.name} default`}
+                      onClick={() => onRemoveDefault(entry.name)}
+                    />
+                  </div>
+                ) : editing ? (
+                  <RemoveMark
+                    label={`Remove ${entry.name} default`}
+                    onClick={() => onRemoveDefault(entry.name)}
+                  />
+                ) : null}
+              </li>
+            );
+          })}
         </ul>
       )}
     </>

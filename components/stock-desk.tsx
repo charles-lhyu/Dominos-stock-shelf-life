@@ -55,6 +55,7 @@ import {
   getHiddenNamesServer,
   subscribeHidden,
 } from "@/lib/hidden-store";
+import { chartProductDefaults } from "@/lib/invalid-presets";
 import {
   getItemPreset,
   getItemPresetServer,
@@ -165,7 +166,6 @@ export function StockDesk() {
   );
   const category = preset.category;
   const sectionFilter = preset.sectionFilter;
-  const productDefaults = preset.defaults;
   const [placeholder, setPlaceholder] = useState("Pepperoni, Chorizo, Nduja Sausage…");
   const [today, setToday] = useState<Date | null>(null);
   const [appUpdate, setAppUpdate] = useState<AppUpdateInfo>({
@@ -243,6 +243,8 @@ export function StockDesk() {
   );
   const storeName = storeId ? (storeNames[storeId] ?? "") : "";
   const hidden = new Set(hiddenNames);
+  // List matching uses chart titles; raw old labels stay in storage for Settings.
+  const productDefaults = chartProductDefaults(preset.defaults, rules, hiddenNames);
   const visibleRules = rules.filter((rule) => !hidden.has(rule.name));
   const categories = categoriesInPack(pack).filter((item) =>
     visibleRules.some((rule) => rule.category === item),

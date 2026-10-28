@@ -56,10 +56,11 @@ function normalizeDefaults(value: unknown): Record<string, ProductDefault> {
     const section = isSection(raw.section) ? raw.section : null;
     // Per-item life defaults are not used — drop any stored life.
     if (!section) continue;
+    // Keep old chart labels as stored (Bacon (FROZEN)) so Settings can warn
+    // and offer Update / Remove. List matching uses chartProductDefaults.
     defaults[trimmed] = { section, life: null };
   }
-  // Bacon (FROZEN) → Bacon, NEW Chinese Style Chicken → Chinese Style Chicken, etc.
-  return migrateProductDefaultEntries(defaults);
+  return defaults;
 }
 
 /**
@@ -170,14 +171,7 @@ export function hydrateItemPresetStore() {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (raw) {
-      const parsed = normalizeItemPreset(JSON.parse(raw));
-      preset = parsed;
-      // Persist renamed keys (Bacon (FROZEN) → Bacon) so old labels leave storage.
-      try {
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(preset));
-      } catch {
-        // Ignore quota / private mode.
-      }
+      preset = normalizeItemPreset(JSON.parse(raw));
       return;
     }
   } catch {
@@ -242,11 +236,47 @@ export function setProductDefault(
   hydrateItemPresetStore();
   const trimmed = canonicalProductName(name);
   if (!trimmed) return;
-  const current = preset.defaults[trimmed] ?? { section: null, life: null };
+  const current =
+    preset.defaults[trimmed] ??
+    preset.defaults[name.trim()] ?? { section: null, life: null };
   const section = partial.section !== undefined ? partial.section : current.section;
   const defaults = { ...preset.defaults };
+  // Drop any stale label for this product when writing the clean title.
+  for (const key of Object.keys(defaults)) {
+    if (key === trimmed) continue;
+    if (canonicalProductName(key) === trimmed) delete defaults[key];
+  }
   if (!section) delete defaults[trimmed];
   else defaults[trimmed] = { section, life: null };
+  update({ defaults });
+}
+
+/** Remove one stored default by its exact saved key (including old chart labels). */
+export function removeProductDefault(name: string) {
+  hydrateItemPresetStore();
+  const trimmed = name.trim();
+  if (!trimmed || !preset.defaults[trimmed]) return;
+  const defaults = { ...preset.defaults };
+  delete defaults[trimmed];
+  update({ defaults });
+}
+
+/** Rewrite one invalid default to a chart product + storage (Update in Settings). */
+export function applyProductDefaultUpdate(
+  fromName: string,
+  next: { name: string; section: SectionId },
+) {
+  hydrateItemPresetStore();
+  const from = fromName.trim();
+  const to = next.name.trim();
+  if (!from || !to || !isSection(next.section)) return;
+  const defaults = { ...preset.defaults };
+  delete defaults[from];
+  for (const key of Object.keys(defaults)) {
+    if (key === to) continue;
+    if (canonicalProductName(key) === to) delete defaults[key];
+  }
+  defaults[to] = { section: next.section, life: null };
   update({ defaults });
 }
 
