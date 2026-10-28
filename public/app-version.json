@@ -1,8 +1,11 @@
 {
-  "version": "2.0.0",
+  "version": "2.0.1",
   "notes": [
-    "Stored data is store-first: each store has name, dates, and list settings",
-    "Campaign presets under a store keep their own hidden items and product defaults, with name, issued, valid until, and version",
-    "Export and import Stored data as a JSON backup; import replaces everything saved on this device"
+    "Show all opens a store preview with an ID title dropdown, Clear, and Edit beside Import/Export",
+    "Campaign presets open into a detail view with a campaign selector; the current chart is selected when available",
+    "Store settings title sits outside the card in Settings and Show all",
+    "Store ID uses a filterable popup list; Days and hours stay debug-only; list mode is labeled Normal",
+    "Stored data on this device shows again after refresh even if nothing was edited",
+    "Item details keep the compact header locked until you leave the item"
   ]
 }
