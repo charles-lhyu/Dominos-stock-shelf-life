@@ -28,6 +28,7 @@ import {
 } from "./desk-store";
 import {
   clearHiddenNames,
+  getHiddenEntries,
   getHiddenNames,
   replaceHiddenNames,
   subscribeHidden,
@@ -232,7 +233,7 @@ function currentSettings(): StoreCampaignSettings {
   const desk = getDeskState();
   return keptSettings(
     {
-      hidden: [...getHiddenNames()],
+      hidden: getHiddenEntries(),
       preset: getItemPreset(),
       compactDates: getCompactDateFormat(),
       showDayCounts: readDebugDays(),
@@ -242,16 +243,21 @@ function currentSettings(): StoreCampaignSettings {
   );
 }
 
-/** Hidden products are not on the list, so a saved storage choice does not apply. */
+/** Hidden storages drop a matching saved storage default. */
 function forgetHiddenDefaults() {
   if (applying) return;
-  const hidden = new Set(getHiddenNames());
-  if (hidden.size === 0) return;
+  const hidden = getHiddenEntries();
+  if (hidden.length === 0) return;
   const preset = getItemPreset();
   let changed = false;
   const defaults: ItemPreset["defaults"] = {};
   for (const [name, value] of Object.entries(preset.defaults)) {
-    if (hidden.has(name)) {
+    const blocked = hidden.some(
+      (entry) =>
+        entry.name === name &&
+        (entry.section == null || entry.section === value.section),
+    );
+    if (blocked) {
       changed = true;
       continue;
     }

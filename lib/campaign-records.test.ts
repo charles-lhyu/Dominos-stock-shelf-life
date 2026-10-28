@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { parseHiddenEntries } from "./hidden-entries";
 import {
   campaignKey,
   emptyCampaignLibrary,
@@ -74,7 +75,7 @@ describe("campaign library records", () => {
       "t2",
     );
     library = writeStoreSettings(library, "12345", "2026-09-07", "2026-11-17", {
-      hidden: ["Olives"],
+      hidden: parseHiddenEntries(["Olives"]),
       preset,
     });
     library = upsertCampaign(
@@ -89,9 +90,10 @@ describe("campaign library records", () => {
     assert.equal(revised?.title, "Campaign 5 revised");
     assert.equal(revised?.sourceUrl, "c.pdf");
     assert.equal("pdfCropImage" in (revised?.pack.rules[0] ?? {}), false);
-    assert.deepEqual(readStoreSettings(library, "12345", "2026-09-07", "2026-11-17")?.hidden, [
-      "Olives",
-    ]);
+    assert.deepEqual(
+      readStoreSettings(library, "12345", "2026-09-07", "2026-11-17")?.hidden,
+      parseHiddenEntries(["Olives"]),
+    );
     assert.equal(readStoreSettings(library, "99", "2026-09-07", "2026-11-17"), null);
   });
 
@@ -108,15 +110,16 @@ describe("campaign library records", () => {
       nextStoreId: "12345",
       issued: "2026-09-07",
       validUntil: "2026-11-17",
-      current: { hidden: ["Bacon"], preset },
+      current: { hidden: parseHiddenEntries(["Bacon"]), preset },
     });
     assert.equal(first.restore, null);
-    assert.deepEqual(readStoreSettings(first.library, "12345", "2026-09-07", "2026-11-17")?.hidden, [
-      "Bacon",
-    ]);
+    assert.deepEqual(
+      readStoreSettings(first.library, "12345", "2026-09-07", "2026-11-17")?.hidden,
+      parseHiddenEntries(["Bacon"]),
+    );
 
     library = writeStoreSettings(first.library, "99", "2026-09-07", "2026-11-17", {
-      hidden: ["Olives"],
+      hidden: parseHiddenEntries(["Olives"]),
       preset: { ...preset, section: "chilled", sectionFilter: "chilled" },
     });
     const switched = planStoreChange({
@@ -125,22 +128,22 @@ describe("campaign library records", () => {
       nextStoreId: "99",
       issued: "2026-09-07",
       validUntil: "2026-11-17",
-      current: { hidden: ["Bacon", "Ham"], preset },
+      current: { hidden: parseHiddenEntries(["Bacon", "Ham"]), preset },
     });
-    assert.deepEqual(switched.restore?.hidden, ["Olives"]);
+    assert.deepEqual(switched.restore?.hidden, parseHiddenEntries(["Olives"]));
     assert.equal(switched.restore?.preset.section, "chilled");
     assert.deepEqual(
-      readStoreSettings(switched.library, "12345", "2026-09-07", "2026-11-17")?.hidden,
-      ["Bacon", "Ham"],
+      readStoreSettings(switched.library, "12345", "2026-09-07", "2026-11-17")?.hidden, parseHiddenEntries(["Bacon", "Ham"]),
     );
-    assert.deepEqual(readStoreSettings(switched.library, "99", "2026-09-07", "2026-11-17")?.hidden, [
-      "Olives",
-    ]);
+    assert.deepEqual(
+      readStoreSettings(switched.library, "99", "2026-09-07", "2026-11-17")?.hidden,
+      parseHiddenEntries(["Olives"]),
+    );
   });
 
   it("writes the screen onto a store that already has this campaign when asked to keep settings", () => {
     let library = writeStoreSettings(emptyCampaignLibrary(), "99", "2026-09-07", "2026-11-17", {
-      hidden: ["Olives"],
+      hidden: parseHiddenEntries(["Olives"]),
       preset,
     });
     const kept = planStoreChange({
@@ -149,22 +152,19 @@ describe("campaign library records", () => {
       nextStoreId: "99",
       issued: "2026-09-07",
       validUntil: "2026-11-17",
-      current: { hidden: ["Bacon"], preset },
+      current: { hidden: parseHiddenEntries(["Bacon"]), preset },
       keepCurrent: true,
     });
     assert.equal(kept.restore, null);
-    assert.deepEqual(readStoreSettings(kept.library, "99", "2026-09-07", "2026-11-17")?.hidden, [
-      "Bacon",
-    ]);
+    assert.deepEqual(readStoreSettings(kept.library, "99", "2026-09-07", "2026-11-17")?.hidden, parseHiddenEntries(["Bacon"]));
     assert.deepEqual(
-      readStoreSettings(kept.library, "12345", "2026-09-07", "2026-11-17")?.hidden,
-      ["Bacon"],
+      readStoreSettings(kept.library, "12345", "2026-09-07", "2026-11-17")?.hidden, parseHiddenEntries(["Bacon"]),
     );
   });
 
   it("loads a saved store or clears the screen when asked not to keep settings", () => {
     const library = writeStoreSettings(emptyCampaignLibrary(), "99", "2026-09-07", "2026-11-17", {
-      hidden: ["Olives"],
+      hidden: parseHiddenEntries(["Olives"]),
       preset,
     });
     const loaded = planStoreChange({
@@ -173,13 +173,11 @@ describe("campaign library records", () => {
       nextStoreId: "99",
       issued: "2026-09-07",
       validUntil: "2026-11-17",
-      current: { hidden: ["Bacon"], preset },
+      current: { hidden: parseHiddenEntries(["Bacon"]), preset },
       keepCurrent: false,
     });
-    assert.deepEqual(loaded.restore?.hidden, ["Olives"]);
-    assert.deepEqual(readStoreSettings(loaded.library, "99", "2026-09-07", "2026-11-17")?.hidden, [
-      "Olives",
-    ]);
+    assert.deepEqual(loaded.restore?.hidden, parseHiddenEntries(["Olives"]));
+    assert.deepEqual(readStoreSettings(loaded.library, "99", "2026-09-07", "2026-11-17")?.hidden, parseHiddenEntries(["Olives"]));
 
     const fresh = planStoreChange({
       library: loaded.library,
@@ -187,28 +185,26 @@ describe("campaign library records", () => {
       nextStoreId: "77",
       issued: "2026-09-07",
       validUntil: "2026-11-17",
-      current: { hidden: ["Olives"], preset },
+      current: { hidden: parseHiddenEntries(["Olives"]), preset },
       keepCurrent: false,
     });
     assert.deepEqual(fresh.restore?.hidden, []);
     assert.equal(readStoreSettings(fresh.library, "77", "2026-09-07", "2026-11-17"), null);
-    assert.deepEqual(readStoreSettings(fresh.library, "99", "2026-09-07", "2026-11-17")?.hidden, [
-      "Olives",
-    ]);
+    assert.deepEqual(readStoreSettings(fresh.library, "99", "2026-09-07", "2026-11-17")?.hidden, parseHiddenEntries(["Olives"]));
   });
 
   it("lists every store saved on the device", () => {
     let library = writeStoreSettings(emptyCampaignLibrary(), "12345", "2026-09-07", "2026-11-17", {
-      hidden: ["Bacon"],
+      hidden: parseHiddenEntries(["Bacon"]),
       preset,
     });
     library = writeStoreSettings(library, "99", "2026-10-01", "2026-12-01", {
-      hidden: ["Ham"],
+      hidden: parseHiddenEntries(["Ham"]),
       preset,
     });
     const rows = listDeviceStored(library);
     assert.deepEqual(
-      rows.map((row) => `${row.storeId}:${row.hidden[0]}`),
+      rows.map((row) => `${row.storeId}:${row.hidden[0]?.name}`),
       ["99:Ham", "12345:Bacon"],
     );
   });
@@ -219,7 +215,7 @@ describe("campaign library records", () => {
       "12345",
       "2026-09-07",
       "2026-11-17",
-      { hidden: ["Bacon"], preset },
+      { hidden: parseHiddenEntries(["Bacon"]), preset },
     );
     const fresh = planStoreChange({
       library,
@@ -227,12 +223,10 @@ describe("campaign library records", () => {
       nextStoreId: "77",
       issued: "2026-09-07",
       validUntil: "2026-11-17",
-      current: { hidden: ["Gherkins"], preset },
+      current: { hidden: parseHiddenEntries(["Gherkins"]), preset },
     });
     assert.equal(fresh.restore, null);
-    assert.deepEqual(readStoreSettings(fresh.library, "77", "2026-09-07", "2026-11-17")?.hidden, [
-      "Gherkins",
-    ]);
+    assert.deepEqual(readStoreSettings(fresh.library, "77", "2026-09-07", "2026-11-17")?.hidden, parseHiddenEntries(["Gherkins"]));
 
     const cleared = planStoreChange({
       library: fresh.library,
@@ -240,12 +234,10 @@ describe("campaign library records", () => {
       nextStoreId: "",
       issued: "2026-09-07",
       validUntil: "2026-11-17",
-      current: { hidden: ["Gherkins"], preset },
+      current: { hidden: parseHiddenEntries(["Gherkins"]), preset },
     });
     assert.equal(cleared.restore, null);
-    assert.deepEqual(readStoreSettings(cleared.library, "77", "2026-09-07", "2026-11-17")?.hidden, [
-      "Gherkins",
-    ]);
+    assert.deepEqual(readStoreSettings(cleared.library, "77", "2026-09-07", "2026-11-17")?.hidden, parseHiddenEntries(["Gherkins"]));
   });
 
   it("lists newer valid dates first and drops crop images when reading storage", () => {
@@ -270,17 +262,17 @@ describe("campaign library records", () => {
       ],
       stores: {
         "12": {
-          "2026-09-07|2026-11-17": { hidden: [" Olives ", "Olives"], preset: { section: "pack" } },
-          bad: { hidden: ["Ham"] },
+          "2026-09-07|2026-11-17": { hidden: parseHiddenEntries([" Olives ", "Olives"]), preset: { section: "pack" } },
+          bad: { hidden: parseHiddenEntries(["Ham"]) },
         },
-        store: { "2026-09-07|2026-11-17": { hidden: ["Ham"] } },
+        store: { "2026-09-07|2026-11-17": { hidden: parseHiddenEntries(["Ham"]) } },
       },
     });
     const titles = listCampaignSummaries(parsed).map((item) => item.title);
     assert.deepEqual(titles, ["Campaign 6", "Campaign 5"]);
     assert.equal("pdfCropImage" in parsed.campaigns[0]!.pack.rules[0]!, false);
     const settings = readStoreSettings(parsed, "12", "2026-09-07", "2026-11-17");
-    assert.deepEqual(settings?.hidden, ["Olives"]);
+    assert.deepEqual(settings?.hidden, parseHiddenEntries(["Olives"]));
     assert.equal(settings?.preset.section, "pack");
     assert.equal(settings?.preset.lifeFilter, "all");
     assert.equal(parsed.stores.store, undefined);
@@ -300,7 +292,7 @@ describe("campaign library records", () => {
       "t2",
     );
     library = writeStoreSettings(library, "12345", "2026-09-07", "2026-11-17", {
-      hidden: ["Olives", "Bacon"],
+      hidden: parseHiddenEntries(["Olives", "Bacon"]),
       preset,
     });
     library = writeStoreSettings(library, "12345", "2026-10-01", "2026-12-01", {
@@ -308,7 +300,7 @@ describe("campaign library records", () => {
       preset: { ...preset, category: "Sides", lifeFilter: "prepped" },
     });
     library = writeStoreSettings(library, "99", "2026-09-07", "2026-11-17", {
-      hidden: ["Ham"],
+      hidden: parseHiddenEntries(["Ham"]),
       preset,
     });
 
@@ -317,10 +309,10 @@ describe("campaign library records", () => {
       rows.map((row) => row.title),
       ["Campaign 6", "Campaign 5"],
     );
-    assert.deepEqual(rows[1]?.hidden, ["Bacon", "Olives"]);
+    assert.deepEqual(rows[1]?.hidden, parseHiddenEntries(["Bacon", "Olives"]));
     assert.equal(rows[0]?.preset.category, "Sides");
     assert.equal(rows[0]?.preset.lifeFilter, "prepped");
-    assert.deepEqual(listStoreCampaigns(library, "99").map((row) => row.hidden[0]), ["Ham"]);
+    assert.deepEqual(listStoreCampaigns(library, "99").map((row) => row.hidden[0]?.name), ["Ham"]);
     assert.deepEqual(listStoreCampaigns(library, ""), []);
   });
 
@@ -340,7 +332,7 @@ describe("campaign library records", () => {
     ];
     let library = upsertCampaign(emptyCampaignLibrary(), chart, "a.pdf", "t1");
     library = writeStoreSettings(library, "12345", "2026-09-07", "2026-11-17", {
-      hidden: ["Pepperoni"],
+      hidden: parseHiddenEntries(["Pepperoni"]),
       preset: {
         ...preset,
         defaults: {
@@ -369,7 +361,7 @@ describe("campaign library records", () => {
 
   it("drops one hidden name or one product default from saved settings", () => {
     const settings = {
-      hidden: ["Bacon", "Olives"],
+      hidden: parseHiddenEntries(["Bacon", "Olives"]),
       preset: {
         ...preset,
         defaults: {
@@ -379,7 +371,7 @@ describe("campaign library records", () => {
       },
     };
     const hidden = dropStoredHidden(settings, "Olives");
-    assert.deepEqual(hidden.hidden, ["Bacon"]);
+    assert.deepEqual(hidden.hidden, parseHiddenEntries(["Bacon"]));
     assert.equal(dropStoredHidden(hidden, "Missing"), hidden);
     const defaults = dropStoredDefault(settings, "Pepperoni");
     assert.equal(defaults.preset.defaults.Pepperoni, undefined);
@@ -415,7 +407,7 @@ describe("campaign library records", () => {
       "t1",
     );
     library = writeStoreSettings(library, "12345", "2026-09-07", "2026-11-17", {
-      hidden: ["Bacon"],
+      hidden: parseHiddenEntries(["Bacon"]),
       preset,
       compactDates: true,
       showDayCounts: true,
@@ -447,7 +439,7 @@ describe("campaign library records", () => {
 
   it("lists store changes and applies only the accepted ones", () => {
     const current = {
-      hidden: ["Bacon"],
+      hidden: parseHiddenEntries(["Bacon"]),
       preset: {
         ...preset,
         defaults: { Pepperoni: { section: "chilled" as const, life: "stock" as const } },
@@ -456,7 +448,7 @@ describe("campaign library records", () => {
       showDayCounts: false,
     };
     const saved = {
-      hidden: ["Olives"],
+      hidden: parseHiddenEntries(["Olives"]),
       preset: {
         ...preset,
         defaults: { Pepperoni: { section: "frozen" as const, life: "stock" as const } },
@@ -471,7 +463,7 @@ describe("campaign library records", () => {
     );
     assert.equal(changes.find((change) => change.id === "dates:compact")?.to, "Short");
     const merged = applyAcceptedStoreChanges(current, saved, ["hidden:Olives", "dates:compact"]);
-    assert.deepEqual(merged.hidden, ["Bacon", "Olives"]);
+    assert.deepEqual(merged.hidden, parseHiddenEntries(["Bacon", "Olives"]));
     assert.equal(merged.compactDates, true);
     assert.equal(merged.preset.defaults.Pepperoni?.section, "chilled");
     assert.equal(applyAcceptedStoreChanges(current, null, []).compactDates, false);
@@ -493,9 +485,9 @@ describe("campaign library records", () => {
     });
     const previous = readStoreSettings(planned.library, "12345", "2026-09-07", "2026-11-17");
     const next = readStoreSettings(planned.library, "99999", "2026-09-07", "2026-11-17");
-    assert.deepEqual(previous?.hidden, ["Bacon"]);
+    assert.deepEqual(previous?.hidden, parseHiddenEntries(["Bacon"]));
     assert.equal(previous?.compactDates, false);
-    assert.deepEqual(next?.hidden, ["Bacon", "Olives"]);
+    assert.deepEqual(next?.hidden, parseHiddenEntries(["Bacon", "Olives"]));
     assert.equal(next?.compactDates, true);
     assert.equal(next?.preset.defaults.Pepperoni?.section, "chilled");
     assert.equal(planned.restore?.compactDates, true);
@@ -505,7 +497,7 @@ describe("campaign library records", () => {
     let library = writeStoreName(emptyCampaignLibrary(), "12345", "  Oxford Street  ");
     assert.equal(readStoreName(library, "12345"), "Oxford Street");
     library = writeStoreSettings(library, "12345", "2026-09-07", "2026-11-17", {
-      hidden: ["Bacon"],
+      hidden: parseHiddenEntries(["Bacon"]),
       preset,
     });
     library = upsertCampaign(library, pack("2026-09-07", "2026-11-17"), "b.pdf", "t2");

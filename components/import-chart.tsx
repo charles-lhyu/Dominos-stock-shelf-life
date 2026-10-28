@@ -88,11 +88,16 @@ import {
 } from "@/lib/debug-store";
 import {
   clearHiddenNames,
+  formatHiddenLabel,
+  getHiddenEntries,
+  getHiddenEntriesServer,
   getHiddenNames,
   getHiddenNamesServer,
+  hiddenEntryKey,
   subscribeHidden,
-  unhideProductName,
+  unhideByKey,
 } from "@/lib/hidden-store";
+import type { HiddenEntry } from "@/lib/hidden-entries";
 import {
   clearImportedPack,
   setImportedPack,
@@ -258,6 +263,11 @@ export function ImportChartButton({
     subscribeHidden,
     getHiddenNames,
     getHiddenNamesServer,
+  );
+  const hiddenEntries = useSyncExternalStore(
+    subscribeHidden,
+    getHiddenEntries,
+    getHiddenEntriesServer,
   );
   const itemPreset = useSyncExternalStore(
     subscribeItemPreset,
@@ -438,7 +448,7 @@ export function ImportChartButton({
     );
     const merged = applyAcceptedStoreChanges(
       {
-        hidden: [...getHiddenNames()],
+        hidden: getHiddenEntries(),
         preset: getItemPreset(),
         compactDates: getCompactDateFormat(),
         showDayCounts: readDebugDays(),
@@ -676,7 +686,7 @@ export function ImportChartButton({
     storePrompt && desk.imported
       ? listStoreSettingChanges(
           {
-            hidden: hiddenNames,
+            hidden: hiddenEntries,
             preset: itemPreset,
             compactDates,
             showDayCounts: debugDays,
@@ -701,10 +711,10 @@ export function ImportChartButton({
     );
   }
 
-  function withLiveSettings<T extends { hidden: string[]; preset: ItemPreset }>(item: T): T {
+  function withLiveSettings<T extends { hidden: HiddenEntry[]; preset: ItemPreset }>(item: T): T {
     return {
       ...item,
-      hidden: hiddenNames,
+      hidden: hiddenEntries,
       compactDates,
       showDayCounts: debugDays,
       compactList,
@@ -750,7 +760,7 @@ export function ImportChartButton({
             issued: desk.pack.chart.issued,
             validUntil: desk.pack.chart.validUntil,
             title: desk.pack.chart.title || "Shelf life chart",
-            hidden: hiddenNames,
+            hidden: hiddenEntries,
             preset: itemPreset,
           }),
           ...savedRows,
@@ -783,14 +793,14 @@ export function ImportChartButton({
     targetStoreId: string,
     issued: string,
     validUntil: string,
-    name: string,
+    key: string,
     onScreen: boolean,
   ) {
     if (onScreen) {
-      unhideProductName(name);
+      unhideByKey(key);
       return;
     }
-    forgetSavedHidden(targetStoreId, issued, validUntil, name);
+    forgetSavedHidden(targetStoreId, issued, validUntil, key);
   }
 
   function removeDefault(
@@ -1300,15 +1310,15 @@ export function ImportChartButton({
                           item={item}
                           editing={storedEditing}
                           invalidDefaults={onScreen ? invalidDefaults : []}
-                          onOpenHidden={(name) =>
-                            openStoredProduct(name, item.issued, item.validUntil)
+                          onOpenHidden={(entry) =>
+                            openStoredProduct(entry.name, item.issued, item.validUntil)
                           }
-                          onRemoveHidden={(name) =>
+                          onRemoveHidden={(entry) =>
                             removeHidden(
                               previewStoreId ?? storeId,
                               item.issued,
                               item.validUntil,
-                              name,
+                              hiddenEntryKey(entry),
                               onScreen,
                             )
                           }
@@ -2327,7 +2337,7 @@ function StoredCampaignDetails({
   onRemoveAllDefaults,
 }: {
   item: {
-    hidden: string[];
+    hidden: HiddenEntry[];
     preset: ItemPreset;
     compactDates?: boolean;
     showDayCounts?: boolean;
@@ -2335,8 +2345,8 @@ function StoredCampaignDetails({
   };
   editing: boolean;
   invalidDefaults?: InvalidProductDefault[];
-  onOpenHidden: (name: string) => void;
-  onRemoveHidden: (name: string) => void;
+  onOpenHidden: (entry: HiddenEntry) => void;
+  onRemoveHidden: (entry: HiddenEntry) => void;
   onRemoveDefault: (name: string) => void;
   onUpdateInvalidDefault?: (name: string) => void;
   onRemoveAllHidden: () => void;
@@ -2372,17 +2382,20 @@ function StoredCampaignDetails({
         <p className="px-2 text-sm text-stone-200">None</p>
       ) : (
         <ul className="text-sm text-stone-200">
-          {item.hidden.map((name, index) => (
-            <li key={name} className={storedRowClass(index)}>
+          {item.hidden.map((entry, index) => (
+            <li key={hiddenEntryKey(entry)} className={storedRowClass(index)}>
               <button
                 type="button"
                 className="min-w-0 flex-1 truncate text-left"
-                onClick={() => onOpenHidden(name)}
+                onClick={() => onOpenHidden(entry)}
               >
-                {name}
+                {formatHiddenLabel(entry)}
               </button>
               {editing ? (
-                <RemoveMark label={`Remove ${name}`} onClick={() => onRemoveHidden(name)} />
+                <RemoveMark
+                  label={`Remove ${formatHiddenLabel(entry)}`}
+                  onClick={() => onRemoveHidden(entry)}
+                />
               ) : null}
             </li>
           ))}

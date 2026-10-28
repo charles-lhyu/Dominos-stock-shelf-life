@@ -39,8 +39,11 @@ import {
 } from "@/lib/preview";
 import type { ProductDefault } from "@/lib/item-preset-store";
 import {
+  getHiddenEntries,
+  getHiddenEntriesServer,
   getHiddenNames,
   getHiddenNamesServer,
+  isHiddenSection,
   subscribeHidden,
 } from "@/lib/hidden-store";
 import type { ChartPack, SectionId } from "@/lib/types";
@@ -212,8 +215,9 @@ export function ChartList({
     getHiddenNames,
     getHiddenNamesServer,
   );
-  const hidden = new Set(hiddenNames);
   const hiddenCount = hiddenNames.length;
+  // Subscribe so section-level hides refresh the list.
+  useSyncExternalStore(subscribeHidden, getHiddenEntries, getHiddenEntriesServer);
   // "New" is a filter chip only — list sections stay the real chart categories.
   const newOnly = isNewCategoryFilter(category);
   const categories =
@@ -221,13 +225,15 @@ export function ChartList({
   const blocks: StickyBlock[] = [];
 
   for (const cat of categories) {
-    const names = uniqueNamesInCategory(pack.rules, cat).filter(
-      (name) => showHidden || !hidden.has(name),
-    );
+    const names = uniqueNamesInCategory(pack.rules, cat);
     const rows: ListRow[] = names.flatMap((name) => {
       let variants = variantsForName(name, pack.rules, pack).filter(
         (item) => item.rule.category === cat,
       );
+      const allVariants = variants;
+      if (!showHidden) {
+        variants = variants.filter((item) => !isHiddenSection(name, item.sectionId));
+      }
       if (newOnly) {
         variants = variants.filter((item) => item.rule.tags?.includes("new"));
       }
@@ -256,6 +262,9 @@ export function ChartList({
         lifePreference ?? calculatedLifeKind(active.rule),
       );
       const preview = datePreview(active.rule, deliveryDate, activeLife, today, prepTime);
+      const productHidden =
+        allVariants.length > 0 &&
+        allVariants.every((item) => isHiddenSection(name, item.sectionId));
 
       return [{
         name,
@@ -264,7 +273,7 @@ export function ChartList({
         kinds,
         activeLife,
         preview,
-        hidden: hidden.has(name),
+        hidden: productHidden || isHiddenSection(name, active.sectionId),
         isNew: active.rule.tags?.includes("new") ?? false,
       }];
     });

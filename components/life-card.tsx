@@ -14,7 +14,7 @@ import { WhenDate } from "@/components/when-date";
 import { sectionFromPack } from "@/lib/chart-pack";
 import { toIsoDate } from "@/lib/dates";
 import { readDebug, subscribeDebug } from "@/lib/debug-store";
-import { hideProductName } from "@/lib/hidden-store";
+import { hideProductName, hideProductSection } from "@/lib/hidden-store";
 import { getPdfCropImage, getSourcePdf, putPdfCropImage } from "@/lib/pdf-crop-images";
 import { cropOneProductRowImage } from "@/lib/pdf-chart";
 import { capAdvice, clocksFor, projectClock, type Clock, type ClockResult } from "@/lib/life";
@@ -22,6 +22,7 @@ import {
   isPrintedPackDate,
   LIFE_KIND_META,
   prepClockTime,
+  SECTION_TAG,
   type ItemVariant,
   type LifeKind,
 } from "@/lib/preview";
@@ -411,29 +412,72 @@ export function LifeCard({
               Hide {rule.name}?
             </DialogTitle>
             <DialogDescription className="text-stone-400">
-              It will leave the list until you show it again in Settings → App.
+              {storageOptions && storageOptions.length > 1
+                ? "Choose one storage to hide, or hide every storage for this item. Show them again in Settings → Store."
+                : "It will leave the list until you show it again in Settings → Store."}
             </DialogDescription>
           </DialogHeader>
-          <div className="flex gap-2 pt-2">
-            <button
-              type="button"
-              onClick={() => setHideConfirmOpen(false)}
-              className="h-11 flex-1 rounded-xl border border-white/10 bg-card text-sm font-semibold text-stone-200 transition-colors hover:bg-white/5"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                hideProductName(rule.name);
-                setHideConfirmOpen(false);
-                onHidden?.();
-              }}
-              className="h-11 flex-1 rounded-xl bg-orange-500 text-sm font-semibold text-orange-950 transition-colors hover:bg-orange-400"
-            >
-              Hide
-            </button>
-          </div>
+          {storageOptions && storageOptions.length > 1 ? (
+            <div className="flex flex-col gap-2 pt-2">
+              {storageOptions.map((item) => (
+                <button
+                  key={item.sectionId}
+                  type="button"
+                  onClick={() => {
+                    hideProductSection(rule.name, item.sectionId);
+                    setHideConfirmOpen(false);
+                    const remaining = storageOptions.filter(
+                      (option) => option.sectionId !== item.sectionId,
+                    );
+                    if (remaining.length === 0) onHidden?.();
+                    else onPreferredSection?.(remaining[0]!.sectionId);
+                  }}
+                  className="h-11 rounded-xl border border-white/10 bg-card text-sm font-semibold text-stone-100 transition-colors hover:bg-white/5"
+                >
+                  Hide {SECTION_TAG[item.sectionId]}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => {
+                  hideProductName(rule.name);
+                  setHideConfirmOpen(false);
+                  onHidden?.();
+                }}
+                className="h-11 rounded-xl bg-orange-500 text-sm font-semibold text-orange-950 transition-colors hover:bg-orange-400"
+              >
+                Hide all
+              </button>
+              <button
+                type="button"
+                onClick={() => setHideConfirmOpen(false)}
+                className="h-11 rounded-xl text-sm font-semibold text-stone-400 transition-colors hover:text-stone-200"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setHideConfirmOpen(false)}
+                className="h-11 flex-1 rounded-xl border border-white/10 bg-card text-sm font-semibold text-stone-200 transition-colors hover:bg-white/5"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  hideProductName(rule.name);
+                  setHideConfirmOpen(false);
+                  onHidden?.();
+                }}
+                className="h-11 flex-1 rounded-xl bg-orange-500 text-sm font-semibold text-orange-950 transition-colors hover:bg-orange-400"
+              >
+                Hide
+              </button>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </article>

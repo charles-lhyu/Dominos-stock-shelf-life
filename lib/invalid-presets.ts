@@ -2,6 +2,11 @@ import {
   CHART_PRODUCT_RENAMES,
   migrateProductDefaultEntries,
 } from "./chart-name-migrate";
+import {
+  isSectionHidden,
+  parseHiddenEntries,
+  type HiddenEntry,
+} from "./hidden-entries";
 import type { ProductDefault } from "./item-preset-store";
 import { SECTION_TAG } from "./preview";
 import type { SectionId, ShelfRule } from "./types";
@@ -127,19 +132,18 @@ export function listInvalidProductDefaults(
 export function chartProductDefaults(
   defaults: Record<string, ProductDefault>,
   rules: ShelfRule[],
-  hidden: Iterable<string> = [],
+  hidden: Iterable<string | HiddenEntry> = [],
 ): Record<string, ProductDefault> {
-  const hiddenNames = new Set(
-    [...hidden].map((item) => item.trim()).filter((item) => item !== ""),
-  );
+  const hiddenEntries = parseHiddenEntries([...hidden]);
   const sectionsByName = sectionsByProduct(rules);
   const kept: Record<string, ProductDefault> = {};
   for (const [name, value] of Object.entries(migrateProductDefaultEntries(defaults))) {
     const trimmed = name.trim();
-    if (!trimmed || hiddenNames.has(trimmed)) continue;
+    if (!trimmed || !value.section) continue;
     const sections = sectionsByName.get(trimmed);
     if (!sections || sections.size < 2) continue;
-    if (!value.section || !sections.has(value.section)) continue;
+    if (!sections.has(value.section)) continue;
+    if (isSectionHidden(hiddenEntries, trimmed, value.section)) continue;
     kept[trimmed] = { section: value.section, life: null };
   }
   return kept;

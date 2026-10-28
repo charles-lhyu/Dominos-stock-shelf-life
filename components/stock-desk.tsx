@@ -51,8 +51,12 @@ import {
   subscribeDesk,
 } from "@/lib/desk-store";
 import {
+  getHiddenEntries,
+  getHiddenEntriesServer,
   getHiddenNames,
   getHiddenNamesServer,
+  isHiddenProduct,
+  isHiddenSection,
   subscribeHidden,
 } from "@/lib/hidden-store";
 import { chartProductDefaults } from "@/lib/invalid-presets";
@@ -225,6 +229,11 @@ export function StockDesk() {
     getHiddenNames,
     getHiddenNamesServer,
   );
+  const hiddenEntries = useSyncExternalStore(
+    subscribeHidden,
+    getHiddenEntries,
+    getHiddenEntriesServer,
+  );
   const storeId = useSyncExternalStore(
     subscribeStoreId,
     () => {
@@ -242,10 +251,11 @@ export function StockDesk() {
     listStoreNamesServer,
   );
   const storeName = storeId ? (storeNames[storeId] ?? "") : "";
-  const hidden = new Set(hiddenNames);
   // List matching uses chart titles; raw old labels stay in storage for Settings.
-  const productDefaults = chartProductDefaults(preset.defaults, rules, hiddenNames);
-  const visibleRules = rules.filter((rule) => !hidden.has(rule.name));
+  const productDefaults = chartProductDefaults(preset.defaults, rules, hiddenEntries);
+  const visibleRules = rules.filter(
+    (rule) => !isHiddenSection(rule.name, rule.sectionId),
+  );
   const categories = categoriesInPack(pack).filter((item) =>
     visibleRules.some((rule) => rule.category === item),
   );
@@ -527,9 +537,13 @@ export function StockDesk() {
     if (scroller) scroller.scrollTop = 0;
   });
 
-  const hits = searchNames(query, rules).filter(
-    (hit) => !hidden.has(hit.name) || hit.name === picked,
-  );
+  const hits = searchNames(query, rules).filter((hit) => {
+    if (hit.name === picked) return true;
+    const sections = rules
+      .filter((rule) => rule.name === hit.name)
+      .map((rule) => rule.sectionId);
+    return !isHiddenProduct(hit.name, sections);
+  });
   // Picked details stay open with an empty search box (choose no longer fills the query).
   const pickedName =
     picked && rulesForName(picked, rules).length > 0

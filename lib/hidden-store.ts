@@ -1,51 +1,57 @@
-import { canonicalProductName, migrateProductNames } from "./chart-name-migrate";
+import {
+  addHiddenEntry,
+  formatHiddenLabel,
+  hiddenEntryKey,
+  hiddenNamesFromEntries,
+  isProductHidden,
+  isSectionHidden,
+  parseHiddenEntries,
+  removeHiddenByKey,
+  removeHiddenEntry,
+  serializeHiddenEntries,
+  type HiddenEntry,
+} from "./hidden-entries";
+import type { SectionId } from "./types";
 
 const STORAGE_KEY = "shelf-life-hidden-names";
 const listeners = new Set<() => void>();
 /** Stable empty list for useSyncExternalStore getServerSnapshot. */
 export const EMPTY_HIDDEN_NAMES: string[] = [];
+export const EMPTY_HIDDEN_ENTRIES: HiddenEntry[] = [];
 
-function readNames(): string[] {
+function readEntries(): HiddenEntry[] {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    const before = parsed
-      .filter((item): item is string => typeof item === "string")
-      .map((item) => item.trim())
-      .filter((item) => item !== "")
-      .sort((a, b) => a.localeCompare(b));
-    const migrated = migrateProductNames(before);
-    if (
-      before.length !== migrated.length ||
-      before.some((item, index) => item !== migrated[index])
-    ) {
-      try {
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
-      } catch {
-        // Ignore quota / private mode.
-      }
+    const parsed = parseHiddenEntries(JSON.parse(raw) as unknown);
+    // Persist migrated shape (Bacon (FROZEN) → Bacon + frozen, etc.).
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeHiddenEntries(parsed)));
+    } catch {
+      // Ignore quota / private mode.
     }
-    return migrated;
+    return parsed;
   } catch {
     return [];
   }
 }
 
-function writeNames(names: string[]) {
+function writeEntries(entries: HiddenEntry[]) {
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(names));
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify(serializeHiddenEntries(entries)),
+    );
   } catch {
     // Ignore quota / private mode.
   }
   for (const listener of listeners) listener();
 }
 
-let cached: string[] | null = null;
+let cached: HiddenEntry[] | null = null;
 
-function names(): string[] {
-  if (cached == null) cached = readNames();
+function entries(): HiddenEntry[] {
+  if (cached == null) cached = readEntries();
   return cached;
 }
 
@@ -54,8 +60,17 @@ export function subscribeHidden(listener: () => void) {
   return () => listeners.delete(listener);
 }
 
+export function getHiddenEntries(): HiddenEntry[] {
+  return entries();
+}
+
+export function getHiddenEntriesServer(): HiddenEntry[] {
+  return EMPTY_HIDDEN_ENTRIES;
+}
+
+/** Product names that have at least one hidden storage (for counts / legacy callers). */
 export function getHiddenNames(): string[] {
-  return names();
+  return hiddenNamesFromEntries(entries());
 }
 
 export function getHiddenNamesServer(): string[] {
@@ -63,37 +78,63 @@ export function getHiddenNamesServer(): string[] {
 }
 
 export function isNameHidden(name: string): boolean {
-  return names().includes(canonicalProductName(name));
+  return getHiddenNames().includes(name.trim()) || isProductHidden(entries(), name, []);
 }
 
+export function isHiddenSection(name: string, section: SectionId): boolean {
+  return isSectionHidden(entries(), name, section);
+}
+
+export function isHiddenProduct(name: string, sections: Iterable<SectionId>): boolean {
+  return isProductHidden(entries(), name, sections);
+}
+
+/** Hide every storage for this product. */
 export function hideProductName(name: string) {
-  const trimmed = canonicalProductName(name);
-  if (!trimmed) return;
-  const next = names();
-  if (next.includes(trimmed)) return;
-  cached = [...next, trimmed].sort((a, b) => a.localeCompare(b));
-  writeNames(cached);
+  const next = addHiddenEntry(entries(), name, null);
+  cached = next;
+  writeEntries(cached);
+}
+
+/** Hide one storage for a multi-storage product. */
+export function hideProductSection(name: string, section: SectionId) {
+  const next = addHiddenEntry(entries(), name, section);
+  cached = next;
+  writeEntries(cached);
 }
 
 export function unhideProductName(name: string) {
-  const trimmed = canonicalProductName(name);
-  cached = names().filter((item) => item !== trimmed);
-  writeNames(cached);
+  cached = removeHiddenEntry(entries(), name);
+  writeEntries(cached);
+}
+
+export function unhideProductSection(name: string, section: SectionId | null) {
+  cached = removeHiddenEntry(entries(), name, section);
+  writeEntries(cached);
+}
+
+export function unhideByKey(key: string) {
+  cached = removeHiddenByKey(entries(), key);
+  writeEntries(cached);
 }
 
 export function clearHiddenNames() {
   cached = [];
-  writeNames(cached);
+  writeEntries(cached);
 }
 
-export function replaceHiddenNames(next: string[]) {
-  const cleaned = migrateProductNames(
-    next.filter((item) => typeof item === "string").map((item) => item.trim()),
-  );
-  const current = names();
-  if (current.length === cleaned.length && current.every((item, index) => item === cleaned[index])) {
+export function replaceHiddenNames(next: unknown) {
+  const cleaned = parseHiddenEntries(next);
+  const current = entries();
+  if (
+    current.length === cleaned.length &&
+    current.every((item, index) => hiddenEntryKey(item) === hiddenEntryKey(cleaned[index]!))
+  ) {
     return;
   }
   cached = cleaned;
-  writeNames(cached);
+  writeEntries(cached);
 }
+
+export { formatHiddenLabel, hiddenEntryKey };
+export type { HiddenEntry };

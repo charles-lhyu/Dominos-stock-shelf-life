@@ -1,4 +1,9 @@
-import { migrateProductNames } from "./chart-name-migrate";
+import {
+  formatHiddenLabel,
+  hiddenEntryKey,
+  parseHiddenEntries,
+  type HiddenEntry,
+} from "./hidden-entries";
 import {
   DEFAULT_ITEM_PRESET,
   normalizeItemPreset,
@@ -10,7 +15,7 @@ import type { ChartPack, ShelfRule } from "./types";
 
 /** Hidden items, item-type preset, and date display for one store on one campaign. */
 export type StoreCampaignSettings = {
-  hidden: string[];
+  hidden: HiddenEntry[];
   preset: ItemPreset;
   /** Short DD/MM/YY dates instead of the long form. */
   compactDates?: boolean;
@@ -96,15 +101,11 @@ export function stripPackImages(pack: ChartPack): ChartPack {
   };
 }
 
-function hiddenNames(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return migrateProductNames(
-    value.filter((item): item is string => typeof item === "string").map((item) => item.trim()),
+function sameHidden(a: HiddenEntry[], b: HiddenEntry[]): boolean {
+  return (
+    a.length === b.length &&
+    a.every((item, index) => hiddenEntryKey(item) === hiddenEntryKey(b[index]!))
   );
-}
-
-function sameHidden(a: string[], b: string[]): boolean {
-  return a.length === b.length && a.every((item, index) => item === b[index]);
 }
 
 function parsePack(value: unknown): ChartPack | null {
@@ -144,7 +145,7 @@ function dateDisplayFlags(value: {
 function parseSettings(value: unknown): StoreCampaignSettings | null {
   if (!isRecord(value)) return null;
   return {
-    hidden: hiddenNames(value.hidden),
+    hidden: parseHiddenEntries(value.hidden),
     preset: normalizeItemPreset(value.preset),
     ...dateDisplayFlags(value),
   };
@@ -255,7 +256,7 @@ export function writeStoreSettings(
   const key = campaignKey(issued, validUntil);
   if (!storeId || !key) return library;
   const nextSettings: StoreCampaignSettings = {
-    hidden: hiddenNames(settings.hidden),
+    hidden: parseHiddenEntries(settings.hidden),
     preset: normalizeItemPreset(settings.preset),
     ...dateDisplayFlags(settings),
   };
@@ -285,11 +286,15 @@ export function writeStoreSettings(
 
 export function dropStoredHidden(
   settings: StoreCampaignSettings,
-  name: string,
+  nameOrKey: string,
 ): StoreCampaignSettings {
-  const trimmed = name.trim();
-  if (!trimmed || !settings.hidden.includes(trimmed)) return settings;
-  return { ...settings, hidden: settings.hidden.filter((item) => item !== trimmed) };
+  const trimmed = nameOrKey.trim();
+  if (!trimmed) return settings;
+  const next = settings.hidden.filter(
+    (item) => item.name !== trimmed && hiddenEntryKey(item) !== trimmed,
+  );
+  if (next.length === settings.hidden.length) return settings;
+  return { ...settings, hidden: next };
 }
 
 export function dropStoredDefault(
@@ -440,15 +445,21 @@ export function listStoreSettingChanges(
       to: target.compactDates ? "Short" : "Full",
     });
   }
-  const hidden = new Set([...current.hidden, ...target.hidden]);
-  for (const name of [...hidden].sort((a, b) => a.localeCompare(b))) {
-    const onScreen = current.hidden.includes(name);
-    const onSaved = target.hidden.includes(name);
+  const hiddenKeys = new Set([
+    ...current.hidden.map(hiddenEntryKey),
+    ...target.hidden.map(hiddenEntryKey),
+  ]);
+  const currentHidden = new Map(current.hidden.map((item) => [hiddenEntryKey(item), item]));
+  const savedHidden = new Map(target.hidden.map((item) => [hiddenEntryKey(item), item]));
+  for (const key of [...hiddenKeys].sort((a, b) => a.localeCompare(b))) {
+    const onScreen = currentHidden.has(key);
+    const onSaved = savedHidden.has(key);
     if (onScreen === onSaved) continue;
+    const entry = currentHidden.get(key) ?? savedHidden.get(key)!;
     changes.push({
-      id: `hidden:${name}`,
+      id: `hidden:${key}`,
       group: "Hidden",
-      label: name,
+      label: formatHiddenLabel(entry),
       from: onScreen ? "Hidden" : "Shown",
       to: onSaved ? "Hidden" : "Shown",
     });
@@ -480,11 +491,15 @@ export function applyAcceptedStoreChanges(
 ): StoreCampaignSettings {
   const target = saved ?? EMPTY_SETTINGS;
   const accepted = new Set(acceptedIds);
-  const hidden = new Set(current.hidden);
-  for (const name of new Set([...current.hidden, ...target.hidden])) {
-    if (!accepted.has(`hidden:${name}`)) continue;
-    if (target.hidden.includes(name)) hidden.add(name);
-    else hidden.delete(name);
+  const hidden = new Map(current.hidden.map((item) => [hiddenEntryKey(item), item]));
+  for (const entry of [...current.hidden, ...target.hidden]) {
+    const key = hiddenEntryKey(entry);
+    if (!accepted.has(`hidden:${key}`)) continue;
+    if (target.hidden.some((item) => hiddenEntryKey(item) === key)) {
+      hidden.set(key, entry);
+    } else {
+      hidden.delete(key);
+    }
   }
   const defaults = { ...current.preset.defaults };
   for (const name of new Set([
@@ -497,7 +512,7 @@ export function applyAcceptedStoreChanges(
     else delete defaults[name];
   }
   return {
-    hidden: [...hidden].sort((a, b) => a.localeCompare(b)),
+    hidden: parseHiddenEntries([...hidden.values()]),
     preset: { ...current.preset, defaults },
     compactDates: accepted.has("dates:compact")
       ? target.compactDates === true
@@ -514,7 +529,7 @@ export type StoreCampaignView = {
   issued: string;
   validUntil: string;
   title: string;
-  hidden: string[];
+  hidden: HiddenEntry[];
   preset: ItemPreset;
   compactDates: boolean;
   showDayCounts: boolean;

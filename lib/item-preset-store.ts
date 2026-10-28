@@ -2,6 +2,11 @@ import {
   canonicalProductName,
   migrateProductDefaultEntries,
 } from "./chart-name-migrate";
+import {
+  isProductHidden,
+  parseHiddenEntries,
+  type HiddenEntry,
+} from "./hidden-entries";
 import type { LifeKind } from "./preview";
 import type { SectionId, ShelfRule } from "./types";
 
@@ -70,11 +75,9 @@ function normalizeDefaults(value: unknown): Record<string, ProductDefault> {
 export function retainProductDefaults(
   defaults: Record<string, ProductDefault>,
   rules: ShelfRule[],
-  hidden: Iterable<string>,
+  hidden: Iterable<string | HiddenEntry>,
 ): Record<string, ProductDefault> {
-  const hiddenNames = new Set(
-    [...hidden].map((name) => name.trim()).filter((name) => name !== ""),
-  );
+  const hiddenEntries = parseHiddenEntries([...hidden]);
   const sectionsByName = new Map<string, Set<SectionId>>();
   for (const rule of rules) {
     const name = rule.name.trim();
@@ -86,10 +89,22 @@ export function retainProductDefaults(
   const kept: Record<string, ProductDefault> = {};
   for (const [name, value] of Object.entries(migrateProductDefaultEntries(defaults))) {
     const trimmed = name.trim();
-    if (!trimmed || hiddenNames.has(trimmed)) continue;
+    if (!trimmed) continue;
     const sections = sectionsByName.get(trimmed);
     if (!sections || sections.size < 2) continue;
+    if (isProductHidden(hiddenEntries, trimmed, sections)) continue;
     if (!value.section || !sections.has(value.section)) continue;
+    // A storage-specific hide drops only that storage default.
+    if (
+      value.section &&
+      hiddenEntries.some(
+        (entry) =>
+          entry.name === trimmed &&
+          (entry.section == null || entry.section === value.section),
+      )
+    ) {
+      continue;
+    }
     kept[trimmed] = { section: value.section, life: null };
   }
   return kept;
