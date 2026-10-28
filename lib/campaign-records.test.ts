@@ -11,6 +11,7 @@ import {
   setStoredDefault,
   listCampaignSummaries,
   listDeviceStored,
+  listDeviceStoreSettings,
   listStoreCampaigns,
   listStoreSettingChanges,
   applyAcceptedStoreChanges,
@@ -21,6 +22,7 @@ import {
   upsertCampaign,
   writeStoreName,
   writeStoreSettings,
+  writeStoreSettingsRecord,
 } from "./campaign-records";
 import type { ItemPreset } from "./item-preset-store";
 import type { ChartPack } from "./types";
@@ -207,6 +209,51 @@ describe("campaign library records", () => {
     assert.deepEqual(
       rows.map((row) => `${row.storeId}:${row.hidden[0]?.name}`),
       ["99:Ham", "12345:Bacon"],
+    );
+  });
+
+  it("lists store settings cards for every store on the device", () => {
+    let library = writeStoreSettingsRecord(emptyCampaignLibrary(), "42", {
+      name: "City",
+      compactDates: true,
+      showDayCounts: false,
+      compactList: true,
+    });
+    library = writeStoreSettings(library, "99", "2026-10-01", "2026-12-01", {
+      hidden: parseHiddenEntries(["Ham"]),
+      preset,
+      compactDates: false,
+      showDayCounts: true,
+      compactList: false,
+    });
+    const rows = listDeviceStoreSettings(library);
+    assert.deepEqual(
+      rows.map((row) => ({
+        storeId: row.storeId,
+        name: row.name,
+        compactDates: row.compactDates,
+        showDayCounts: row.showDayCounts,
+        compactList: row.compactList,
+        campaignCount: row.campaignCount,
+      })),
+      [
+        {
+          storeId: "42",
+          name: "City",
+          compactDates: true,
+          showDayCounts: false,
+          compactList: true,
+          campaignCount: 0,
+        },
+        {
+          storeId: "99",
+          name: "",
+          compactDates: false,
+          showDayCounts: true,
+          compactList: false,
+          campaignCount: 1,
+        },
+      ],
     );
   });
 

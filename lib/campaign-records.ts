@@ -822,6 +822,31 @@ export function listDeviceStored(library: CampaignLibrary): DeviceStoredRecord[]
     );
 }
 
+/** One store's display settings for the All stored list. */
+export type DeviceStoreSettingsView = StoreSettings & {
+  storeId: string;
+  campaignCount: number;
+};
+
+/** Every store record on this device, with settings and campaign count. */
+export function listDeviceStoreSettings(
+  library: CampaignLibrary,
+): DeviceStoreSettingsView[] {
+  return Object.keys(library.stores)
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+    .map((storeId) => {
+      const store = library.stores[storeId]!;
+      return {
+        storeId,
+        name: store.settings.name,
+        compactDates: store.settings.compactDates,
+        showDayCounts: store.settings.showDayCounts,
+        compactList: store.settings.compactList,
+        campaignCount: Object.keys(store.campaigns).length,
+      };
+    });
+}
+
 export function listCampaignSummaries(library: CampaignLibrary): CampaignSummary[] {
   return [...library.campaigns]
     .sort((a, b) => {

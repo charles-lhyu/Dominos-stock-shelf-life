@@ -3,6 +3,7 @@ import {
   emptyCampaignLibrary,
   listCampaignSummaries,
   listDeviceStored,
+  listDeviceStoreSettings,
   listStoreCampaigns,
   dropAllStoredDefaults,
   dropAllStoredHidden,
@@ -18,6 +19,7 @@ import {
   type CampaignLibrary,
   type CampaignSummary,
   type DeviceStoredRecord,
+  type DeviceStoreSettingsView,
   type StoreCampaignSettings,
   type StoreCampaignView,
 } from "./campaign-records";
@@ -56,8 +58,10 @@ const STORAGE_KEY = "campaign-library-v1";
 const EMPTY_CAMPAIGNS: CampaignSummary[] = [];
 const EMPTY_STORED: StoreCampaignView[] = [];
 const EMPTY_DEVICE: DeviceStoredRecord[] = [];
+const EMPTY_STORE_SETTINGS: DeviceStoreSettingsView[] = [];
 const EMPTY_STORE_NAMES: Record<string, string> = {};
 let storeNameSnapshot: Record<string, string> = EMPTY_STORE_NAMES;
+let storeSettingsSnapshot: DeviceStoreSettingsView[] = EMPTY_STORE_SETTINGS;
 
 let library: CampaignLibrary = emptyCampaignLibrary();
 let snapshot: CampaignSummary[] = EMPTY_CAMPAIGNS;
@@ -76,6 +80,9 @@ function refreshSnapshot() {
   snapshot = next.length === 0 ? EMPTY_CAMPAIGNS : next;
   const device = listDeviceStored(library);
   deviceSnapshot = device.length === 0 ? EMPTY_DEVICE : device;
+  const storeSettings = listDeviceStoreSettings(library);
+  storeSettingsSnapshot =
+    storeSettings.length === 0 ? EMPTY_STORE_SETTINGS : storeSettings;
   storedCache = new Map();
   const names: Record<string, string> = {};
   for (const [storeId, store] of Object.entries(library.stores)) {
@@ -176,6 +183,14 @@ export function listStoredOnDevice(): DeviceStoredRecord[] {
 
 export function listStoredOnDeviceServer(): DeviceStoredRecord[] {
   return EMPTY_DEVICE;
+}
+
+export function listStoreSettingsOnDevice(): DeviceStoreSettingsView[] {
+  return storeSettingsSnapshot;
+}
+
+export function listStoreSettingsOnDeviceServer(): DeviceStoreSettingsView[] {
+  return EMPTY_STORE_SETTINGS;
 }
 
 export function listStoreNames(): Record<string, string> {

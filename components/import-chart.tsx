@@ -62,6 +62,8 @@ import {
   listStoredOnDeviceServer,
   listStoreNames,
   listStoreNamesServer,
+  listStoreSettingsOnDevice,
+  listStoreSettingsOnDeviceServer,
   readSavedCampaignSettings,
   reloadCampaign,
   replaceCampaignLibrary,
@@ -440,6 +442,14 @@ export function ImportChartButton({
     },
     listStoredOnDeviceServer,
   );
+  const deviceStoreSettings = useSyncExternalStore(
+    subscribeCampaignLibrary,
+    () => {
+      hydrateCampaignLibrary();
+      return listStoreSettingsOnDevice();
+    },
+    listStoreSettingsOnDeviceServer,
+  );
   const storeNames = useSyncExternalStore(
     subscribeCampaignLibrary,
     () => {
@@ -786,7 +796,12 @@ export function ImportChartButton({
   const settingsSelectLabels = Object.fromEntries(
     settingsNav.map((item) => [item.id, item.label]),
   );
-  const storedStoreIds = [...new Set(deviceStored.map((item) => item.storeId))];
+  const storedStoreIds = [
+    ...new Set([
+      ...deviceStoreSettings.map((item) => item.storeId),
+      ...deviceStored.map((item) => item.storeId),
+    ]),
+  ].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
   const storeQuery = storeDraft.trim().replace(/\s+/g, "");
   const menuStoreIds =
     storeMenuAll || !storeQuery
@@ -2345,67 +2360,68 @@ export function ImportChartButton({
                 </button>
               </div>
               <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-3">
-                {storedStoreIds.length === 0 ? (
+                {deviceStoreSettings.length === 0 ? (
                   <p className="text-sm text-stone-500">
                     Nothing is saved on this device yet. Import a backup to load stores
                     and campaign presets.
                   </p>
                 ) : (
-                  storedStoreIds.map((id) => {
-                    const label = nameFor(id);
-                    const active = (previewStoreId ?? storeId) === id;
-                    const rows = deviceStored.filter((item) => item.storeId === id);
-                    const sample = rows[0];
-                    const datesLabel = sample?.showDayCounts
+                  deviceStoreSettings.map((store) => {
+                    const label = nameFor(store.storeId) || store.name;
+                    const active = (previewStoreId ?? storeId) === store.storeId;
+                    const datesLabel = store.showDayCounts
                       ? "Days and hours"
-                      : sample?.compactDates
+                      : store.compactDates
                         ? "Short"
                         : "Full";
-                    const listLabel = sample?.compactList ? "Compact" : "With tags";
-                    const campaignCount = rows.length;
+                    const listLabel = store.compactList ? "Compact" : "With tags";
                     return (
                       <button
-                        key={id}
+                        key={store.storeId}
                         type="button"
                         onClick={() => {
-                          setStoreDraft(id);
+                          setStoreDraft(store.storeId);
                           setStoreMenuOpen(false);
                           setStoreMenuAll(false);
                           setAllStoredOpen(false);
                         }}
                         className={cn(
-                          "w-full rounded-xl border px-3 py-2.5 text-left transition-colors",
+                          "w-full space-y-2 rounded-xl border px-3 py-2.5 text-left transition-colors",
                           active
                             ? "border-sky-400/40 bg-sky-500/10"
                             : "border-white/10 bg-black/20 hover:bg-white/[0.06]",
                         )}
                       >
-                        <div className="flex items-start justify-between gap-3">
-                          <span className="min-w-0 truncate text-sm font-medium text-white">
-                            {label || "Unnamed store"}
-                          </span>
-                          <span className="shrink-0 font-mono text-sm text-stone-300">
-                            {id}
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-[0.65rem] font-semibold uppercase tracking-wider text-stone-500">
+                            Store settings
+                          </p>
+                          <span className="shrink-0 font-mono text-xs text-stone-300">
+                            {store.storeId}
                           </span>
                         </div>
-                        <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5">
-                          <div className="min-w-0">
-                            <p className="text-[0.65rem] font-semibold uppercase tracking-wider text-stone-500">
-                              Dates
-                            </p>
-                            <p className="truncate text-xs text-stone-200">{datesLabel}</p>
+                        <div className="space-y-0.5">
+                          <p className="text-xs text-stone-500">Name</p>
+                          <p className="truncate text-sm text-stone-200">
+                            {label || "Not set"}
+                          </p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-0.5">
+                            <p className="text-xs text-stone-500">Dates</p>
+                            <p className="text-sm text-stone-200">{datesLabel}</p>
                           </div>
-                          <div className="min-w-0">
-                            <p className="text-[0.65rem] font-semibold uppercase tracking-wider text-stone-500">
-                              List
-                            </p>
-                            <p className="truncate text-xs text-stone-200">{listLabel}</p>
+                          <div className="space-y-0.5">
+                            <p className="text-xs text-stone-500">List</p>
+                            <p className="text-sm text-stone-200">{listLabel}</p>
                           </div>
                         </div>
-                        <p className="mt-2 text-[0.7rem] text-stone-500">
-                          {campaignCount === 1
-                            ? "1 campaign preset"
-                            : `${campaignCount} campaign presets`}
+                        <p className="text-[0.7rem] text-stone-500">
+                          {store.campaignCount === 0
+                            ? "No campaign presets"
+                            : store.campaignCount === 1
+                              ? "1 campaign preset"
+                              : `${store.campaignCount} campaign presets`}
                         </p>
                       </button>
                     );
