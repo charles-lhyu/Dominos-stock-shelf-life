@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.4.49",
+    "notes": [
+      "Item details put the category above the name",
+      "Storage and life tags on the card cycle with a dropdown marker when there are options"
+    ]
+  },
+  {
     "version": "1.4.48",
     "notes": [
       "Opening an item no longer fills the search bar"

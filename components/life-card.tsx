@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { Bug, EyeOff, Minus, Plus, X } from "lucide-react";
+import { Bug, ChevronDown, EyeOff, Minus, Plus, X } from "lucide-react";
 import { DateField, TimeField } from "@/components/date-field";
 import {
   Dialog,
@@ -18,16 +18,32 @@ import { hideProductName } from "@/lib/hidden-store";
 import { getPdfCropImage, getSourcePdf, putPdfCropImage } from "@/lib/pdf-crop-images";
 import { cropOneProductRowImage } from "@/lib/pdf-chart";
 import { capAdvice, clocksFor, projectClock, type Clock, type ClockResult } from "@/lib/life";
-import { isPrintedPackDate, LIFE_KIND_META, prepClockTime, type LifeKind } from "@/lib/preview";
-import type { ChartPack, ShelfRule, StockStatus } from "@/lib/types";
+import {
+  isPrintedPackDate,
+  LIFE_KIND_META,
+  prepClockTime,
+  type ItemVariant,
+  type LifeKind,
+} from "@/lib/preview";
+import type { ChartPack, SectionId, ShelfRule, StockStatus } from "@/lib/types";
 import { cn } from "cn";
 
-const SECTION_TONE: Record<ShelfRule["sectionId"], string> = {
-  frozen: "bg-sky-500/20 text-sky-200",
-  chilled: "bg-teal-500/20 text-teal-200",
-  ready: "bg-amber-500/20 text-amber-200",
-  ambient: "bg-orange-500/20 text-orange-200",
-  pack: "bg-stone-500/25 text-stone-200",
+const SECTION_ACTIVE: Record<SectionId, string> = {
+  frozen:
+    "bg-sky-400 text-sky-950 ring-sky-300 dark:bg-sky-400 dark:text-sky-950",
+  chilled:
+    "bg-teal-400 text-teal-950 ring-teal-300 dark:bg-teal-400 dark:text-teal-950",
+  ready:
+    "bg-amber-400 text-amber-950 ring-amber-300 dark:bg-amber-400 dark:text-amber-950",
+  ambient:
+    "bg-orange-400 text-orange-950 ring-orange-300 dark:bg-orange-400 dark:text-orange-950",
+  pack: "bg-stone-300 text-stone-950 ring-stone-200 dark:bg-stone-300 dark:text-stone-950",
+};
+
+const LIFE_ACTIVE: Record<LifeKind, string> = {
+  stock: "bg-violet-300 text-violet-950 ring-violet-200",
+  prepped: "bg-fuchsia-300 text-fuchsia-950 ring-fuchsia-200",
+  ambient: "bg-rose-300 text-rose-950 ring-rose-200",
 };
 
 function toneClass(tone: StockStatus) {
@@ -93,6 +109,10 @@ export function LifeCard({
   deliveryDate = "",
   prepTime = "",
   focusKind = null,
+  variants = [],
+  kinds = [],
+  onPreferredSection,
+  onPreferredLife,
   onHidden,
 }: {
   rule: ShelfRule;
@@ -100,6 +120,12 @@ export function LifeCard({
   deliveryDate?: string;
   prepTime?: string;
   focusKind?: LifeKind | null;
+  /** Storage options for this product (cycle in the card header). */
+  variants?: ItemVariant[];
+  /** Life kinds for this product (cycle in the card header). */
+  kinds?: LifeKind[];
+  onPreferredSection?: (section: SectionId) => void;
+  onPreferredLife?: (life: LifeKind) => void;
   /** Called after the product is hidden from the list. */
   onHidden?: () => void;
 }) {
@@ -242,19 +268,74 @@ export function LifeCard({
     );
   }
 
+  const storageOptions = variants.length > 0 ? variants : null;
+  const lifeOptions = kinds.length > 0 ? kinds : focusKind ? [focusKind] : [];
+  const activeLife = focusKind && lifeOptions.includes(focusKind) ? focusKind : lifeOptions[0] ?? null;
+
+  function cycleStorage() {
+    if (!storageOptions || storageOptions.length <= 1 || !onPreferredSection) return;
+    const index = storageOptions.findIndex((item) => item.sectionId === rule.sectionId);
+    const next = storageOptions[(index + 1) % storageOptions.length]!;
+    onPreferredSection(next.sectionId);
+  }
+
+  function cycleLife() {
+    if (!activeLife || lifeOptions.length <= 1 || !onPreferredLife) return;
+    const index = lifeOptions.indexOf(activeLife);
+    const next = lifeOptions[(index + 1) % lifeOptions.length]!;
+    onPreferredLife(next);
+  }
+
   return (
     <article className="ticket-in max-w-full min-w-0 overflow-hidden rounded-2xl bg-card shadow-[6px_6px_0_0_rgba(0,0,0,0.35)] ring-1 ring-white/10">
       <div className="flex flex-wrap items-center gap-2 px-4 pt-4">
-        <span className={cn("rounded-full px-2.5 py-1 text-xs font-semibold uppercase tracking-wide", SECTION_TONE[rule.sectionId])}>
-          {section.short}
-        </span>
-        <span className="text-xs font-semibold uppercase tracking-wide text-stone-400">
-          {rule.category}
-        </span>
-        {focusKind ? (
-          <span className="rounded-full bg-violet-500/20 px-2.5 py-1 text-xs font-semibold tracking-wide text-violet-100">
-            {LIFE_KIND_META[focusKind].tag}
+        {storageOptions && storageOptions.length > 1 && onPreferredSection ? (
+          <button
+            type="button"
+            aria-label={`Storage: ${section.short}. Tap to cycle.`}
+            onClick={cycleStorage}
+            className={cn(
+              "inline-flex items-center gap-0.5 rounded-md px-2 py-1 text-xs font-semibold uppercase tracking-wide ring-1",
+              SECTION_ACTIVE[rule.sectionId],
+            )}
+          >
+            {section.short}
+            <ChevronDown className="size-3.5 opacity-80" aria-hidden />
+          </button>
+        ) : (
+          <span
+            className={cn(
+              "rounded-md px-2 py-1 text-xs font-semibold uppercase tracking-wide ring-1",
+              SECTION_ACTIVE[rule.sectionId],
+            )}
+          >
+            {section.short}
           </span>
+        )}
+        {activeLife ? (
+          lifeOptions.length > 1 && onPreferredLife ? (
+            <button
+              type="button"
+              aria-label={`Life: ${LIFE_KIND_META[activeLife].tag}. Tap to cycle.`}
+              onClick={cycleLife}
+              className={cn(
+                "inline-flex items-center gap-0.5 rounded-md px-2 py-1 text-xs font-semibold tracking-wide ring-1",
+                LIFE_ACTIVE[activeLife],
+              )}
+            >
+              {LIFE_KIND_META[activeLife].tag}
+              <ChevronDown className="size-3.5 opacity-80" aria-hidden />
+            </button>
+          ) : (
+            <span
+              className={cn(
+                "rounded-md px-2 py-1 text-xs font-semibold tracking-wide ring-1",
+                LIFE_ACTIVE[activeLife],
+              )}
+            >
+              {LIFE_KIND_META[activeLife].tag}
+            </span>
+          )
         ) : null}
         <div className="ml-auto flex shrink-0 items-center gap-1.5">
           <button
@@ -287,7 +368,10 @@ export function LifeCard({
         </div>
       </div>
       <div className="min-w-0 px-4 pt-3 pb-5">
-        <h2 className="font-display text-3xl leading-tight text-white">{rule.name}</h2>
+        <p className="text-xs font-semibold uppercase tracking-wide text-stone-400">
+          {rule.category}
+        </p>
+        <h2 className="mt-1 font-display text-3xl leading-tight text-white">{rule.name}</h2>
         {debugOn && debugOpen ? <ItemDebugPanel rule={rule} clocks={clocks} /> : null}
         {rule.sameAs.length > 0 ? (
           <p className="mt-2 text-sm text-stone-400">
