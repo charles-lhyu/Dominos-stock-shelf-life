@@ -240,6 +240,49 @@ describe("campaign library records", () => {
     assert.deepEqual(listStoreCampaigns(library, ""), []);
   });
 
+  it("shows a default only when the product has another storage option and is not hidden", () => {
+    const chart = pack("2026-09-07", "2026-11-17");
+    chart.rules = [
+      { ...chart.rules[0]!, sectionId: "frozen" },
+      { ...chart.rules[0]!, id: "pepperoni-chilled", sectionId: "chilled" },
+      {
+        id: "dough",
+        sectionId: "frozen",
+        category: "Dough",
+        name: "Dough",
+        aliases: [],
+        sameAs: [],
+      },
+    ];
+    let library = upsertCampaign(emptyCampaignLibrary(), chart, "a.pdf", "t1");
+    library = writeStoreSettings(library, "12345", "2026-09-07", "2026-11-17", {
+      hidden: ["Pepperoni"],
+      preset: {
+        ...preset,
+        defaults: {
+          Pepperoni: { section: "chilled", life: "stock" },
+          Dough: { section: "frozen", life: "stock" },
+        },
+      },
+    });
+    assert.deepEqual(listStoreCampaigns(library, "12345")[0]?.preset.defaults, {});
+
+    library = writeStoreSettings(library, "12345", "2026-09-07", "2026-11-17", {
+      hidden: [],
+      preset: {
+        ...preset,
+        defaults: {
+          Pepperoni: { section: "chilled", life: "stock" },
+          Dough: { section: "frozen", life: "stock" },
+        },
+      },
+    });
+    const shown = listStoreCampaigns(library, "12345")[0]?.preset.defaults;
+    assert.equal(shown?.Pepperoni?.section, "chilled");
+    assert.equal(shown?.Pepperoni?.life, "stock");
+    assert.equal(shown?.Dough, undefined);
+  });
+
   it("keeps a product default such as pepperoni chilled from delivery", () => {
     const library = writeStoreSettings(emptyCampaignLibrary(), "12345", "2026-09-07", "2026-11-17", {
       hidden: [],

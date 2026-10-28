@@ -1,5 +1,5 @@
 import type { LifeKind } from "./preview";
-import type { SectionId } from "./types";
+import type { SectionId, ShelfRule } from "./types";
 
 const STORAGE_KEY = "shelf-life-item-preset-v1";
 const LAST_SECTION_KEY = "shelf-life-last-section";
@@ -54,6 +54,37 @@ function normalizeDefaults(value: unknown): Record<string, ProductDefault> {
     defaults[trimmed] = { section, life };
   }
   return defaults;
+}
+
+/**
+ * A stored default is only useful when the product has more than one storage
+ * row to choose from. Hidden products are off the list, so they keep none.
+ */
+export function retainProductDefaults(
+  defaults: Record<string, ProductDefault>,
+  rules: ShelfRule[],
+  hidden: Iterable<string>,
+): Record<string, ProductDefault> {
+  const hiddenNames = new Set(
+    [...hidden].map((name) => name.trim()).filter((name) => name !== ""),
+  );
+  const sectionsByName = new Map<string, Set<SectionId>>();
+  for (const rule of rules) {
+    const name = rule.name.trim();
+    if (!name) continue;
+    const sections = sectionsByName.get(name) ?? new Set<SectionId>();
+    sections.add(rule.sectionId);
+    sectionsByName.set(name, sections);
+  }
+  const kept: Record<string, ProductDefault> = {};
+  for (const [name, value] of Object.entries(defaults)) {
+    const trimmed = name.trim();
+    if (!trimmed || hiddenNames.has(trimmed)) continue;
+    const sections = sectionsByName.get(trimmed);
+    if (!sections || sections.size < 2) continue;
+    kept[trimmed] = value;
+  }
+  return kept;
 }
 
 function sameDefaults(

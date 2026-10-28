@@ -29,10 +29,12 @@ import {
   getItemPreset,
   replaceItemPreset,
   resetItemPreset,
+  retainProductDefaults,
   subscribeItemPreset,
+  type ItemPreset,
 } from "./item-preset-store";
 import { getStoreId, hydrateStoreIdStore, subscribeStoreId } from "./store-id-store";
-import type { ChartPack } from "./types";
+import type { ChartPack, ShelfRule } from "./types";
 
 const STORAGE_KEY = "campaign-library-v1";
 const EMPTY_CAMPAIGNS: CampaignSummary[] = [];
@@ -117,11 +119,47 @@ export function subscribeStoredStore(listener: () => void) {
   };
 }
 
-function currentSettings(): StoreCampaignSettings {
+function keptSettings(
+  settings: StoreCampaignSettings,
+  rules: ShelfRule[],
+): StoreCampaignSettings {
   return {
-    hidden: [...getHiddenNames()],
-    preset: { ...getItemPreset() },
+    hidden: settings.hidden,
+    preset: {
+      ...settings.preset,
+      defaults: retainProductDefaults(settings.preset.defaults, rules, settings.hidden),
+    },
   };
+}
+
+function currentSettings(): StoreCampaignSettings {
+  const desk = getDeskState();
+  return keptSettings(
+    {
+      hidden: [...getHiddenNames()],
+      preset: getItemPreset(),
+    },
+    desk.pack.rules,
+  );
+}
+
+/** Hidden products are not on the list, so a saved storage choice does not apply. */
+function forgetHiddenDefaults() {
+  if (applying) return;
+  const hidden = new Set(getHiddenNames());
+  if (hidden.size === 0) return;
+  const preset = getItemPreset();
+  let changed = false;
+  const defaults: ItemPreset["defaults"] = {};
+  for (const [name, value] of Object.entries(preset.defaults)) {
+    if (hidden.has(name)) {
+      changed = true;
+      continue;
+    }
+    defaults[name] = value;
+  }
+  if (!changed) return;
+  replaceItemPreset({ ...preset, defaults });
 }
 
 function saveCurrent(storeId: string) {
@@ -140,11 +178,12 @@ function autosave() {
   saveCurrent(storeId);
 }
 
-function applySettings(settings: StoreCampaignSettings) {
+function applySettings(settings: StoreCampaignSettings, rules: ShelfRule[]) {
+  const next = keptSettings(settings, rules);
   applying = true;
   try {
-    replaceHiddenNames(settings.hidden);
-    replaceItemPreset(settings.preset);
+    replaceHiddenNames(next.hidden);
+    replaceItemPreset(next.preset);
   } finally {
     applying = false;
   }
@@ -160,8 +199,9 @@ function handleImportedPack(pack: ChartPack, sourceUrl: string) {
   applying = true;
   try {
     if (saved) {
-      replaceHiddenNames(saved.hidden);
-      replaceItemPreset(saved.preset);
+      const next = keptSettings(saved, pack.rules);
+      replaceHiddenNames(next.hidden);
+      replaceItemPreset(next.preset);
     } else if (storeId && campaignKey(issued, validUntil)) {
       clearHiddenNames();
       resetItemPreset();
@@ -216,7 +256,7 @@ export function adoptStoreForCampaign(previousStoreId: string, nextStoreId: stri
     current: currentSettings(),
   });
   commitLibrary(planned.library);
-  if (planned.restore) applySettings(planned.restore);
+  if (planned.restore) applySettings(planned.restore, desk.pack.rules);
 }
 
 export function reloadCampaign(issued: string, validUntil: string) {
@@ -232,5 +272,8 @@ export function reloadCampaign(issued: string, validUntil: string) {
 
 onPackImported(handleImportedPack);
 onPackCleared(handlePackCleared);
-subscribeHidden(autosave);
+subscribeHidden(() => {
+  forgetHiddenDefaults();
+  autosave();
+});
 subscribeItemPreset(autosave);
