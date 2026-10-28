@@ -25,6 +25,7 @@ import {
   Type,
   Unlock,
   X,
+  ChevronDown,
 } from "lucide-react";
 import { ChangelogBrowser } from "@/components/changelog-notes";
 import { UpdateConfirmDialog } from "@/components/update-confirm";
@@ -196,6 +197,7 @@ export function ImportChartButton({
   const [scanning, setScanning] = useState(false);
   const [storeDraft, setStoreDraft] = useState("");
   const [storeIdError, setStoreIdError] = useState<string | null>(null);
+  const [storeMenuOpen, setStoreMenuOpen] = useState(false);
   const [storePrompt, setStorePrompt] = useState<{ next: string; hasSaved: boolean } | null>(
     null,
   );
@@ -215,6 +217,7 @@ export function ImportChartButton({
   const settingsNavRef = useRef<HTMLDivElement>(null);
   const settingsJumpLock = useRef(false);
   const settingsJumpTimer = useRef<number | null>(null);
+  const storeFieldRef = useRef<HTMLDivElement>(null);
   const debug = useSyncExternalStore(subscribeDebug, readDebug, () => false);
   const debugDays = useSyncExternalStore(
     subscribeDebug,
@@ -299,6 +302,7 @@ export function ImportChartButton({
     hydrateStoreIdStore();
     setStoreDraft(getStoreId());
     setStoreIdError(null);
+    setStoreMenuOpen(false);
     setStoredEditing(false);
     setActiveSettingsSection("settings-app");
     const raf = window.requestAnimationFrame(() => {
@@ -307,12 +311,24 @@ export function ImportChartButton({
     return () => window.cancelAnimationFrame(raf);
   }, [open]);
 
+  useEffect(() => {
+    if (!storeMenuOpen) return;
+    function onPointerDown(event: PointerEvent) {
+      const field = storeFieldRef.current;
+      if (!field || !(event.target instanceof Node) || field.contains(event.target)) return;
+      setStoreMenuOpen(false);
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [storeMenuOpen]);
+
   function handleOpenChange(next: boolean) {
     if (!next && storePromptRef.current) return;
     if (next) {
       hydrateStoreIdStore();
       setStoreDraft(getStoreId());
       setStoreIdError(null);
+      setStoreMenuOpen(false);
       setUrl(desk.sourceUrl);
       setConfirmReset(false);
       setChangelogOpen(false);
@@ -333,6 +349,7 @@ export function ImportChartButton({
       setStoreDraft(getStoreId());
       setStoredEditing(false);
       setOtherStoredOpen(false);
+      setStoreMenuOpen(false);
     }
     setOpen(next);
   }
@@ -360,6 +377,7 @@ export function ImportChartButton({
   }
 
   function commitStoreDraft() {
+    setStoreMenuOpen(false);
     const next = normalizeStoreId(storeDraft);
     if (next == null) {
       setStoreIdError("Store ID is numbers only, up to 8 digits.");
@@ -562,9 +580,6 @@ export function ImportChartButton({
   );
   const otherStored = deviceStored.filter((item) => item.storeId !== storeId);
   const storedStoreIds = [...new Set(deviceStored.map((item) => item.storeId))];
-  const draftStoreId = normalizeStoreId(storeDraft);
-  const loadedStoreId =
-    draftStoreId && storedStoreIds.includes(draftStoreId) ? draftStoreId : null;
   const selectedOther =
     otherStored.find((item) => deviceStoredKey(item) === otherStoredKey) ??
     otherStored[0] ??
@@ -913,29 +928,95 @@ export function ImportChartButton({
               <label htmlFor="store-id" className="text-sm font-medium text-stone-300">
                 Store ID
               </label>
-              <div className="flex gap-2">
-                <Input
-                  id="store-id"
-                  inputMode="numeric"
-                  autoComplete="off"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  maxLength={12}
-                  placeholder="12345"
-                  value={storeDraft}
-                  aria-invalid={storeIdError ? true : undefined}
-                  onChange={(event) => {
-                    setStoreDraft(event.target.value);
-                    if (storeIdError) setStoreIdError(null);
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      commitStoreDraft();
-                    }
-                  }}
-                  className="h-12 rounded-xl border-white/10 bg-black/30 text-base text-white placeholder:text-stone-500"
-                />
+              <div className={cn("flex gap-2", storeMenuOpen && "relative z-20")}>
+                <div ref={storeFieldRef} className="relative min-w-0 flex-1">
+                  <Input
+                    id="store-id"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    maxLength={12}
+                    placeholder="12345"
+                    value={storeDraft}
+                    aria-invalid={storeIdError ? true : undefined}
+                    aria-expanded={storedStoreIds.length > 0 ? storeMenuOpen : undefined}
+                    aria-controls={storeMenuOpen ? "store-id-list" : undefined}
+                    aria-autocomplete={storedStoreIds.length > 0 ? "list" : undefined}
+                    onChange={(event) => {
+                      setStoreDraft(event.target.value);
+                      if (storeIdError) setStoreIdError(null);
+                      if (storedStoreIds.length > 0) setStoreMenuOpen(true);
+                    }}
+                    onFocus={() => {
+                      if (storedStoreIds.length > 0) setStoreMenuOpen(true);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Escape" && storeMenuOpen) {
+                        event.preventDefault();
+                        setStoreMenuOpen(false);
+                        return;
+                      }
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        commitStoreDraft();
+                      }
+                    }}
+                    className={cn(
+                      "h-12 rounded-xl border-white/10 bg-black/30 text-base text-white placeholder:text-stone-500",
+                      storedStoreIds.length > 0 && "pr-11",
+                      storeMenuOpen && "rounded-b-none",
+                    )}
+                  />
+                  {storedStoreIds.length > 0 ? (
+                    <button
+                      type="button"
+                      aria-label="Show stored store IDs"
+                      aria-expanded={storeMenuOpen}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => setStoreMenuOpen((open) => !open)}
+                      className="absolute top-1/2 right-1.5 inline-flex size-9 -translate-y-1/2 items-center justify-center rounded-lg text-stone-300"
+                    >
+                      <ChevronDown
+                        className={cn("size-4 transition-transform", storeMenuOpen && "rotate-180")}
+                        aria-hidden
+                      />
+                    </button>
+                  ) : null}
+                  {storeMenuOpen && storedStoreIds.length > 0 ? (
+                    <ul
+                      id="store-id-list"
+                      role="listbox"
+                      aria-label="Stored store IDs"
+                      className="absolute top-full right-0 left-0 z-30 max-h-60 overflow-y-auto rounded-b-xl border border-t-0 border-white/10 bg-popover py-1 shadow-lg shadow-black/40"
+                    >
+                      {storedStoreIds.map((id) => {
+                        const selected = id === storeDraft;
+                        return (
+                          <li key={id}>
+                            <button
+                              type="button"
+                              role="option"
+                              aria-selected={selected}
+                              onMouseDown={(event) => event.preventDefault()}
+                              onClick={() => {
+                                setStoreDraft(id);
+                                setStoreIdError(null);
+                                setStoreMenuOpen(false);
+                              }}
+                              className={cn(
+                                "flex h-11 w-full items-center px-3 text-left font-mono text-base text-white",
+                                selected ? "bg-sky-500/20" : "hover:bg-white/[0.06]",
+                              )}
+                            >
+                              {id}
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : null}
+                </div>
                 <Button
                   type="button"
                   className="h-12 shrink-0 rounded-xl px-3"
@@ -945,31 +1026,6 @@ export function ImportChartButton({
                   Confirm
                 </Button>
               </div>
-              {storedStoreIds.length > 0 ? (
-                <Select
-                  value={loadedStoreId}
-                  items={Object.fromEntries(storedStoreIds.map((id) => [id, `Store ${id}`]))}
-                  onValueChange={(value) => {
-                    if (typeof value !== "string") return;
-                    setStoreDraft(value);
-                    setStoreIdError(null);
-                  }}
-                >
-                  <SelectTrigger
-                    aria-label="Load stored store"
-                    className="h-11 w-full justify-between rounded-xl border-white/10 bg-black/30 px-3 text-sm text-white hover:bg-white/[0.06] dark:bg-black/30 dark:hover:bg-white/[0.06]"
-                  >
-                    <SelectValue placeholder="Load stored store" />
-                  </SelectTrigger>
-                  <SelectContent align="start" className="min-w-(--anchor-width)">
-                    {storedStoreIds.map((id) => (
-                      <SelectItem key={id} value={id}>
-                        Store {id}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : null}
               <p className={cn("text-xs", storeIdError ? "text-red-300" : "text-stone-500")}>
                 {storeIdError
                   ? storeIdError

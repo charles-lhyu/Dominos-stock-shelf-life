@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.4.27",
+    "notes": [
+      "The store ID field is a dropdown of stores saved on this device"
+    ]
+  },
+  {
     "version": "1.4.26",
     "notes": [
       "Date display is saved with each store",

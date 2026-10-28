@@ -1,7 +1,6 @@
 {
-  "version": "1.4.26",
+  "version": "1.4.27",
   "notes": [
-    "Date display is saved with each store",
-    "Store ID lists stores saved on this device, and Confirm loads that store"
+    "The store ID field is a dropdown of stores saved on this device"
   ]
 }
