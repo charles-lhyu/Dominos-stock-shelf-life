@@ -16,12 +16,14 @@ import {
   upsertCampaign,
   writeStoreName,
   writeStoreSettings,
+  writeStoreSettingsRecord,
   type CampaignLibrary,
   type CampaignSummary,
   type DeviceStoredRecord,
   type DeviceStoreSettingsView,
   type StoreCampaignSettings,
   type StoreCampaignView,
+  type StoreSettings,
 } from "./campaign-records";
 import {
   getDeskState,
@@ -205,6 +207,25 @@ export function setStoreName(storeId: string, name: string) {
   hydrateCampaignLibrary();
   if (!/^\d{1,8}$/.test(storeId)) return;
   commitLibrary(writeStoreName(library, storeId, name));
+}
+
+/** Update a store's name and Dates / List display settings. */
+export function writeStoreDisplaySettings(
+  storeId: string,
+  settings: Pick<StoreSettings, "name" | "compactDates" | "showDayCounts" | "compactList">,
+) {
+  hydrateCampaignLibrary();
+  if (!/^\d{1,8}$/.test(storeId)) return;
+  commitLibrary(writeStoreSettingsRecord(library, storeId, settings));
+  if (storeId !== getStoreId()) return;
+  applying = true;
+  try {
+    setCompactDateFormat(settings.compactDates === true);
+    writeDebugDays(settings.showDayCounts === true);
+    setCompactList(settings.compactList === true);
+  } finally {
+    applying = false;
+  }
 }
 
 export function readSavedCampaignSettings(

@@ -67,10 +67,10 @@ import {
   readSavedCampaignSettings,
   reloadCampaign,
   replaceCampaignLibrary,
-  setStoreName,
   subscribeCampaignLibrary,
   subscribeStoredStore,
   writeSavedDefault,
+  writeStoreDisplaySettings,
 } from "@/lib/campaign-library";
 import { canonicalProductName } from "@/lib/chart-name-migrate";
 import {
@@ -202,10 +202,40 @@ type StoredCampaignDraft = {
   baselineDefaults: Record<string, ProductDefault>;
 };
 
+type StoreDatesMode = "full" | "short" | "days";
+type StoreListMode = "tags" | "compact";
+
+const STORE_DATES_LABELS: Record<StoreDatesMode, string> = {
+  full: "Full",
+  short: "Short",
+  days: "Days and hours",
+};
+
+const STORE_LIST_LABELS: Record<StoreListMode, string> = {
+  tags: "With tags",
+  compact: "Compact",
+};
+
+function storeDatesMode(compactDates: boolean, showDayCounts: boolean): StoreDatesMode {
+  if (showDayCounts) return "days";
+  if (compactDates) return "short";
+  return "full";
+}
+
+function storeListMode(compactList: boolean): StoreListMode {
+  return compactList ? "compact" : "tags";
+}
+
 type StoredEditDraft = {
   storeId: string;
   storeName: string;
   baselineStoreName: string;
+  compactDates: boolean;
+  baselineCompactDates: boolean;
+  showDayCounts: boolean;
+  baselineShowDayCounts: boolean;
+  compactList: boolean;
+  baselineCompactList: boolean;
   campaigns: Record<string, StoredCampaignDraft>;
 };
 
@@ -241,6 +271,31 @@ function listStoredEditChanges(draft: StoredEditDraft): StoredEditChange[] {
       label: "Store name",
       from: draft.baselineStoreName.trim() || "Not set",
       to: draft.storeName.trim() || "Not set",
+    });
+  }
+  const baselineDates = storeDatesMode(
+    draft.baselineCompactDates,
+    draft.baselineShowDayCounts,
+  );
+  const nextDates = storeDatesMode(draft.compactDates, draft.showDayCounts);
+  if (baselineDates !== nextDates) {
+    changes.push({
+      id: "store:dates",
+      group: "Store",
+      label: "Dates",
+      from: STORE_DATES_LABELS[baselineDates],
+      to: STORE_DATES_LABELS[nextDates],
+    });
+  }
+  const baselineList = storeListMode(draft.baselineCompactList);
+  const nextList = storeListMode(draft.compactList);
+  if (baselineList !== nextList) {
+    changes.push({
+      id: "store:list",
+      group: "Store",
+      label: "List",
+      from: STORE_LIST_LABELS[baselineList],
+      to: STORE_LIST_LABELS[nextList],
     });
   }
   const campaignCount = Object.keys(draft.campaigns).length;
@@ -926,6 +981,26 @@ export function ImportChartButton({
     );
   }
 
+  function changeStoreDates(id: string, mode: StoreDatesMode) {
+    setStoredDraft((draft) =>
+      draft && draft.storeId === id
+        ? {
+            ...draft,
+            compactDates: mode === "short",
+            showDayCounts: mode === "days",
+          }
+        : draft,
+    );
+  }
+
+  function changeStoreList(id: string, mode: StoreListMode) {
+    setStoredDraft((draft) =>
+      draft && draft.storeId === id
+        ? { ...draft, compactList: mode === "compact" }
+        : draft,
+    );
+  }
+
   function beginStoredEdit() {
     const targetStoreId = previewStoreId ?? storeId;
     if (!targetStoreId) return;
@@ -947,10 +1022,21 @@ export function ImportChartButton({
         baselineDefaults: copyDefaults(defaults),
       };
     }
+    const saved = deviceStoreSettings.find((item) => item.storeId === targetStoreId);
+    const useLive = !previewStoreId;
+    const nextCompactDates = useLive ? compactDates : saved?.compactDates === true;
+    const nextShowDayCounts = useLive ? debugDays : saved?.showDayCounts === true;
+    const nextCompactList = useLive ? compactList : saved?.compactList === true;
     setStoredDraft({
       storeId: targetStoreId,
-      storeName: storeNames[targetStoreId] ?? "",
-      baselineStoreName: storeNames[targetStoreId] ?? "",
+      storeName: storeNames[targetStoreId] ?? saved?.name ?? "",
+      baselineStoreName: storeNames[targetStoreId] ?? saved?.name ?? "",
+      compactDates: nextCompactDates,
+      baselineCompactDates: nextCompactDates,
+      showDayCounts: nextShowDayCounts,
+      baselineShowDayCounts: nextShowDayCounts,
+      compactList: nextCompactList,
+      baselineCompactList: nextCompactList,
       campaigns,
     });
     setStoredConfirmOpen(false);
@@ -969,8 +1055,18 @@ export function ImportChartButton({
       discardStoredEdit();
       return;
     }
-    if (draft.storeName !== draft.baselineStoreName) {
-      setStoreName(draft.storeId, draft.storeName);
+    const storeSettingsChanged =
+      draft.storeName !== draft.baselineStoreName ||
+      draft.compactDates !== draft.baselineCompactDates ||
+      draft.showDayCounts !== draft.baselineShowDayCounts ||
+      draft.compactList !== draft.baselineCompactList;
+    if (storeSettingsChanged) {
+      writeStoreDisplaySettings(draft.storeId, {
+        name: draft.storeName,
+        compactDates: draft.compactDates,
+        showDayCounts: draft.showDayCounts,
+        compactList: draft.compactList,
+      });
     }
     for (const campaign of Object.values(draft.campaigns)) {
       const remaining = new Set(campaign.hidden.map((entry) => hiddenEntryKey(entry)));
@@ -1177,24 +1273,43 @@ export function ImportChartButton({
   });
 
   const storeDisplayRow = storedDisplayRows[0];
-  const storeDatesLabel = storeDisplayRow
-    ? storeDisplayRow.showDayCounts
-      ? "Days and hours"
-      : storeDisplayRow.compactDates
-        ? "Short"
-        : "Full"
-    : debugDays
-      ? "Days and hours"
-      : compactDates
-        ? "Short"
-        : "Full";
-  const storeListLabel = storeDisplayRow
-    ? storeDisplayRow.compactList
-      ? "Compact"
-      : "With tags"
-    : compactList
-      ? "Compact"
-      : "With tags";
+  const storeDatesLabel = storedDraft
+    ? STORE_DATES_LABELS[
+        storeDatesMode(storedDraft.compactDates, storedDraft.showDayCounts)
+      ]
+    : storeDisplayRow
+      ? storeDisplayRow.showDayCounts
+        ? "Days and hours"
+        : storeDisplayRow.compactDates
+          ? "Short"
+          : "Full"
+      : debugDays
+        ? "Days and hours"
+        : compactDates
+          ? "Short"
+          : "Full";
+  const storeListLabel = storedDraft
+    ? STORE_LIST_LABELS[storeListMode(storedDraft.compactList)]
+    : storeDisplayRow
+      ? storeDisplayRow.compactList
+        ? "Compact"
+        : "With tags"
+      : compactList
+        ? "Compact"
+        : "With tags";
+  const storeDatesValue = storedDraft
+    ? storeDatesMode(storedDraft.compactDates, storedDraft.showDayCounts)
+    : storeDatesMode(
+        storeDisplayRow?.compactDates === true ||
+          (!storeDisplayRow && compactDates),
+        storeDisplayRow?.showDayCounts === true ||
+          (!storeDisplayRow && debugDays),
+      );
+  const storeListValue = storedDraft
+    ? storeListMode(storedDraft.compactList)
+    : storeListMode(
+        storeDisplayRow?.compactList === true || (!storeDisplayRow && compactList),
+      );
 
   function syncNavCard(id: SettingsSectionId) {
     const nav = settingsNavRef.current;
@@ -1674,14 +1789,89 @@ export function ImportChartButton({
                     </div>
                   )}
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-0.5">
-                      <p className="text-xs text-stone-500">Dates</p>
-                      <p className="text-sm text-stone-200">{storeDatesLabel}</p>
-                    </div>
-                    <div className="space-y-0.5">
-                      <p className="text-xs text-stone-500">List</p>
-                      <p className="text-sm text-stone-200">{storeListLabel}</p>
-                    </div>
+                    {storedEditing ? (
+                      <>
+                        <label className="block min-w-0 space-y-1">
+                          <span className="text-xs text-stone-500">Dates</span>
+                          <Select
+                            value={storeDatesValue}
+                            items={STORE_DATES_LABELS}
+                            onValueChange={(value) => {
+                              if (
+                                value === "full" ||
+                                value === "short" ||
+                                value === "days"
+                              ) {
+                                changeStoreDates(previewStoreId ?? storeId, value);
+                              }
+                            }}
+                          >
+                            <SelectTrigger
+                              aria-label="Dates display"
+                              className="h-11 w-full min-w-0 rounded-xl border-white/10 bg-black/30 px-3 text-white hover:bg-black/40 focus-visible:border-white/20 focus-visible:ring-white/15 dark:bg-black/30 [&_svg]:text-stone-400"
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent
+                              align="start"
+                              alignItemWithTrigger={false}
+                              className="rounded-xl border-white/10 bg-popover p-1"
+                            >
+                              {(Object.keys(STORE_DATES_LABELS) as StoreDatesMode[]).map(
+                                (mode) => (
+                                  <SelectItem key={mode} value={mode}>
+                                    {STORE_DATES_LABELS[mode]}
+                                  </SelectItem>
+                                ),
+                              )}
+                            </SelectContent>
+                          </Select>
+                        </label>
+                        <label className="block min-w-0 space-y-1">
+                          <span className="text-xs text-stone-500">List</span>
+                          <Select
+                            value={storeListValue}
+                            items={STORE_LIST_LABELS}
+                            onValueChange={(value) => {
+                              if (value === "tags" || value === "compact") {
+                                changeStoreList(previewStoreId ?? storeId, value);
+                              }
+                            }}
+                          >
+                            <SelectTrigger
+                              aria-label="List display"
+                              className="h-11 w-full min-w-0 rounded-xl border-white/10 bg-black/30 px-3 text-white hover:bg-black/40 focus-visible:border-white/20 focus-visible:ring-white/15 dark:bg-black/30 [&_svg]:text-stone-400"
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent
+                              align="start"
+                              alignItemWithTrigger={false}
+                              className="rounded-xl border-white/10 bg-popover p-1"
+                            >
+                              {(Object.keys(STORE_LIST_LABELS) as StoreListMode[]).map(
+                                (mode) => (
+                                  <SelectItem key={mode} value={mode}>
+                                    {STORE_LIST_LABELS[mode]}
+                                  </SelectItem>
+                                ),
+                              )}
+                            </SelectContent>
+                          </Select>
+                        </label>
+                      </>
+                    ) : (
+                      <>
+                        <div className="space-y-0.5">
+                          <p className="text-xs text-stone-500">Dates</p>
+                          <p className="text-sm text-stone-200">{storeDatesLabel}</p>
+                        </div>
+                        <div className="space-y-0.5">
+                          <p className="text-xs text-stone-500">List</p>
+                          <p className="text-sm text-stone-200">{storeListLabel}</p>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               ) : null}
