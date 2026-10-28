@@ -958,6 +958,27 @@ export function ImportChartButton({
     );
   }
 
+  /** Prefer the on-screen chart's campaign for a store preview; else the first saved preset. */
+  function autoPreviewCampaignKey(forStoreId: string): string | null {
+    const rows = deviceStored.filter((item) => item.storeId === forStoreId);
+    if (rows.length === 0) return null;
+    if (desk.imported) {
+      const current = campaignKey(
+        desk.pack.chart.issued,
+        desk.pack.chart.validUntil,
+      );
+      if (
+        current &&
+        rows.some(
+          (item) => campaignKey(item.issued, item.validUntil) === current,
+        )
+      ) {
+        return current;
+      }
+    }
+    return campaignKey(rows[0]!.issued, rows[0]!.validUntil);
+  }
+
   function withLiveSettings<
     T extends { hidden: HiddenEntry[]; preset: ItemPreset; rules?: ShelfRule[] },
   >(
@@ -2822,7 +2843,9 @@ export function ImportChartButton({
                             onValueChange={(value) => {
                               if (typeof value === "string" && value) {
                                 setAllStoredPreviewId(value);
-                                setAllStoredPreviewCampaignKey(null);
+                                setAllStoredPreviewCampaignKey(
+                                  autoPreviewCampaignKey(value),
+                                );
                                 setStoreDraft(value);
                               }
                             }}
@@ -3297,7 +3320,9 @@ export function ImportChartButton({
                               type="button"
                               onClick={() => {
                                 setAllStoredPreviewId(store.storeId);
-                                setAllStoredPreviewCampaignKey(null);
+                                setAllStoredPreviewCampaignKey(
+                                  autoPreviewCampaignKey(store.storeId),
+                                );
                                 setStoreDraft(store.storeId);
                                 setStoreMenuOpen(false);
                                 setStoreMenuAll(false);
