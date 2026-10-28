@@ -966,7 +966,7 @@ export function ImportChartButton({
             </div>
             <div className="space-y-2 border-t border-white/10 pt-3">
               <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-medium text-stone-300">
+                <p className="min-w-0 truncate text-sm font-medium text-stone-300">
                   {storeId ? `Stored for store ${storeId}` : "Stored for this store"}
                 </p>
                 {storedEditing || canEditStored ? (
@@ -976,6 +976,16 @@ export function ImportChartButton({
                   />
                 ) : null}
               </div>
+              {otherStored.length > 0 ? (
+                <OtherStoredSelect
+                  records={otherStored}
+                  value={otherStoredOpen ? otherStoredKey : null}
+                  onPick={(key) => {
+                    setOtherStoredKey(key);
+                    setOtherStoredOpen(true);
+                  }}
+                />
+              ) : null}
               {!storeId ? (
                 <p className="text-xs text-stone-500">
                   Set a store ID to see the hidden items and product defaults saved for it.
@@ -1028,19 +1038,6 @@ export function ImportChartButton({
                   })}
                 </div>
               )}
-              {otherStored.length > 0 ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="h-11 w-full justify-start rounded-xl border-white/10 text-sm text-white"
-                  onClick={() => {
-                    setOtherStoredKey(deviceStoredKey(otherStored[0]!));
-                    setOtherStoredOpen(true);
-                  }}
-                >
-                  Other data on this device
-                </Button>
-              ) : null}
             </div>
           </section>
           <section
@@ -1623,6 +1620,93 @@ export function ImportChartButton({
           </div>
         </DialogContent>
       </Dialog>
+      <Dialog open={otherStoredOpen} onOpenChange={setOtherStoredOpen}>
+        <DialogContent
+          showCloseButton={false}
+          overlayClassName="z-[60] bg-black/50"
+          className="top-1/2! left-1/2! z-[60] flex h-[min(44rem,calc(100dvh-2.5rem))] max-h-[calc(100dvh-2.5rem)] w-[calc(100%-1.25rem)] max-w-lg -translate-x-1/2! -translate-y-1/2! flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-lg"
+        >
+          <DialogHeader className="shrink-0 space-y-2 border-b border-white/10 px-4 py-3 pr-14">
+            <DialogTitle className="font-display text-xl text-white">
+              Other stored data
+            </DialogTitle>
+            <DialogDescription className="text-sm text-stone-400">
+              Hidden items and product defaults saved for other stores on this device.
+            </DialogDescription>
+            <button
+              type="button"
+              className="absolute top-3 right-3 inline-flex size-10 items-center justify-center rounded-full bg-white/10 text-white"
+              aria-label="Close stored data"
+              onClick={() => setOtherStoredOpen(false)}
+            >
+              <X className="size-5" />
+            </button>
+          </DialogHeader>
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
+            <OtherStoredSelect
+              records={otherStored}
+              value={otherStoredKey}
+              onPick={setOtherStoredKey}
+            />
+            {selectedOther ? (
+              <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-base font-medium text-white">Store {selectedOther.storeId}</p>
+                  {storedEditing ||
+                  selectedOther.hidden.length > 0 ||
+                  Object.keys(selectedOther.preset.defaults).length > 0 ? (
+                    <StoredEditButton
+                      editing={storedEditing}
+                      onToggle={() => setStoredEditing((on) => !on)}
+                    />
+                  ) : null}
+                </div>
+                <p className="text-sm text-stone-200">{selectedOther.title}</p>
+                <p className="mt-0.5 text-xs text-stone-400">
+                  Issued {formatShortDate(selectedOther.issued)} · Valid until{" "}
+                  {formatShortDate(selectedOther.validUntil)}
+                </p>
+                <StoredCampaignDetails
+                  item={selectedOther}
+                  editing={storedEditing}
+                  onRemoveHidden={(name) =>
+                    forgetSavedHidden(
+                      selectedOther.storeId,
+                      selectedOther.issued,
+                      selectedOther.validUntil,
+                      name,
+                    )
+                  }
+                  onRemoveDefault={(name) =>
+                    forgetSavedDefault(
+                      selectedOther.storeId,
+                      selectedOther.issued,
+                      selectedOther.validUntil,
+                      name,
+                    )
+                  }
+                  onRemoveAllHidden={() =>
+                    clearSavedHidden(
+                      selectedOther.storeId,
+                      selectedOther.issued,
+                      selectedOther.validUntil,
+                    )
+                  }
+                  onRemoveAllDefaults={() =>
+                    clearSavedDefaults(
+                      selectedOther.storeId,
+                      selectedOther.issued,
+                      selectedOther.validUntil,
+                    )
+                  }
+                />
+              </div>
+            ) : (
+              <p className="text-sm text-stone-500">Nothing else is saved on this device.</p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </Dialog>
 
     <Dialog open={confirmReset} onOpenChange={setConfirmReset}>
@@ -1684,109 +1768,6 @@ export function ImportChartButton({
       />
     ) : null}
 
-    <Dialog open={otherStoredOpen} onOpenChange={setOtherStoredOpen}>
-      <DialogContent
-        showCloseButton={false}
-        overlayClassName="z-[60] bg-black/50"
-        className="relative z-[60] flex h-[min(32rem,85dvh)] w-[calc(100%-1.25rem)] max-w-sm flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-sm"
-      >
-        <DialogHeader className="shrink-0 space-y-1 border-b border-white/10 px-4 py-3 pr-14">
-          <DialogTitle className="font-display text-xl text-white">
-            Other stored data
-          </DialogTitle>
-          <DialogDescription className="text-sm text-stone-400">
-            Hidden items and product defaults saved for other stores on this device.
-          </DialogDescription>
-          <button
-            type="button"
-            className="absolute top-3 right-3 inline-flex size-10 items-center justify-center rounded-full bg-white/10 text-white"
-            aria-label="Close stored data"
-            onClick={() => setOtherStoredOpen(false)}
-          >
-            <X className="size-5" />
-          </button>
-        </DialogHeader>
-        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-3">
-          {otherStored.map((item) => {
-            const key = deviceStoredKey(item);
-            const selected = selectedOther != null && key === deviceStoredKey(selectedOther);
-            return (
-              <button
-                key={key}
-                type="button"
-                aria-pressed={selected}
-                onClick={() => setOtherStoredKey(key)}
-                className={cn(
-                  "w-full rounded-xl border px-3 py-2.5 text-left",
-                  selected
-                    ? "border-sky-400/50 bg-sky-500/15"
-                    : "border-white/10 bg-black/20 hover:border-white/20",
-                )}
-              >
-                <span className="block text-sm font-medium text-white">Store {item.storeId}</span>
-                <span className="mt-0.5 block truncate text-sm text-stone-200">{item.title}</span>
-                <span className="mt-0.5 block text-xs text-stone-400">
-                  Issued {formatShortDate(item.issued)} · Valid until {formatShortDate(item.validUntil)}
-                </span>
-              </button>
-            );
-          })}
-          {selectedOther ? (
-            <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2.5">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-medium text-white">Store {selectedOther.storeId}</p>
-                {storedEditing ||
-                selectedOther.hidden.length > 0 ||
-                Object.keys(selectedOther.preset.defaults).length > 0 ? (
-                  <StoredEditButton
-                    editing={storedEditing}
-                    onToggle={() => setStoredEditing((on) => !on)}
-                  />
-                ) : null}
-              </div>
-              <p className="text-sm text-stone-200">{selectedOther.title}</p>
-              <StoredCampaignDetails
-                item={selectedOther}
-                editing={storedEditing}
-                onRemoveHidden={(name) =>
-                  forgetSavedHidden(
-                    selectedOther.storeId,
-                    selectedOther.issued,
-                    selectedOther.validUntil,
-                    name,
-                  )
-                }
-                onRemoveDefault={(name) =>
-                  forgetSavedDefault(
-                    selectedOther.storeId,
-                    selectedOther.issued,
-                    selectedOther.validUntil,
-                    name,
-                  )
-                }
-                onRemoveAllHidden={() =>
-                  clearSavedHidden(
-                    selectedOther.storeId,
-                    selectedOther.issued,
-                    selectedOther.validUntil,
-                  )
-                }
-                onRemoveAllDefaults={() =>
-                  clearSavedDefaults(
-                    selectedOther.storeId,
-                    selectedOther.issued,
-                    selectedOther.validUntil,
-                  )
-                }
-              />
-            </div>
-          ) : (
-            <p className="text-sm text-stone-500">Nothing else is saved on this device.</p>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
-
     <Dialog open={changelogOpen} onOpenChange={setChangelogOpen}>
       <DialogContent
         showCloseButton={false}
@@ -1820,6 +1801,70 @@ export function ImportChartButton({
 
 function deviceStoredKey(item: { storeId: string; issued: string; validUntil: string }) {
   return `${item.storeId}|${item.issued}|${item.validUntil}`;
+}
+
+function otherStoredOptionLabel(item: {
+  storeId: string;
+  title: string;
+}) {
+  return `Store ${item.storeId} · ${item.title || "Shelf life chart"}`;
+}
+
+function OtherStoredSelect({
+  records,
+  value,
+  onPick,
+}: {
+  records: {
+    storeId: string;
+    title: string;
+    issued: string;
+    validUntil: string;
+  }[];
+  value: string | null;
+  onPick: (key: string) => void;
+}) {
+  const items = Object.fromEntries(
+    records.map((item) => [deviceStoredKey(item), otherStoredOptionLabel(item)]),
+  );
+  return (
+    <Select
+      value={value}
+      items={items}
+      onValueChange={(next) => {
+        if (typeof next === "string") onPick(next);
+      }}
+    >
+      <SelectTrigger
+        aria-label="Other stored data"
+        className="h-11 w-full justify-between rounded-xl border-white/10 bg-black/30 px-3 text-sm text-white hover:bg-white/[0.06] dark:bg-black/30 dark:hover:bg-white/[0.06]"
+      >
+        <SelectValue placeholder="Other stored data" />
+      </SelectTrigger>
+      <SelectContent
+        align="start"
+        className="max-h-72 min-w-(--anchor-width) max-w-[calc(100vw-2rem)]"
+      >
+        {records.map((item) => {
+          const key = deviceStoredKey(item);
+          return (
+            <SelectItem
+              key={key}
+              value={key}
+              className="items-start py-2"
+              onClick={() => onPick(key)}
+            >
+              <span className="block truncate font-medium">Store {item.storeId}</span>
+              <span className="block truncate text-xs text-stone-400">
+                {item.title || "Shelf life chart"} · Issued {formatShortDate(item.issued)} ·
+                Valid until {formatShortDate(item.validUntil)}
+              </span>
+            </SelectItem>
+          );
+        })}
+      </SelectContent>
+    </Select>
+  );
 }
 
 function StoredEditButton({

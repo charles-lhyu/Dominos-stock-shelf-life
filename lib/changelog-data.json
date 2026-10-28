@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.4.25",
+    "notes": [
+      "Other stored data is a dropdown beside the current store and opens in a larger centered popup"
+    ]
+  },
+  {
     "version": "1.4.24",
     "notes": [
       "Changing the store ID stays in Settings and asks whether to keep the current settings"
