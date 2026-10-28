@@ -1,5 +1,16 @@
 [
   {
+    "version": "1.4.19",
+    "notes": [
+      "Category titles are bold",
+      "Sort buttons stay in place while the category title changes on scroll",
+      "A little more space between the divider and the category title",
+      "Collapsed search and date use the same gap as the space under the filters",
+      "A saved default is kept only for a product with more than one storage option",
+      "Hiding a product clears its default"
+    ]
+  },
+  {
     "version": "1.4.18",
     "notes": [
       "A store ID keeps hidden items and product defaults with that store",
