@@ -45,6 +45,7 @@ import {
 import {
   getDeskState,
   hydrateDeskStore,
+  lockPrepTimeIfLive,
   setDeliveryDate,
   setPrepTime,
   subscribeDesk,
@@ -360,6 +361,8 @@ export function StockDesk() {
       listScrollableRef.current = false;
       setListScrollable(false);
       setHeaderCollapsed(collapsed);
+      // Collapsed strip freezes prep time so hour lives stop drifting with the live clock.
+      if (collapsed) lockPrepTimeIfLive();
       if (collapsed && !query.trim()) inputRef.current?.blur();
       if (!collapsed) setShowGoTop(false);
 
@@ -533,6 +536,8 @@ export function StockDesk() {
       savedListScrollRef.current = mainRef.current?.scrollTop ?? 0;
       savedListCollapsedRef.current = headerCollapsedRef.current;
     }
+    // Lock prep time so item details use a stable clock (esp. when collapsed).
+    lockPrepTimeIfLive();
     showItemFromTopRef.current = true;
     setQuery(name);
     setPicked(name);
@@ -541,6 +546,8 @@ export function StockDesk() {
   }
 
   function clearSearch() {
+    // Keep the prep time frozen after leaving details (list may stay collapsed).
+    lockPrepTimeIfLive();
     setQuery("");
     setPicked(null);
     inputRef.current?.blur();

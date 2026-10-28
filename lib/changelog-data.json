@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.4.45",
+    "notes": [
+      "Prep time locks when you open or leave an item, and when the header collapses"
+    ]
+  },
+  {
     "version": "1.4.44",
     "notes": [
       "Date and time selector shows time before the date"
