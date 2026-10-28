@@ -1940,7 +1940,7 @@ export function ImportChartButton({
                 ) : null}
               </div>
               {previewStoreId ?? storeId ? (
-                <div className="space-y-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2.5">
+                <div className="space-y-2">
                   <button
                     type="button"
                     aria-expanded={storeSettingsOpen}
@@ -1959,7 +1959,7 @@ export function ImportChartButton({
                     />
                   </button>
                   {storeSettingsOpen ? (
-                    <>
+                    <div className="space-y-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2.5">
                       {storedEditing ? (
                         <StoreNameField
                           value={nameFor(previewStoreId ?? storeId)}
@@ -2056,7 +2056,7 @@ export function ImportChartButton({
                           </>
                         )}
                       </div>
-                    </>
+                    </div>
                   ) : null}
                 </div>
               ) : null}
