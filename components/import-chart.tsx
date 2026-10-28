@@ -2875,34 +2875,36 @@ export function ImportChartButton({
                           ? "Preview this store's settings and campaign presets."
                           : "Store settings saved on this device. Tap a card to preview."}
                       </p>
-                      <div className="flex flex-wrap items-center gap-2 pt-1">
-                        <button
-                          type="button"
-                          onClick={exportStoredData}
-                          className="rounded-lg px-2.5 py-1 text-xs font-semibold text-stone-200 ring-1 ring-white/15"
-                        >
-                          Export
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => storedImportInputRef.current?.click()}
-                          className="rounded-lg px-2.5 py-1 text-xs font-semibold text-stone-200 ring-1 ring-white/15"
-                        >
-                          Import
-                        </button>
-                        <input
-                          ref={storedImportInputRef}
-                          type="file"
-                          accept="application/json,.json"
-                          className="hidden"
-                          onChange={(event) => {
-                            const file = event.target.files?.[0] ?? null;
-                            event.target.value = "";
-                            onStoredImportFile(file);
-                          }}
-                        />
+                      <div className="-mr-11 flex items-center justify-between gap-2 pt-1">
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={exportStoredData}
+                            className="rounded-lg px-2.5 py-1 text-xs font-semibold text-stone-200 ring-1 ring-white/15"
+                          >
+                            Export
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => storedImportInputRef.current?.click()}
+                            className="rounded-lg px-2.5 py-1 text-xs font-semibold text-stone-200 ring-1 ring-white/15"
+                          >
+                            Import
+                          </button>
+                          <input
+                            ref={storedImportInputRef}
+                            type="file"
+                            accept="application/json,.json"
+                            className="hidden"
+                            onChange={(event) => {
+                              const file = event.target.files?.[0] ?? null;
+                              event.target.value = "";
+                              onStoredImportFile(file);
+                            }}
+                          />
+                        </div>
                         {previewStore ? (
-                          <div className="ml-auto flex shrink-0 items-center gap-1.5">
+                          <div className="flex shrink-0 items-center gap-1.5">
                             {storedEditing &&
                             storedDraft?.storeId === previewStore.storeId ? (
                               <button
@@ -3295,6 +3297,7 @@ export function ImportChartButton({
                               type="button"
                               onClick={() => {
                                 setAllStoredPreviewId(store.storeId);
+                                setAllStoredPreviewCampaignKey(null);
                                 setStoreDraft(store.storeId);
                                 setStoreMenuOpen(false);
                                 setStoreMenuAll(false);
