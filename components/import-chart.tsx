@@ -8,6 +8,7 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import {
   Camera,
   FileText,
@@ -410,6 +411,12 @@ export function ImportChartButton({
   const settingsJumpLock = useRef(false);
   const settingsJumpTimer = useRef<number | null>(null);
   const storeFieldRef = useRef<HTMLDivElement>(null);
+  const storeMenuListRef = useRef<HTMLUListElement>(null);
+  const [storeMenuPos, setStoreMenuPos] = useState<{
+    top: number;
+    left: number;
+    width: number;
+  } | null>(null);
   const debug = useSyncExternalStore(subscribeDebug, readDebug, () => false);
   const debugDays = useSyncExternalStore(
     subscribeDebug,
@@ -537,8 +544,10 @@ export function ImportChartButton({
   useEffect(() => {
     if (!storeMenuOpen) return;
     function onPointerDown(event: PointerEvent) {
-      const field = storeFieldRef.current;
-      if (!field || !(event.target instanceof Node) || field.contains(event.target)) return;
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (storeFieldRef.current?.contains(target)) return;
+      if (storeMenuListRef.current?.contains(target)) return;
       setStoreMenuOpen(false);
       setStoreMenuAll(false);
     }
@@ -858,13 +867,11 @@ export function ImportChartButton({
     ]),
   ].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
   const storeQuery = storeDraft.trim().replace(/\s+/g, "");
-  const filteredStoreIds =
-    !storeQuery || storeMenuAll
-      ? storedStoreIds
-      : storedStoreIds.filter((id) => id.startsWith(storeQuery));
-  // Keep the full list available when the typed filter matches nothing.
-  const menuStoreIds =
-    filteredStoreIds.length > 0 ? filteredStoreIds : storedStoreIds;
+  const menuStoreIds = storeMenuAll
+    ? storedStoreIds
+    : storeQuery
+      ? storedStoreIds.filter((id) => id.startsWith(storeQuery))
+      : storedStoreIds;
   const draftStoreId = normalizeStoreId(storeDraft);
   const previewStoreId = draftStoreId && draftStoreId !== storeId ? draftStoreId : null;
   const previewRows = previewStoreId
@@ -872,6 +879,31 @@ export function ImportChartButton({
     : [];
   const storeMenuVisible = storeMenuOpen && storedStoreIds.length > 0;
   const showStoreClear = storeDraft.trim().length > 0;
+
+  useLayoutEffect(() => {
+    if (!storeMenuVisible) {
+      setStoreMenuPos(null);
+      return;
+    }
+    function updatePos() {
+      const field = storeFieldRef.current;
+      if (!field) return;
+      const rect = field.getBoundingClientRect();
+      setStoreMenuPos({
+        top: rect.bottom + 4,
+        left: rect.left,
+        width: rect.width,
+      });
+    }
+    updatePos();
+    const body = settingsBodyRef.current;
+    window.addEventListener("resize", updatePos);
+    body?.addEventListener("scroll", updatePos, { passive: true });
+    return () => {
+      window.removeEventListener("resize", updatePos);
+      body?.removeEventListener("scroll", updatePos);
+    };
+  }, [storeMenuVisible, menuStoreIds.length, storeDraft, showStoreClear]);
   const storeChanges =
     storePrompt && desk.imported
       ? listStoreSettingChanges(
@@ -1610,7 +1642,7 @@ export function ImportChartButton({
               <label htmlFor="store-id" className="text-sm font-medium text-stone-300">
                 Store ID
               </label>
-              <div className={cn("flex gap-2", storeMenuVisible && "relative z-20")}>
+              <div className="flex gap-2">
                 <div ref={storeFieldRef} className="relative min-w-0 flex-1">
                   <div className="relative">
                     <Input
@@ -1634,7 +1666,7 @@ export function ImportChartButton({
                       }}
                       onFocus={() => {
                         if (storedStoreIds.length > 0) {
-                          setStoreMenuAll(true);
+                          setStoreMenuAll(false);
                           setStoreMenuOpen(true);
                         }
                       }}
@@ -1657,7 +1689,6 @@ export function ImportChartButton({
                           : showStoreClear || storedStoreIds.length > 0
                             ? "pr-11"
                             : null,
-                        storeMenuVisible && "rounded-b-none",
                       )}
                     />
                     {showStoreClear || storedStoreIds.length > 0 ? (
@@ -1672,7 +1703,7 @@ export function ImportChartButton({
                               setStoreDraft("");
                               setStoreIdError(null);
                               if (storedStoreIds.length > 0) {
-                                setStoreMenuAll(true);
+                                setStoreMenuAll(false);
                                 setStoreMenuOpen(true);
                               } else {
                                 setStoreMenuOpen(false);
@@ -1688,7 +1719,7 @@ export function ImportChartButton({
                           <button
                             type="button"
                             aria-label="Show stored store IDs"
-                            aria-expanded={storeMenuOpen}
+                            aria-expanded={storeMenuOpen && storeMenuAll}
                             onMouseDown={(event) => event.preventDefault()}
                             onClick={() => {
                               if (storeMenuOpen && storeMenuAll) {
@@ -1704,7 +1735,7 @@ export function ImportChartButton({
                             <ChevronDown
                               className={cn(
                                 "size-4 transition-transform",
-                                storeMenuOpen && "rotate-180",
+                                storeMenuOpen && storeMenuAll && "rotate-180",
                               )}
                               aria-hidden
                             />
@@ -1713,49 +1744,66 @@ export function ImportChartButton({
                       </div>
                     ) : null}
                   </div>
-                  {storeMenuVisible ? (
-                    <ul
-                      id="store-id-list"
-                      role="listbox"
-                      aria-label="Stored store IDs"
-                      className="relative z-30 max-h-60 overflow-y-auto rounded-b-xl border border-t-0 border-white/10 bg-popover py-1 shadow-lg shadow-black/40"
-                    >
-                      {menuStoreIds.map((id) => {
-                        const selected = id === storeDraft;
-                        return (
-                          <li key={id}>
-                            <button
-                              type="button"
-                              role="option"
-                              aria-selected={selected}
-                              onMouseDown={(event) => event.preventDefault()}
-                              onClick={() => {
-                                setStoreDraft(id);
-                                setStoreIdError(null);
-                                setStoreMenuOpen(false);
-                                setStoreMenuAll(false);
-                              }}
-                              className={cn(
-                                "flex h-11 w-full items-center gap-2 px-3 text-left text-base text-white",
-                                selected ? "bg-sky-500/20" : "hover:bg-white/[0.06]",
-                              )}
-                            >
-                              <span className="shrink-0 font-mono">{id}</span>
-                              {storeNames[id] ? (
-                                <span className="min-w-0 truncate text-sm text-stone-300">
-                                  {storeNames[id]}
-                                </span>
-                              ) : null}
-                            </button>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  ) : null}
+                  {storeMenuVisible && storeMenuPos
+                    ? createPortal(
+                        <ul
+                          ref={storeMenuListRef}
+                          id="store-id-list"
+                          role="listbox"
+                          aria-label="Stored store IDs"
+                          style={{
+                            top: storeMenuPos.top,
+                            left: storeMenuPos.left,
+                            width: storeMenuPos.width,
+                          }}
+                          className="fixed z-[80] max-h-60 overflow-y-auto rounded-xl border border-white/10 bg-popover py-1 shadow-lg shadow-black/40 ring-1 ring-white/10"
+                        >
+                          {menuStoreIds.length === 0 ? (
+                            <li className="px-3 py-2.5 text-sm text-stone-500">
+                              No matching stores
+                            </li>
+                          ) : (
+                            menuStoreIds.map((id) => {
+                              const selected = id === storeDraft;
+                              return (
+                                <li key={id}>
+                                  <button
+                                    type="button"
+                                    role="option"
+                                    aria-selected={selected}
+                                    onMouseDown={(event) => event.preventDefault()}
+                                    onClick={() => {
+                                      setStoreDraft(id);
+                                      setStoreIdError(null);
+                                      setStoreMenuOpen(false);
+                                      setStoreMenuAll(false);
+                                    }}
+                                    className={cn(
+                                      "flex h-11 w-full items-center gap-2 px-3 text-left text-base text-white",
+                                      selected
+                                        ? "bg-sky-500/20"
+                                        : "hover:bg-white/[0.06]",
+                                    )}
+                                  >
+                                    <span className="shrink-0 font-mono">{id}</span>
+                                    {storeNames[id] ? (
+                                      <span className="min-w-0 truncate text-sm text-stone-300">
+                                        {storeNames[id]}
+                                      </span>
+                                    ) : null}
+                                  </button>
+                                </li>
+                              );
+                            })
+                          )}
+                        </ul>,
+                        document.body,
+                      )
+                    : null}
                 </div>
                 <Button
                   type="button"
-                  className="h-12 shrink-0 self-start rounded-xl px-3"
+                  className="h-12 shrink-0 rounded-xl px-3"
                   disabled={normalizeStoreId(storeDraft) === storeId || storePrompt != null}
                   onClick={commitStoreDraft}
                 >
