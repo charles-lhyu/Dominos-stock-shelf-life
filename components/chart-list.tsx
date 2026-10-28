@@ -42,13 +42,6 @@ import {
   getHiddenNamesServer,
   subscribeHidden,
 } from "@/lib/hidden-store";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import type { ChartPack, SectionId } from "@/lib/types";
 import { cn } from "cn";
 
@@ -197,7 +190,8 @@ export function ChartList({
   sectionFilter: SectionId | "all";
   lifeFilter: LifeKind | "all";
   productDefaults: Record<string, ProductDefault>;
-  onProductDefault: (name: string, section: SectionId, life: LifeKind | null) => void;
+  /** Omit `life` when only storage changes — life is not part of the storage default. */
+  onProductDefault: (name: string, section: SectionId, life?: LifeKind | null) => void;
   onLifeFilter: (kind: LifeKind) => void;
   onOpen: (name: string, sectionId: SectionId) => void;
   compact?: boolean;
@@ -379,7 +373,8 @@ export function ChartList({
 
 type ListActions = {
   onOpen: (name: string, sectionId: SectionId) => void;
-  onProductDefault: (name: string, section: SectionId, life: LifeKind | null) => void;
+  /** Omit `life` when only storage changes — life is not part of the storage default. */
+  onProductDefault: (name: string, section: SectionId, life?: LifeKind | null) => void;
   compact: boolean;
   showHiddenChip: boolean;
   nameSort: DirSort;
@@ -844,7 +839,8 @@ function ProductRow({
   row: ListRow;
   compact: boolean;
   onOpen: (name: string, sectionId: SectionId) => void;
-  onProductDefault: (name: string, section: SectionId, life: LifeKind | null) => void;
+  /** Omit `life` when only storage changes — life is not part of the storage default. */
+  onProductDefault: (name: string, section: SectionId, life?: LifeKind | null) => void;
 }) {
   const { name, variants, active, kinds, activeLife, preview, hidden } = row;
 
@@ -880,7 +876,7 @@ function ProductRow({
               <CompactStorageTag
                 variants={variants}
                 active={active}
-                onPreferredSection={(sectionId) => onProductDefault(name, sectionId, activeLife)}
+                onPreferredSection={(sectionId) => onProductDefault(name, sectionId)}
               />
             ) : null}
             <AutoScrollText className="w-0 min-w-0 flex-1 font-medium text-white">
@@ -912,7 +908,7 @@ function ProductRow({
                   aria-pressed={selected}
                   onClick={(event) => {
                     event.stopPropagation();
-                    onProductDefault(name, variant.sectionId, activeLife);
+                    onProductDefault(name, variant.sectionId);
                   }}
                   className={cn(
                     "touch-pan-y shrink-0 rounded-md px-1.5 py-0.5 text-[0.6875rem] font-semibold uppercase tracking-wide ring-1",
@@ -991,46 +987,25 @@ function CompactStorageTag({
   }
 
   return (
-    <div
-      className={cn("relative inline-flex h-6 shrink-0 items-center", COMPACT_TAG_WIDTH)}
-      onClick={(event) => event.stopPropagation()}
-      onKeyDown={(event) => event.stopPropagation()}
+    <button
+      type="button"
+      aria-label={`Storage: ${active.tag}. Tap to cycle.`}
+      title={`Storage: ${active.tag}. Tap to cycle.`}
+      className={cn(
+        "inline-flex h-6 shrink-0 items-center justify-center gap-0.5 rounded-md px-1 text-[0.625rem] font-semibold uppercase tracking-wide ring-1",
+        COMPACT_TAG_WIDTH,
+        tone,
+      )}
+      onClick={(event) => {
+        event.stopPropagation();
+        const index = variants.findIndex((variant) => variant.sectionId === active.sectionId);
+        const next = variants[(index + 1) % variants.length]!;
+        onPreferredSection(next.sectionId);
+      }}
     >
-      <Select
-        value={active.sectionId}
-        items={variants.map((variant) => ({
-          value: variant.sectionId,
-          label: variant.tag,
-        }))}
-        onValueChange={(value) => {
-          if (typeof value === "string") {
-            onPreferredSection(value as SectionId);
-          }
-        }}
-      >
-        <SelectTrigger
-          aria-label="Storage"
-          size="sm"
-          className={cn(
-            "h-6 w-full justify-center gap-0.5 rounded-md border-0 px-1 py-0 text-[0.625rem] font-semibold uppercase tracking-wide shadow-none ring-1 focus-visible:ring-2 focus-visible:ring-white/30 data-[size=sm]:h-6 dark:border-0 [&_svg]:size-3 [&_svg]:shrink-0 [&_svg]:text-current [&_svg]:opacity-80 [&_[data-slot=select-value]]:min-w-0 [&_[data-slot=select-value]]:flex-1 [&_[data-slot=select-value]]:truncate [&_[data-slot=select-value]]:text-center",
-            tone,
-          )}
-        >
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent align="start" className="min-w-[7rem]">
-          {variants.map((variant) => (
-            <SelectItem
-              key={variant.sectionId}
-              value={variant.sectionId}
-              className="text-[0.6875rem] font-semibold uppercase tracking-wide"
-            >
-              {variant.tag}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
+      <span className="min-w-0 truncate">{active.tag}</span>
+      <ChevronDown className="size-3 shrink-0 opacity-80" aria-hidden />
+    </button>
   );
 }
 

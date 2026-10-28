@@ -1168,7 +1168,6 @@ export function StockDesk() {
                             if (expanded) {
                               setProductDefault(expanded, {
                                 section: variant.sectionId,
-                                life: activeLife,
                               });
                             }
                           }}
@@ -1238,7 +1237,8 @@ export function StockDesk() {
               kinds={expandedKinds}
               onPreferredSection={(sectionId) => {
                 if (!expanded) return;
-                setProductDefault(expanded, { section: sectionId, life: activeLife });
+                // Storage default only — life is chosen separately, not with storage.
+                setProductDefault(expanded, { section: sectionId });
               }}
               onPreferredLife={(life) => {
                 if (!expanded || !activeVariant) return;
@@ -1292,7 +1292,12 @@ export function StockDesk() {
             sectionFilter={sectionFilter}
             lifeFilter={lifeFilter}
             productDefaults={productDefaults}
-            onProductDefault={(name, section, life) => setProductDefault(name, { section, life })}
+            onProductDefault={(name, section, life) =>
+              setProductDefault(
+                name,
+                life === undefined ? { section } : { section, life },
+              )
+            }
             onLifeFilter={setPresetLifeFilter}
             onOpen={choose}
             compact={compactList}

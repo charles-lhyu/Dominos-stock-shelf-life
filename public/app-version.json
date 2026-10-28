@@ -1,7 +1,7 @@
 {
-  "version": "1.4.50",
+  "version": "1.4.51",
   "notes": [
-    "Item details keep storage and life chips above the card with a Back button",
-    "Card tags and Hide stay on one row"
+    "Compact storage chips tap to cycle instead of opening a menu",
+    "Changing storage no longer saves a life default with it"
   ]
 }

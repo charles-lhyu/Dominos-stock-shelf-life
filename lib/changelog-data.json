@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.4.51",
+    "notes": [
+      "Compact storage chips tap to cycle instead of opening a menu",
+      "Changing storage no longer saves a life default with it"
+    ]
+  },
+  {
     "version": "1.4.50",
     "notes": [
       "Item details keep storage and life chips above the card with a Back button",
