@@ -816,10 +816,7 @@ export function ImportChartButton({
     ? deviceStored.filter((item) => item.storeId === previewStoreId)
     : [];
   const storeMenuVisible = storeMenuOpen && storedStoreIds.length > 0;
-  const showStoreCancel =
-    storedStoreIds.length > 0 ||
-    previewStoreId != null ||
-    storeDraft.trim() !== storeId;
+  const showStoreClear = storeDraft.trim().length > 0;
   const storeChanges =
     storePrompt && desk.imported
       ? listStoreSettingChanges(
@@ -1514,35 +1511,65 @@ export function ImportChartButton({
                       }}
                       className={cn(
                         "h-12 rounded-xl border-white/10 bg-black/30 text-base text-white placeholder:text-stone-500",
-                        storedStoreIds.length > 0 && "pr-11",
+                        showStoreClear && storedStoreIds.length > 0
+                          ? "pr-[5.25rem]"
+                          : showStoreClear || storedStoreIds.length > 0
+                            ? "pr-11"
+                            : null,
                         storeMenuVisible && "rounded-b-none",
                       )}
                     />
-                    {storedStoreIds.length > 0 ? (
-                      <button
-                        type="button"
-                        aria-label="Show stored store IDs"
-                        aria-expanded={storeMenuOpen}
-                        onMouseDown={(event) => event.preventDefault()}
-                        onClick={() => {
-                          if (storeMenuOpen && storeMenuAll) {
-                            setStoreMenuOpen(false);
-                            setStoreMenuAll(false);
-                            return;
-                          }
-                          setStoreMenuAll(true);
-                          setStoreMenuOpen(true);
-                        }}
-                        className="absolute top-1/2 right-1.5 inline-flex size-9 -translate-y-1/2 items-center justify-center rounded-lg text-stone-300"
-                      >
-                        <ChevronDown
-                          className={cn(
-                            "size-4 transition-transform",
-                            storeMenuOpen && "rotate-180",
-                          )}
-                          aria-hidden
-                        />
-                      </button>
+                    {showStoreClear || storedStoreIds.length > 0 ? (
+                      <div className="absolute top-1/2 right-1.5 flex -translate-y-1/2 items-center gap-0.5">
+                        {showStoreClear ? (
+                          <button
+                            type="button"
+                            aria-label="Clear store ID"
+                            disabled={storePrompt != null}
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() => {
+                              setStoreDraft("");
+                              setStoreIdError(null);
+                              if (storedStoreIds.length > 0) {
+                                setStoreMenuAll(true);
+                                setStoreMenuOpen(true);
+                              } else {
+                                setStoreMenuOpen(false);
+                                setStoreMenuAll(false);
+                              }
+                            }}
+                            className="inline-flex size-9 items-center justify-center rounded-lg text-stone-300 disabled:opacity-40"
+                          >
+                            <X className="size-4" aria-hidden />
+                          </button>
+                        ) : null}
+                        {storedStoreIds.length > 0 ? (
+                          <button
+                            type="button"
+                            aria-label="Show stored store IDs"
+                            aria-expanded={storeMenuOpen}
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() => {
+                              if (storeMenuOpen && storeMenuAll) {
+                                setStoreMenuOpen(false);
+                                setStoreMenuAll(false);
+                                return;
+                              }
+                              setStoreMenuAll(true);
+                              setStoreMenuOpen(true);
+                            }}
+                            className="inline-flex size-9 items-center justify-center rounded-lg text-stone-300"
+                          >
+                            <ChevronDown
+                              className={cn(
+                                "size-4 transition-transform",
+                                storeMenuOpen && "rotate-180",
+                              )}
+                              aria-hidden
+                            />
+                          </button>
+                        ) : null}
+                      </div>
                     ) : null}
                   </div>
                   {storeMenuVisible ? (
@@ -1585,27 +1612,6 @@ export function ImportChartButton({
                     </ul>
                   ) : null}
                 </div>
-                {showStoreCancel ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-12 shrink-0 self-start rounded-xl border-white/15 px-3 text-white"
-                    disabled={storePrompt != null}
-                    onClick={() => {
-                      setStoreDraft(storeId);
-                      setStoreIdError(null);
-                      if (storedStoreIds.length > 0) {
-                        setStoreMenuAll(true);
-                        setStoreMenuOpen(true);
-                      } else {
-                        setStoreMenuOpen(false);
-                        setStoreMenuAll(false);
-                      }
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                ) : null}
                 <Button
                   type="button"
                   className="h-12 shrink-0 self-start rounded-xl px-3"
