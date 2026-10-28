@@ -201,7 +201,6 @@ export function ChartList({
 }) {
   const [nameSort, setNameSort] = useState<DirSort>("off");
   const [dateSort, setDateSort] = useState<DirSort>("off");
-  const [activeSortKey, setActiveSortKey] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const hiddenNames = useSyncExternalStore(
     subscribeHidden,
@@ -269,51 +268,6 @@ export function ChartList({
   }
 
   const activeLife: LifeKind = lifeFilter === "all" ? "stock" : lifeFilter;
-  const blockSignature = blocks.map((block) => block.key).join("|");
-
-  useEffect(() => {
-    const root = listRef.current;
-    const scroller = root?.closest("main");
-    if (!root || !(scroller instanceof HTMLElement)) return;
-
-    const pickActiveSortHeader = () => {
-      const headers = [
-        ...root.querySelectorAll<HTMLElement>(
-          "[data-section-header][data-sort-key]",
-        ),
-      ];
-      if (headers.length === 0) {
-        setActiveSortKey(null);
-        return;
-      }
-      const scrollerTop = scroller.getBoundingClientRect().top;
-      let best: HTMLElement | null = null;
-      let bestZ = Number.NEGATIVE_INFINITY;
-      for (const header of headers) {
-        const rect = header.getBoundingClientRect();
-        // Cover-stack: the stuck header sits at the scroller top; later
-        // headers slide over earlier ones with a higher z-index.
-        const stuck =
-          rect.top <= scrollerTop + 2 && rect.bottom > scrollerTop + 28;
-        if (!stuck) continue;
-        const z = Number(header.style.zIndex || 0);
-        if (z >= bestZ) {
-          bestZ = z;
-          best = header;
-        }
-      }
-      const key = best?.dataset.sortKey ?? headers[0]?.dataset.sortKey ?? null;
-      setActiveSortKey((prev) => (prev === key ? prev : key));
-    };
-
-    pickActiveSortHeader();
-    scroller.addEventListener("scroll", pickActiveSortHeader, { passive: true });
-    window.addEventListener("resize", pickActiveSortHeader);
-    return () => {
-      scroller.removeEventListener("scroll", pickActiveSortHeader);
-      window.removeEventListener("resize", pickActiveSortHeader);
-    };
-  }, [blockSignature]);
 
   const actions: ListActions = {
     onOpen,
@@ -321,7 +275,6 @@ export function ChartList({
     compact,
     nameSort,
     dateSort,
-    activeSortKey,
     onToggleNameSort: () => {
       setNameSort((prev) => nextDirSort(prev));
       setDateSort("off");
@@ -334,6 +287,18 @@ export function ChartList({
 
   return (
     <div ref={listRef} className="relative select-none">
+      <SortButtonOverlay
+        nameSort={nameSort}
+        dateSort={dateSort}
+        onToggleNameSort={() => {
+          setNameSort((prev) => nextDirSort(prev));
+          setDateSort("off");
+        }}
+        onToggleDateSort={() => {
+          setDateSort((prev) => nextDirSort(prev));
+          setNameSort("off");
+        }}
+      />
       {compact ? (
         <div className="sticky top-0 z-50 -mx-4 h-0 w-[calc(100%+2rem)] overflow-visible">
           <div
@@ -380,14 +345,51 @@ type ListActions = {
   compact: boolean;
   nameSort: DirSort;
   dateSort: DirSort;
-  activeSortKey: string | null;
   onToggleNameSort: () => void;
   onToggleDateSort: () => void;
 };
 
-/** Sub-header row: A–Z left of the label, date sort on the right.
- *  Always keeps the same height so sticky category headers slide over
- *  each other smoothly; only the topmost sticky header shows the controls.
+/** Title line plus the gap before the sort row, matching the sticky category header. */
+const SORT_ROW_TOP = "top-[calc(0.75rem+1.125rem*1.25+0.25rem)]";
+
+/**
+ * Sort controls stay fixed over the category header. Incoming category
+ * titles slide underneath them instead of covering the buttons.
+ */
+function SortButtonOverlay({
+  nameSort,
+  dateSort,
+  onToggleNameSort,
+  onToggleDateSort,
+}: {
+  nameSort: DirSort;
+  dateSort: DirSort;
+  onToggleNameSort: () => void;
+  onToggleDateSort: () => void;
+}) {
+  return (
+    <div
+      data-sort-overlay=""
+      className="pointer-events-none sticky top-0 z-40 h-0"
+    >
+      <div
+        className={cn(
+          "pointer-events-auto absolute right-0 left-0 flex min-h-8 items-center gap-1.5",
+          SORT_ROW_TOP,
+        )}
+      >
+        <NameSortButton sort={nameSort} onToggle={onToggleNameSort} />
+        <div className="min-w-0 flex-1" />
+        <div className="flex w-[46%] shrink-0 justify-end">
+          <DateSortButton sort={dateSort} onToggle={onToggleDateSort} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Sub-header row: keeps the sort-row height while category titles slide past.
+ *  The buttons themselves live in SortButtonOverlay so they stay on top.
  */
 function SubHeaderSortRow({
   label,
@@ -454,7 +456,7 @@ function NameSortButton({
         onToggle();
       }}
       className={cn(
-        "inline-flex size-8 shrink-0 items-center justify-center rounded-lg ring-1 transition-colors",
+        "relative isolate inline-flex size-8 shrink-0 items-center justify-center rounded-lg ring-1 transition-colors before:absolute before:inset-0 before:-z-10 before:rounded-lg before:bg-[#0f1624]",
         sort === "off"
           ? "text-stone-400 ring-white/15 hover:bg-white/10 hover:text-white"
           : "bg-sky-400/20 text-sky-100 ring-sky-400/40 hover:bg-sky-400/30",
@@ -493,7 +495,7 @@ function DateSortButton({
         onToggle();
       }}
       className={cn(
-        "inline-flex size-8 shrink-0 items-center justify-center rounded-lg ring-1 transition-colors",
+        "relative isolate inline-flex size-8 shrink-0 items-center justify-center rounded-lg ring-1 transition-colors before:absolute before:inset-0 before:-z-10 before:rounded-lg before:bg-[#0f1624]",
         sort === "off"
           ? "text-stone-400 ring-white/15 hover:bg-white/10 hover:text-white"
           : "bg-amber-400/20 text-amber-100 ring-amber-400/40 hover:bg-amber-400/30",
@@ -534,7 +536,6 @@ function renderCoverStack(
         groups={groups}
         actions={actions}
         zIndex={10 + index}
-        preferSort={index === 0}
         after={renderCoverStack(blocks, end, actions)}
       />
     );
@@ -542,10 +543,6 @@ function renderCoverStack(
 
   const rows = sortSectionRows(block.rows, actions.nameSort, actions.dateSort);
   const sortKey = block.key;
-  const showSort =
-    actions.activeSortKey == null
-      ? index === 0
-      : actions.activeSortKey === sortKey;
 
   return (
     <div key={block.key} data-section-root="">
@@ -578,7 +575,7 @@ function renderCoverStack(
           dateSort={actions.dateSort}
           onToggleNameSort={actions.onToggleNameSort}
           onToggleDateSort={actions.onToggleDateSort}
-          showSort={showSort}
+          showSort={false}
         />
       </div>
       <ul className="divide-y divide-white/10">
@@ -601,13 +598,11 @@ function ToppingsSection({
   groups,
   actions,
   zIndex,
-  preferSort,
   after,
 }: {
   groups: StickyBlock[];
   actions: ListActions;
   zIndex: number;
-  preferSort: boolean;
   after: ReactNode;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -652,11 +647,6 @@ function ToppingsSection({
     return () => scroller.removeEventListener("scroll", pickLabel);
   }, [groupKey]);
 
-  const showSort =
-    actions.activeSortKey == null
-      ? preferSort
-      : actions.activeSortKey === "toppings";
-
   return (
     <div ref={rootRef} data-section-root="">
       <div
@@ -692,7 +682,7 @@ function ToppingsSection({
           dateSort={actions.dateSort}
           onToggleNameSort={actions.onToggleNameSort}
           onToggleDateSort={actions.onToggleDateSort}
-          showSort={showSort}
+          showSort={false}
         />
       </div>
       {groups.map((group, groupIndex) => {
