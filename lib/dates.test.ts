@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   addHoursToLocal,
   daysBetween,
+  inclusiveDaysRemaining,
   excelSerialToIso,
   formatCompactDateTime,
   formatDateTime,
@@ -61,6 +62,21 @@ describe("readExpiry", () => {
     assert.equal(readExpiry("2026-12-01", today).status, "ok");
     assert.equal(readExpiry(null, today).status, "missing");
     assert.equal(daysBetween(today, new Date(2026, 9, 23)), 0);
+  });
+
+  it("counts remaining days including today for debug day mode", () => {
+    const today = new Date(2026, 9, 23);
+    // Use-by today → 1 day left (today counts).
+    assert.equal(inclusiveDaysRemaining(today, new Date(2026, 9, 23)), 1);
+    // Use-by tomorrow → 2 days (today + tomorrow).
+    assert.equal(inclusiveDaysRemaining(today, new Date(2026, 9, 24)), 2);
+    // 12-day life from 1 Oct ends 12 Oct; on 1 Oct that is 12 days inclusive.
+    assert.equal(
+      inclusiveDaysRemaining(new Date(2026, 9, 1), new Date(2026, 9, 12)),
+      12,
+    );
+    // Expired yesterday → 0 days left.
+    assert.equal(inclusiveDaysRemaining(today, new Date(2026, 9, 22)), 0);
   });
 
   it("formats a date for the ticket", () => {

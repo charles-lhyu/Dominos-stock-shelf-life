@@ -80,6 +80,14 @@ export function daysBetween(today: Date, expiry: Date): number {
   return Math.round((end - start) / 86_400_000);
 }
 
+/**
+ * Days from today through the use-by date, counting today as day 1
+ * (same inclusive count as chart day lives).
+ */
+export function inclusiveDaysRemaining(today: Date, expiry: Date): number {
+  return daysBetween(today, expiry) + 1;
+}
+
 function expandYear(year: number): number {
   if (year >= 100) return year;
   return year >= 70 ? 1900 + year : 2000 + year;

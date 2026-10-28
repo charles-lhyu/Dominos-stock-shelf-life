@@ -8,9 +8,9 @@ import {
 } from "@/lib/date-format-store";
 import { readDebugDays, subscribeDebug } from "@/lib/debug-store";
 import {
-  daysBetween,
   formatCompactDate,
   formatCompactDateTime,
+  inclusiveDaysRemaining,
 } from "@/lib/dates";
 import { cn } from "cn";
 
@@ -23,7 +23,7 @@ function hasTimeInWhen(when: string) {
 }
 
 function formatDaysFromToday(at: Date, today = new Date()) {
-  const days = daysBetween(today, at);
+  const days = inclusiveDaysRemaining(today, at);
   if (days === 0) return "0 days";
   if (days === 1) return "1 day";
   if (days === -1) return "-1 day";

@@ -1,7 +1,6 @@
 {
-  "version": "1.4.57",
+  "version": "1.4.58",
   "notes": [
-    "New sits at the end of the category filters for chart NEW items",
-    "New is only a filter — the list still groups items under their real categories"
+    "Debug days/hours mode counts remaining days including today"
   ]
 }
