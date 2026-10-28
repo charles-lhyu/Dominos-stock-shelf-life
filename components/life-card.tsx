@@ -359,7 +359,14 @@ export function LifeCard({
         <p className="text-xs font-semibold uppercase tracking-wide text-stone-400">
           {rule.category}
         </p>
-        <h2 className="mt-1 font-display text-3xl leading-tight text-white">{rule.name}</h2>
+        <div className="mt-1 flex flex-wrap items-center gap-2">
+          {rule.tags?.includes("new") ? (
+            <span className="shrink-0 rounded-md bg-amber-300/90 px-1.5 py-0.5 text-[0.6875rem] font-bold uppercase tracking-wide text-amber-950 ring-1 ring-amber-200">
+              New
+            </span>
+          ) : null}
+          <h2 className="font-display text-3xl leading-tight text-white">{rule.name}</h2>
+        </div>
         {debugOn && debugOpen ? <ItemDebugPanel rule={rule} clocks={clocks} /> : null}
         {rule.sameAs.length > 0 ? (
           <p className="mt-2 text-sm text-stone-400">
@@ -482,6 +489,7 @@ function ItemDebugPanel({ rule, clocks }: { rule: ShelfRule; clocks: Clock[] }) 
           const image = await cropOneProductRowImage(pdf, {
             id: rule.id,
             name: rule.name,
+            aliases: rule.aliases,
           });
           if (image) await putPdfCropImage(rule.id, image);
           if (!cancelled) {

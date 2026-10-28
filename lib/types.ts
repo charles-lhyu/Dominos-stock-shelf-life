@@ -14,6 +14,9 @@ export type ShelfAlso = {
   value: string;
 };
 
+/** Chart-printed markers that are not part of the product name. */
+export type ShelfTag = "new";
+
 export type ShelfRule = {
   id: string;
   sectionId: SectionId;
@@ -21,6 +24,8 @@ export type ShelfRule = {
   name: string;
   aliases: string[];
   sameAs: string[];
+  /** Markers from the chart such as NEW — shown as chips, not in the name. */
+  tags?: ShelfTag[];
   fromDelivery?: string;
   inUse?: string;
   unopened?: string;

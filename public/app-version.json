@@ -1,7 +1,7 @@
 {
-  "version": "1.4.55",
+  "version": "1.4.56",
   "notes": [
-    "Frozen rows that span From delivery and In use now keep both lives (Pepperoni, Chorizo, Nduja, and the other spanned day rows)",
-    "Existing charts fill in the missing In use life on load"
+    "Bacon (FROZEN) shows as Bacon with frozen storage, same item as chilled Bacon",
+    "NEW Chinese Style Chicken shows as Chinese Style Chicken with a New tag"
   ]
 }

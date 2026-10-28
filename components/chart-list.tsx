@@ -59,6 +59,7 @@ type ListRow = {
   activeLife: LifeKind | null;
   preview: DatePreview;
   hidden: boolean;
+  isNew: boolean;
 };
 
 type StickyBlock = {
@@ -249,7 +250,16 @@ export function ChartList({
       );
       const preview = datePreview(active.rule, deliveryDate, activeLife, today, prepTime);
 
-      return [{ name, variants, active, kinds, activeLife, preview, hidden: hidden.has(name) }];
+      return [{
+        name,
+        variants,
+        active,
+        kinds,
+        activeLife,
+        preview,
+        hidden: hidden.has(name),
+        isNew: active.rule.tags?.includes("new") ?? false,
+      }];
     });
 
     if (rows.length === 0) continue;
@@ -857,7 +867,7 @@ function ProductRow({
   onProductDefault: (name: string, section: SectionId) => void;
   onLifePrefer: (kind: LifeKind) => void;
 }) {
-  const { name, variants, active, kinds, activeLife, preview, hidden } = row;
+  const { name, variants, active, kinds, activeLife, preview, hidden, isNew } = row;
 
   return (
     <li>
@@ -893,6 +903,11 @@ function ProductRow({
                 active={active}
                 onPreferredSection={(sectionId) => onProductDefault(name, sectionId)}
               />
+            ) : null}
+            {isNew ? (
+              <span className="shrink-0 rounded-md bg-amber-300/90 px-1 py-0.5 text-[0.625rem] font-bold uppercase tracking-wide text-amber-950 ring-1 ring-amber-200">
+                New
+              </span>
             ) : null}
             <AutoScrollText className="w-0 min-w-0 flex-1 font-medium text-white">
               {name}

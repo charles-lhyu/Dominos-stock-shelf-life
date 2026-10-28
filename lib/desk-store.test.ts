@@ -137,7 +137,7 @@ describe("stored chart repair", () => {
       id: "frozen:bacon-frozen",
       sectionId: "frozen",
       category: "Toppings",
-      name: "Bacon (FROZEN)",
+      name: "Bacon",
       aliases: [],
       sameAs: [],
       fromDelivery: "10 days",
@@ -146,6 +146,34 @@ describe("stored chart repair", () => {
     const [repaired] = repairStoredRules([saved]);
     assert.equal(repaired?.fromDelivery, "10 days");
     assert.equal(repaired?.inUse, "7 days");
+  });
+
+  it("renames chart label markers into the product title and NEW tag", () => {
+    const frozenBacon: ShelfRule = {
+      id: "frozen:bacon-frozen",
+      sectionId: "frozen",
+      category: "Toppings",
+      name: "Bacon (FROZEN)",
+      aliases: [],
+      sameAs: [],
+      fromDelivery: "10 days",
+      inUse: "7 days",
+    };
+    const chinese: ShelfRule = {
+      id: "frozen:new-chinese-style-chicken",
+      sectionId: "frozen",
+      category: "Toppings",
+      name: "NEW Chinese Style Chicken",
+      aliases: [],
+      sameAs: [],
+      fromDelivery: "9 days",
+      inUse: "9 days",
+    };
+    const repaired = repairStoredRules([frozenBacon, chinese]);
+    assert.equal(repaired[0]?.name, "Bacon");
+    assert.equal(repaired[0]?.sectionId, "frozen");
+    assert.equal(repaired[1]?.name, "Chinese Style Chicken");
+    assert.deepEqual(repaired[1]?.tags, ["new"]);
   });
 
   it("drops chilled chorizo and nduja that are not on the chart", () => {

@@ -69,6 +69,7 @@ function group(
       | "ambientUse"
       | "also"
       | "note"
+      | "tags"
     >
   >,
   aliases: Record<string, string[]> = {},
@@ -101,15 +102,24 @@ export const RULES: ShelfRule[] = [
   }, {
     "Tandoori Chicken": ["tandoori"],
   }),
-  ...group("frozen", "Toppings", ["Bacon (FROZEN)"], {
+  // Chart prints "Bacon (FROZEN)" — same product as chilled Bacon, frozen storage.
+  ...group("frozen", "Toppings", ["Bacon"], {
     fromDelivery: "10 days",
     inUse: "7 days",
     note: "You will be notified by Supply Chain if you are due to receive frozen bacon.",
-  }, { "Bacon (FROZEN)": ["frozen bacon", "bacon frozen"] }),
-  ...group("frozen", "Toppings", ["NEW Chinese Style Chicken"], {
+  }, { Bacon: ["bacon (frozen)", "frozen bacon", "bacon frozen"] }),
+  // Chart prints "NEW" as a marker, not part of the product name.
+  ...group("frozen", "Toppings", ["Chinese Style Chicken"], {
     fromDelivery: "9 days",
     inUse: "9 days",
-  }, { "NEW Chinese Style Chicken": ["chinese chicken", "chinese style chicken"] }),
+    tags: ["new"],
+  }, {
+    "Chinese Style Chicken": [
+      "new chinese style chicken",
+      "chinese chicken",
+      "chinese style chicken",
+    ],
+  }),
   ...group(
     "frozen",
     "Toppings",

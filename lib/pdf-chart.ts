@@ -29,27 +29,51 @@ function namePattern(name: string) {
   return new RegExp(`(?:^|[^a-z0-9])${parts.join("[^a-z0-9]+")}(?![a-z0-9])`, "gi");
 }
 
-type NameSpan = { name: string; start: number; end: number };
+type NameSpan = {
+  /** Display product key, e.g. "bacon". */
+  name: string;
+  /** Text that matched, e.g. "bacon frozen" from the chart label. */
+  matched: string;
+  start: number;
+  end: number;
+};
+
+type MatchLabel = { display: string; label: string };
+
+function matchLabelsForRules(): MatchLabel[] {
+  const labels: MatchLabel[] = [];
+  const seen = new Set<string>();
+  for (const rule of BUNDLED_PACK.rules) {
+    const display = nameKey(rule.name);
+    if (display.length < 3) continue;
+    for (const label of [rule.name, ...rule.aliases]) {
+      const key = nameKey(label);
+      if (key.length < 3) continue;
+      const id = `${display}::${key}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      labels.push({ display, label });
+    }
+  }
+  // Longer chart labels first so "Bacon (FROZEN)" wins over "Bacon".
+  return labels.sort((a, b) => nameKey(b.label).length - nameKey(a.label).length);
+}
 
 function findNameSpans(haystack: string): NameSpan[] {
-  const names = [...new Set(BUNDLED_PACK.rules.map((rule) => rule.name))].sort(
-    (a, b) => nameKey(b).length - nameKey(a).length,
-  );
   const spans: NameSpan[] = [];
   const overlaps = (start: number, end: number) =>
     spans.some((span) => start < span.end && end > span.start);
 
-  for (const name of names) {
-    const key = nameKey(name);
-    if (key.length < 3) continue;
-    const pattern = namePattern(name);
+  for (const { display, label } of matchLabelsForRules()) {
+    const matched = nameKey(label);
+    const pattern = namePattern(label);
     let match: RegExpExecArray | null;
     while ((match = pattern.exec(haystack))) {
       const atStart = match.index === 0 && /^[a-z0-9]/.test(match[0]);
       const start = match.index + (atStart ? 0 : 1);
       const end = match.index + match[0].length;
       if (end > start && !overlaps(start, end)) {
-        spans.push({ name: key, start, end });
+        spans.push({ name: display, matched, start, end });
       }
       if (pattern.lastIndex === match.index) pattern.lastIndex += 1;
     }
@@ -253,17 +277,32 @@ function mergeContinuationLines(text: string): string {
   return merged.join("\n");
 }
 
-function takeSpan(spans: NameSpan[], name: string, cursor: Map<string, number>) {
-  const startAt = cursor.get(name) ?? 0;
-  for (let index = startAt; index < spans.length; index += 1) {
-    if (spans[index]?.name !== name) continue;
-    cursor.set(name, index + 1);
-    return index;
-  }
+function spanScoreForRule(span: NameSpan, rule: ShelfRule): number {
+  const display = nameKey(rule.name);
+  if (span.name !== display) return -1;
+  const aliasKeys = new Set(rule.aliases.map(nameKey));
+  if (aliasKeys.has(span.matched)) return 100 + span.matched.length;
+  if (span.matched === display) return 50;
+  return -1;
+}
+
+function takeSpanForRule(
+  spans: NameSpan[],
+  rule: ShelfRule,
+  used: Set<number>,
+): number | null {
+  let best: { index: number; score: number } | null = null;
   for (let index = 0; index < spans.length; index += 1) {
-    if (spans[index]?.name === name) return index;
+    if (used.has(index)) continue;
+    const score = spanScoreForRule(spans[index]!, rule);
+    if (score < 0) continue;
+    if (!best || score > best.score || (score === best.score && index < best.index)) {
+      best = { index, score };
+    }
   }
-  return null;
+  if (!best) return null;
+  used.add(best.index);
+  return best.index;
 }
 
 function isoFromLooseDate(raw: string): string {
@@ -363,14 +402,13 @@ function clusterPdfLines(
     .sort((a, b) => b.y - a.y);
 }
 
-function lineMatchesName(line: PdfLine, name: string) {
-  const needle = nameKey(name);
-  if (needle.length < 3) return false;
+function lineMatchesRule(line: PdfLine, rule: { name: string; aliases: string[] }) {
   const hay = nameKey(line.text);
-  if (!hay.includes(needle)) return false;
-  // Prefer exact-ish hits so "Bacon" does not steal the "Bacon (FROZEN)" row.
-  if (needle === "bacon" && /\bbacon frozen\b/.test(hay)) return false;
-  return true;
+  const labels = [rule.name, ...rule.aliases].map(nameKey).filter((key) => key.length >= 3);
+  if (labels.length === 0) return false;
+  // Prefer the longest label that appears on the line.
+  const hit = labels.sort((a, b) => b.length - a.length).find((key) => hay.includes(key));
+  return Boolean(hit);
 }
 
 function dayField(value: string | undefined) {
@@ -497,7 +535,7 @@ function cropStrip(
  */
 async function cropProductRowsFromPdf(
   data: Uint8Array,
-  products: { id: string; name: string }[],
+  products: { id: string; name: string; aliases: string[] }[],
 ): Promise<Record<string, string>> {
   if (typeof document === "undefined") return {};
   const pdfjs = await import("pdfjs-dist");
@@ -506,17 +544,19 @@ async function cropProductRowsFromPdf(
   const scale = 2.5;
   const crops: Record<string, string> = {};
   const usedLineKeys = new Set<string>();
-  // Longer names first so "Bacon (FROZEN)" claims its row before "Bacon".
-  const ordered = [...products].sort(
-    (a, b) => nameKey(b.name).length - nameKey(a.name).length,
-  );
+  // Longer labels first so "Bacon (FROZEN)" claims its row before plain "Bacon".
+  const ordered = [...products].sort((a, b) => {
+    const aLen = Math.max(nameKey(a.name).length, ...a.aliases.map((alias) => nameKey(alias).length));
+    const bLen = Math.max(nameKey(b.name).length, ...b.aliases.map((alias) => nameKey(alias).length));
+    return bLen - aLen;
+  });
 
   for (let pageNumber = 1; pageNumber <= doc.numPages; pageNumber += 1) {
     const page = (await doc.getPage(pageNumber)) as unknown as PdfjsPage;
     const content = await page.getTextContent();
     const lines = clusterPdfLines(pageNumber - 1, content.items);
     const productLines = lines.filter((line) =>
-      ordered.some((product) => lineMatchesName(line, product.name)),
+      ordered.some((product) => lineMatchesRule(line, product)),
     );
     if (productLines.length === 0) continue;
 
@@ -529,7 +569,7 @@ async function cropProductRowsFromPdf(
       const line = productLines.find((item) => {
         const key = `${item.pageIndex}:${item.y}`;
         if (usedLineKeys.has(key)) return false;
-        return lineMatchesName(item, product.name);
+        return lineMatchesRule(item, product);
       });
       if (!line) continue;
       usedLineKeys.add(`${line.pageIndex}:${line.y}`);
@@ -563,9 +603,11 @@ async function cropProductRowsFromPdf(
 /** Build one product row JPEG from PDF bytes (used on import and on-demand in debug). */
 export async function cropOneProductRowImage(
   data: Uint8Array,
-  product: { id: string; name: string },
+  product: { id: string; name: string; aliases?: string[] },
 ): Promise<string | null> {
-  const crops = await cropProductRowsFromPdf(data, [product]);
+  const crops = await cropProductRowsFromPdf(data, [
+    { id: product.id, name: product.name, aliases: product.aliases ?? [] },
+  ]);
   return crops[product.id] ?? null;
 }
 
@@ -626,14 +668,14 @@ export function packFromPdfText(text: string, fileName: string): { ok: true; pac
   const used = new Set<string>();
   const haystack = flat.toLowerCase();
   const spans = findNameSpans(haystack);
-  const spanCursor = new Map<string, number>();
+  const usedSpans = new Set<number>();
   const columnLives = columnLifeCounts(spans, haystack);
   const lifeWindows = resolveSplitLifeWindows(spans, haystack);
 
   for (const base of BUNDLED_PACK.rules) {
     const needle = nameKey(base.name);
     if (needle.length < 3) continue;
-    const spanIndex = takeSpan(spans, needle, spanCursor);
+    const spanIndex = takeSpanForRule(spans, base, usedSpans);
     if (spanIndex == null) continue;
     const window = lifeWindows[spanIndex] ?? lifeWindow(spans, spanIndex, haystack);
     const columnLife = columnLives.get(spanIndex);
@@ -712,7 +754,11 @@ export async function parsePdfChartBytes(
     try {
       crops = await cropProductRowsFromPdf(
         data,
-        parsed.pack.rules.map((rule) => ({ id: rule.id, name: rule.name })),
+        parsed.pack.rules.map((rule) => ({
+          id: rule.id,
+          name: rule.name,
+          aliases: rule.aliases,
+        })),
       );
     } catch {
       crops = {};

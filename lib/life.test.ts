@@ -117,7 +117,7 @@ describe("shelf life dates", () => {
   });
 
   it("counts the prep date as day 1 of an in-use life", () => {
-    const bacon = RULES.find((rule) => rule.name === "Bacon (FROZEN)");
+    const bacon = RULES.find((rule) => rule.name === "Bacon" && rule.sectionId === "frozen");
     assert.ok(bacon);
     const inUse = clocksFor(bacon).find((clock) => clock.id === "use");
     assert.ok(inUse);

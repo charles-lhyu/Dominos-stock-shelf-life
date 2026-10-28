@@ -43,8 +43,11 @@ describe("Campaign 5 chart", () => {
       RULES.some((item) => item.name === "Nduja Sausage" && item.sectionId === "chilled"),
       false,
     );
-    assert.equal(rule("Bacon (FROZEN)", "frozen").fromDelivery, "10 days");
-    assert.equal(rule("Bacon (FROZEN)", "frozen").inUse, "7 days");
+    assert.equal(rule("Bacon", "frozen").fromDelivery, "10 days");
+    assert.equal(rule("Bacon", "frozen").inUse, "7 days");
+    assert.equal(rule("Bacon", "chilled").prepped, "6 days");
+    assert.equal(rule("Chinese Style Chicken", "frozen").fromDelivery, "9 days");
+    assert.deepEqual(rule("Chinese Style Chicken", "frozen").tags, ["new"]);
     assert.equal(rule("Chicken Wings", "frozen").fromDelivery, "9 days");
     assert.equal(rule("Chicken Wings", "frozen").inUse, "9 days");
     assert.equal(rule("Fries", "frozen").inUse, "7 days");

@@ -37,6 +37,45 @@ function withChartCategory(rule: ShelfRule): ShelfRule {
   return { ...rule, category: bundled.category };
 }
 
+/** Chart labels that are storage / NEW markers, not the product title. */
+const CHART_NAME_RENAMES: Record<string, { name: string; sectionId?: ShelfRule["sectionId"] }> = {
+  "Bacon (FROZEN)": { name: "Bacon", sectionId: "frozen" },
+  "NEW Chinese Style Chicken": { name: "Chinese Style Chicken" },
+};
+
+function withChartDisplayName(rule: ShelfRule): ShelfRule {
+  const rename = CHART_NAME_RENAMES[rule.name];
+  let next = rule;
+  if (rename && (!rename.sectionId || rename.sectionId === rule.sectionId)) {
+    const idSlug = rename.name
+      .toLowerCase()
+      .replace(/&/g, " and ")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "");
+    next = {
+      ...rule,
+      name: rename.name,
+      id: `${rule.sectionId}:${idSlug}`,
+    };
+  }
+  const bundled = BUNDLED_PACK.rules.find(
+    (item) => item.name === next.name && item.sectionId === next.sectionId,
+  );
+  if (bundled?.tags?.length) {
+    next = { ...next, tags: [...bundled.tags] };
+  } else if (next.tags?.length) {
+    next = { ...next, tags: undefined };
+  }
+  // Only fill aliases when we renamed a chart label into the clean title.
+  if (rename && bundled?.aliases?.length) {
+    next = {
+      ...next,
+      aliases: [...new Set([...next.aliases, ...bundled.aliases])],
+    };
+  }
+  return next;
+}
+
 /**
  * Drop fields we invented that are not on the Campaign chart:
  * - chilled Chorizo / Nduja (frozen-only on the chart)
@@ -86,7 +125,7 @@ function withSpannedInUse(rule: ShelfRule): ShelfRule {
 export function repairStoredRules(rules: ShelfRule[]): ShelfRule[] {
   const repaired: ShelfRule[] = [];
   for (const rule of rules) {
-    const stripped = withoutInventedFields(withChartCategory(rule));
+    const stripped = withoutInventedFields(withChartCategory(withChartDisplayName(rule)));
     if (!stripped) continue;
     const current = withSpannedInUse(stripped);
     if (current.sectionId !== "ready" || !current.prepped) {

@@ -55,6 +55,7 @@ function parseRule(value: unknown, index: number): ShelfRule | string {
   const name = asString(value.name);
   if (!category || !name) return `Rule ${index + 1} needs category and name.`;
   const id = asString(value.id) ?? `${sectionId}:${index + 1}`;
+  const tags = asStringArray(value.tags).filter((tag): tag is "new" => tag === "new");
   return {
     id,
     sectionId,
@@ -62,6 +63,7 @@ function parseRule(value: unknown, index: number): ShelfRule | string {
     name,
     aliases: asStringArray(value.aliases),
     sameAs: asStringArray(value.sameAs),
+    tags: tags.length > 0 ? tags : undefined,
     fromDelivery: asString(value.fromDelivery) ?? undefined,
     inUse: asString(value.inUse) ?? undefined,
     unopened: asString(value.unopened) ?? undefined,

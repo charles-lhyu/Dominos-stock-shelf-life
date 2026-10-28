@@ -61,18 +61,44 @@ describe("PDF shelf life parsing", () => {
     assert.match(pineapple.pdfCrop, /10\s*days/i);
   });
 
-  it("keeps Bacon (FROZEN) delivery at 10 days when only the 7-day in-use count follows the name", () => {
+  it("keeps Bacon delivery at 10 days when only the 7-day in-use count follows the chart label", () => {
     const text =
       "Bacon (FROZEN) 7 days You will be notified by Supply Chain NEW Chinese Style Chicken 9 days";
     const result = packFromPdfText(`${HEADER}${text}`, "campaign-5.pdf");
     assert.equal(result.ok, true);
     if (!result.ok) return;
     const bacon = result.pack.rules.find(
-      (item) => item.name === "Bacon (FROZEN)" && item.sectionId === "frozen",
+      (item) => item.name === "Bacon" && item.sectionId === "frozen",
     );
     assert.ok(bacon);
     assert.equal(bacon.fromDelivery, "10 days");
     assert.equal(bacon.inUse, "7 days");
+    const chinese = result.pack.rules.find(
+      (item) => item.name === "Chinese Style Chicken" && item.sectionId === "frozen",
+    );
+    assert.ok(chinese);
+    assert.equal(chinese.fromDelivery, "9 days");
+    assert.equal(chinese.inUse, "9 days");
+    assert.deepEqual(chinese.tags, ["new"]);
+  });
+
+  it("treats Bacon (FROZEN) as Bacon frozen storage, not a separate product title", () => {
+    const text =
+      "Bacon (FROZEN) 10 days 7 days Bacon Date on pack 6 days N/A";
+    const result = packFromPdfText(`${HEADER}${text}`, "campaign-5.pdf");
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    const frozen = result.pack.rules.find(
+      (item) => item.name === "Bacon" && item.sectionId === "frozen",
+    );
+    const chilled = result.pack.rules.find(
+      (item) => item.name === "Bacon" && item.sectionId === "chilled",
+    );
+    assert.ok(frozen);
+    assert.equal(frozen.fromDelivery, "10 days");
+    assert.equal(frozen.inUse, "7 days");
+    assert.ok(chilled);
+    assert.equal(chilled.prepped, "6 days");
   });
 
   it("copies a spanned from-delivery / in-use day count onto both lives", () => {
