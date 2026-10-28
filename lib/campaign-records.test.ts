@@ -15,7 +15,9 @@ import {
   parseCampaignLibrary,
   planStoreChange,
   readStoreSettings,
+  readStoreName,
   upsertCampaign,
+  writeStoreName,
   writeStoreSettings,
 } from "./campaign-records";
 import type { ItemPreset } from "./item-preset-store";
@@ -495,5 +497,18 @@ describe("campaign library records", () => {
     assert.equal(next?.compactDates, true);
     assert.equal(next?.preset.defaults.Pepperoni?.section, "chilled");
     assert.equal(planned.restore?.compactDates, true);
+  });
+
+  it("keeps a custom store name with the store", () => {
+    let library = writeStoreName(emptyCampaignLibrary(), "12345", "  Oxford Street  ");
+    assert.equal(readStoreName(library, "12345"), "Oxford Street");
+    library = writeStoreSettings(library, "12345", "2026-09-07", "2026-11-17", {
+      hidden: ["Bacon"],
+      preset,
+    });
+    library = upsertCampaign(library, pack("2026-09-07", "2026-11-17"), "b.pdf", "t2");
+    const parsed = parseCampaignLibrary(JSON.parse(JSON.stringify(library)));
+    assert.equal(readStoreName(parsed, "12345"), "Oxford Street");
+    assert.equal(readStoreName(writeStoreName(parsed, "12345", " "), "12345"), "");
   });
 });

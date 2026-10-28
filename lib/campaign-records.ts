@@ -39,12 +39,41 @@ export type CampaignSummary = {
 export type CampaignLibrary = {
   campaigns: CampaignRecord[];
   stores: Record<string, Record<string, StoreCampaignSettings>>;
+  /** Display name for a store id on this device. */
+  storeNames: Record<string, string>;
 };
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 export function emptyCampaignLibrary(): CampaignLibrary {
-  return { campaigns: [], stores: {} };
+  return { campaigns: [], stores: {}, storeNames: {} };
+}
+
+const STORE_NAME_LIMIT = 48;
+
+/** Trim a store display name. Blank clears it. */
+export function normalizeStoreName(raw: string): string {
+  return raw.replace(/\s+/g, " ").trim().slice(0, STORE_NAME_LIMIT);
+}
+
+export function readStoreName(library: CampaignLibrary, storeId: string): string {
+  if (!/^\d{1,8}$/.test(storeId)) return "";
+  return library.storeNames[storeId] ?? "";
+}
+
+export function writeStoreName(
+  library: CampaignLibrary,
+  storeId: string,
+  name: string,
+): CampaignLibrary {
+  if (!/^\d{1,8}$/.test(storeId)) return library;
+  const next = normalizeStoreName(name);
+  const current = library.storeNames[storeId] ?? "";
+  if (current === next) return library;
+  const storeNames = { ...library.storeNames };
+  if (next) storeNames[storeId] = next;
+  else delete storeNames[storeId];
+  return { ...library, storeNames };
 }
 
 /** Campaign identity is the issued date plus the valid-until date. */
@@ -153,7 +182,15 @@ export function parseCampaignLibrary(value: unknown): CampaignLibrary {
       if (Object.keys(next).length > 0) stores[storeId] = next;
     }
   }
-  return { campaigns: [...byKey.values()], stores };
+  const storeNames: Record<string, string> = {};
+  if (isRecord(value.storeNames)) {
+    for (const [storeId, name] of Object.entries(value.storeNames)) {
+      if (typeof name !== "string") continue;
+      const next = normalizeStoreName(name);
+      if (/^\d{1,8}$/.test(storeId) && next) storeNames[storeId] = next;
+    }
+  }
+  return { campaigns: [...byKey.values()], stores, storeNames };
 }
 
 export function upsertCampaign(
@@ -185,6 +222,7 @@ export function upsertCampaign(
     pack: stored,
   };
   return {
+    ...library,
     campaigns: [
       ...library.campaigns.filter((item) => campaignKey(item.issued, item.validUntil) !== key),
       record,
@@ -229,6 +267,7 @@ export function writeStoreSettings(
     return library;
   }
   return {
+    ...library,
     campaigns: library.campaigns,
     stores: {
       ...library.stores,

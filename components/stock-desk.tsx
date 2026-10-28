@@ -26,7 +26,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { dismissTopDialog, hasOpenDialog, nextBackAction } from "@/lib/back-button";
-import { captureActiveCampaign } from "@/lib/campaign-library";
+import {
+  captureActiveCampaign,
+  hydrateCampaignLibrary,
+  listStoreNames,
+  listStoreNamesServer,
+  subscribeCampaignLibrary,
+} from "@/lib/campaign-library";
 import { formatAppVersion } from "@/lib/changelog";
 import {
   daysBetween,
@@ -211,6 +217,15 @@ export function StockDesk() {
     },
     getStoreIdServer,
   );
+  const storeNames = useSyncExternalStore(
+    subscribeCampaignLibrary,
+    () => {
+      hydrateCampaignLibrary();
+      return listStoreNames();
+    },
+    listStoreNamesServer,
+  );
+  const storeName = storeId ? (storeNames[storeId] ?? "") : "";
   const hidden = new Set(hiddenNames);
   const visibleRules = rules.filter((rule) => !hidden.has(rule.name));
   const categories = categoriesInPack(pack).filter((item) =>
@@ -636,19 +651,29 @@ export function StockDesk() {
             type="button"
             onClick={() => setSettingsOpenSafe(true)}
             className="flex min-w-0 flex-1 items-center gap-2 py-1 text-left"
-            aria-label={storeId ? `Store ${storeId}` : "Store ID not set"}
+            aria-label={
+              storeId
+                ? storeName
+                  ? `${storeName}, store ${storeId}`
+                  : `Store ${storeId}`
+                : "Store ID not set"
+            }
           >
             <span className="shrink-0 text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-stone-500">
               Store
             </span>
             <span
               className={cn(
-                "min-w-0 truncate font-mono text-sm font-medium",
-                storeId ? "text-white" : "text-stone-500",
+                "min-w-0 truncate text-sm font-medium",
+                storeName || storeId ? "text-white" : "text-stone-500",
+                storeName ? "" : "font-mono",
               )}
             >
-              {storeId || "Not set"}
+              {storeName || storeId || "Not set"}
             </span>
+            {storeName && storeId ? (
+              <span className="shrink-0 font-mono text-xs text-stone-400">{storeId}</span>
+            ) : null}
           </button>
           <ImportChartButton
             desk={desk}
@@ -704,6 +729,11 @@ export function StockDesk() {
               >
                 <div className="min-w-0 flex-1 overflow-visible pt-0.5">
                   <h1 className="font-display text-xl leading-[1.2] text-balance [overflow-wrap:anywhere]">
+                    {storeName ? (
+                      <span className="mb-1 block text-base font-medium tracking-normal text-stone-200">
+                        {storeName}
+                      </span>
+                    ) : null}
                     {chart.title}
                   </h1>
                   {chart.audience || chart.version || chart.issued ? (

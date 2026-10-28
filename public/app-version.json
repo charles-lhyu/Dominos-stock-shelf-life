@@ -1,6 +1,7 @@
 {
-  "version": "1.4.32",
+  "version": "1.4.33",
   "notes": [
-    "The store ID dropdown button shows every saved store, even when the field already has a number"
+    "A cleared store ID field hints the store that is loaded",
+    "Editing stored data can set a store name, shown on the store bar and the chart title"
   ]
 }

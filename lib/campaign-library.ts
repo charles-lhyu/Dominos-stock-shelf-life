@@ -12,6 +12,7 @@ import {
   planStoreChange,
   readStoreSettings,
   upsertCampaign,
+  writeStoreName,
   writeStoreSettings,
   type CampaignLibrary,
   type CampaignSummary,
@@ -52,6 +53,8 @@ const STORAGE_KEY = "campaign-library-v1";
 const EMPTY_CAMPAIGNS: CampaignSummary[] = [];
 const EMPTY_STORED: StoreCampaignView[] = [];
 const EMPTY_DEVICE: DeviceStoredRecord[] = [];
+const EMPTY_STORE_NAMES: Record<string, string> = {};
+let storeNameSnapshot: Record<string, string> = EMPTY_STORE_NAMES;
 
 let library: CampaignLibrary = emptyCampaignLibrary();
 let snapshot: CampaignSummary[] = EMPTY_CAMPAIGNS;
@@ -71,6 +74,8 @@ function refreshSnapshot() {
   const device = listDeviceStored(library);
   deviceSnapshot = device.length === 0 ? EMPTY_DEVICE : device;
   storedCache = new Map();
+  const names = library.storeNames ?? EMPTY_STORE_NAMES;
+  storeNameSnapshot = Object.keys(names).length === 0 ? EMPTY_STORE_NAMES : names;
 }
 
 function commitLibrary(next: CampaignLibrary) {
@@ -132,6 +137,20 @@ export function listStoredOnDevice(): DeviceStoredRecord[] {
 
 export function listStoredOnDeviceServer(): DeviceStoredRecord[] {
   return EMPTY_DEVICE;
+}
+
+export function listStoreNames(): Record<string, string> {
+  return storeNameSnapshot;
+}
+
+export function listStoreNamesServer(): Record<string, string> {
+  return EMPTY_STORE_NAMES;
+}
+
+export function setStoreName(storeId: string, name: string) {
+  hydrateCampaignLibrary();
+  if (!/^\d{1,8}$/.test(storeId)) return;
+  commitLibrary(writeStoreName(library, storeId, name));
 }
 
 export function readSavedCampaignSettings(

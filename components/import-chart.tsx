@@ -59,8 +59,11 @@ import {
   listStoredForStoreServer,
   listStoredOnDevice,
   listStoredOnDeviceServer,
+  listStoreNames,
+  listStoreNamesServer,
   readSavedCampaignSettings,
   reloadCampaign,
+  setStoreName,
   subscribeCampaignLibrary,
   subscribeStoredStore,
 } from "@/lib/campaign-library";
@@ -214,6 +217,9 @@ export function ImportChartButton({
   const [otherStoredOpen, setOtherStoredOpen] = useState(false);
   const [otherStoredKey, setOtherStoredKey] = useState<string | null>(null);
   const [storedEditing, setStoredEditing] = useState(false);
+  const [storeNameDraft, setStoreNameDraft] = useState<{ storeId: string; value: string } | null>(
+    null,
+  );
   const storePromptRef = useRef<string | null>(null);
   const [activeSettingsSection, setActiveSettingsSection] =
     useState<SettingsSectionId>("settings-app");
@@ -309,6 +315,14 @@ export function ImportChartButton({
     },
     listStoredOnDeviceServer,
   );
+  const storeNames = useSyncExternalStore(
+    subscribeCampaignLibrary,
+    () => {
+      hydrateCampaignLibrary();
+      return listStoreNames();
+    },
+    listStoreNamesServer,
+  );
 
   useEffect(() => () => stopScan(), []);
 
@@ -320,6 +334,7 @@ export function ImportChartButton({
     setStoreMenuOpen(false);
     setStoreMenuAll(false);
     setStoredEditing(false);
+    setStoreNameDraft(null);
     setActiveSettingsSection("settings-app");
     const raf = window.requestAnimationFrame(() => {
       settingsBodyRef.current?.scrollTo({ top: 0 });
@@ -368,6 +383,7 @@ export function ImportChartButton({
       setChangeChoices([]);
       setStoreDraft(getStoreId());
       setStoredEditing(false);
+    setStoreNameDraft(null);
       setOtherStoredOpen(false);
       setStoreMenuOpen(false);
       setStoreMenuAll(false);
@@ -706,9 +722,22 @@ export function ImportChartButton({
           ...savedRows,
         ]
       : savedRows;
-  const canEditStored = storedRows.some(
-    (item) => item.hidden.length > 0 || Object.keys(item.preset.defaults).length > 0,
-  );
+  function nameFor(id: string) {
+    if (storeNameDraft?.storeId === id) return storeNameDraft.value;
+    return storeNames[id] ?? "";
+  }
+
+  function changeStoreName(id: string, value: string) {
+    setStoreNameDraft({ storeId: id, value: value.slice(0, 48) });
+    setStoreName(id, value);
+  }
+
+  function toggleStoredEditing() {
+    setStoredEditing((on) => {
+      if (on) setStoreNameDraft(null);
+      return !on;
+    });
+  }
 
   function removeHidden(issued: string, validUntil: string, name: string, onScreen: boolean) {
     if (onScreen) {
@@ -1019,7 +1048,7 @@ export function ImportChartButton({
                     autoCorrect="off"
                     spellCheck={false}
                     maxLength={12}
-                    placeholder="12345"
+                    placeholder={storeId || "12345"}
                     value={storeDraft}
                     aria-invalid={storeIdError ? true : undefined}
                     aria-expanded={storedStoreIds.length > 0 ? storeMenuOpen : undefined}
@@ -1098,11 +1127,16 @@ export function ImportChartButton({
                                 setStoreMenuAll(false);
                               }}
                               className={cn(
-                                "flex h-11 w-full items-center px-3 text-left font-mono text-base text-white",
+                                "flex h-11 w-full items-center gap-2 px-3 text-left text-base text-white",
                                 selected ? "bg-sky-500/20" : "hover:bg-white/[0.06]",
                               )}
                             >
-                              {id}
+                              <span className="shrink-0 font-mono">{id}</span>
+                              {storeNames[id] ? (
+                                <span className="min-w-0 truncate text-sm text-stone-300">
+                                  {storeNames[id]}
+                                </span>
+                              ) : null}
                             </button>
                           </li>
                         );
@@ -1130,20 +1164,22 @@ export function ImportChartButton({
             <div className="space-y-2 border-t border-white/10 pt-3">
               <div className="flex items-center justify-between gap-2">
                 <p className="min-w-0 truncate text-sm font-medium text-stone-300">
-                  {(previewStoreId ?? storeId)
-                    ? `Stored for store ${previewStoreId ?? storeId}`
-                    : "Stored for this store"}
+                  {storedHeading(previewStoreId ?? storeId, nameFor(previewStoreId ?? storeId))}
                 </p>
-                {!previewStoreId && (storedEditing || canEditStored) ? (
-                  <StoredEditButton
-                    editing={storedEditing}
-                    onToggle={() => setStoredEditing((on) => !on)}
-                  />
+                {!previewStoreId && storeId ? (
+                  <StoredEditButton editing={storedEditing} onToggle={toggleStoredEditing} />
                 ) : null}
               </div>
+              {!previewStoreId && storedEditing && storeId ? (
+                <StoreNameField
+                  value={nameFor(storeId)}
+                  onChange={(value) => changeStoreName(storeId, value)}
+                />
+              ) : null}
               {otherStored.length > 0 ? (
                 <OtherStoredSelect
                   records={otherStored}
+                  names={storeNames}
                   value={otherStoredOpen ? otherStoredKey : null}
                   onPick={(key) => {
                     setOtherStoredKey(key);
@@ -1890,22 +1926,29 @@ export function ImportChartButton({
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
             <OtherStoredSelect
               records={otherStored}
+              names={storeNames}
               value={otherStoredKey}
               onPick={setOtherStoredKey}
             />
             {selectedOther ? (
               <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-3">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-base font-medium text-white">Store {selectedOther.storeId}</p>
-                  {storedEditing ||
-                  selectedOther.hidden.length > 0 ||
-                  Object.keys(selectedOther.preset.defaults).length > 0 ? (
-                    <StoredEditButton
-                      editing={storedEditing}
-                      onToggle={() => setStoredEditing((on) => !on)}
-                    />
-                  ) : null}
+                  <div className="min-w-0">
+                    <p className="truncate text-base font-medium text-white">
+                      {nameFor(selectedOther.storeId) || `Store ${selectedOther.storeId}`}
+                    </p>
+                    {nameFor(selectedOther.storeId) ? (
+                      <p className="text-xs text-stone-400">Store {selectedOther.storeId}</p>
+                    ) : null}
+                  </div>
+                  <StoredEditButton editing={storedEditing} onToggle={toggleStoredEditing} />
                 </div>
+                {storedEditing ? (
+                  <StoreNameField
+                    value={nameFor(selectedOther.storeId)}
+                    onChange={(value) => changeStoreName(selectedOther.storeId, value)}
+                  />
+                ) : null}
                 <p className="text-sm text-stone-200">{selectedOther.title}</p>
                 <p className="mt-0.5 text-xs text-stone-400">
                   Issued {formatShortDate(selectedOther.issued)} · Valid until{" "}
@@ -2044,19 +2087,52 @@ export function ImportChartButton({
   );
 }
 
+function storedHeading(storeId: string, name: string) {
+  if (!storeId) return "Stored for this store";
+  if (!name) return `Stored for store ${storeId}`;
+  return `Stored for ${name} · ${storeId}`;
+}
+
+function StoreNameField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="block space-y-1">
+      <span className="text-xs text-stone-500">Store name</span>
+      <Input
+        value={value}
+        maxLength={48}
+        placeholder="Name for this store"
+        aria-label="Store name"
+        onChange={(event) => onChange(event.target.value)}
+        className="h-11 rounded-xl border-white/10 bg-black/30 text-base text-white placeholder:text-stone-500"
+      />
+    </label>
+  );
+}
+
 function deviceStoredKey(item: { storeId: string; issued: string; validUntil: string }) {
   return `${item.storeId}|${item.issued}|${item.validUntil}`;
 }
 
-function otherStoredOptionLabel(item: {
-  storeId: string;
-  title: string;
-}) {
-  return `Store ${item.storeId} · ${item.title || "Shelf life chart"}`;
+function otherStoredOptionLabel(
+  item: {
+    storeId: string;
+    title: string;
+  },
+  name: string,
+) {
+  const who = name ? `${name} · ${item.storeId}` : `Store ${item.storeId}`;
+  return `${who} · ${item.title || "Shelf life chart"}`;
 }
 
 function OtherStoredSelect({
   records,
+  names,
   value,
   onPick,
 }: {
@@ -2066,11 +2142,15 @@ function OtherStoredSelect({
     issued: string;
     validUntil: string;
   }[];
+  names: Record<string, string>;
   value: string | null;
   onPick: (key: string) => void;
 }) {
   const items = Object.fromEntries(
-    records.map((item) => [deviceStoredKey(item), otherStoredOptionLabel(item)]),
+    records.map((item) => [
+      deviceStoredKey(item),
+      otherStoredOptionLabel(item, names[item.storeId] ?? ""),
+    ]),
   );
   return (
     <Select
