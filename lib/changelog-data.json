@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.4.54",
+    "notes": [
+      "Chart import keeps lives correct when a cell wraps or splits across rows or columns",
+      "Chilled/ambient companions stay with the right product when another name lands between them"
+    ]
+  },
+  {
     "version": "1.4.53",
     "notes": [
       "Life tags in the normal list are one-tap to cycle again",

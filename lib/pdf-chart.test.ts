@@ -104,4 +104,56 @@ describe("PDF shelf life parsing", () => {
     assert.equal(prepped("Pineapple and Olives 9 days", "Pineapple"), "9 days");
     assert.equal(prepped("Pineapple and Olives 9 days", "Olives"), "9 days");
   });
+
+  it("merges a life cell that wraps onto the next PDF line", () => {
+    const text = [
+      "Prepared Double Decadence bases N/A 12 hours chilled",
+      "4 hours ambient",
+      "Pineapple Date on pack 10 days N/A",
+    ].join("\n");
+    const result = packFromPdfText(`${HEADER}${text}`, "campaign-5.pdf");
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    const decadence = result.pack.rules.find(
+      (item) => item.name === "Prepared Double Decadence bases",
+    );
+    const pineapple = result.pack.rules.find((item) => item.name === "Pineapple");
+    assert.ok(decadence);
+    assert.equal(decadence.prepped, "12 hours chilled");
+    assert.equal(decadence.ambientUse, "4 hours");
+    assert.ok(pineapple);
+    assert.equal(pineapple.prepped, "10 days");
+    assert.equal(pineapple.ambientUse, "N/A");
+  });
+
+  it("keeps a chilled/ambient companion with the prior product when a name splits the cell", () => {
+    const text =
+      "Prepared Double Decadence bases N/A 12 hours chilled Pineapple 6 hours ambient Date on pack 10 days N/A";
+    const result = packFromPdfText(`${HEADER}${text}`, "campaign-5.pdf");
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    const decadence = result.pack.rules.find(
+      (item) => item.name === "Prepared Double Decadence bases",
+    );
+    const pineapple = result.pack.rules.find((item) => item.name === "Pineapple");
+    assert.ok(decadence);
+    assert.equal(decadence.prepped, "12 hours chilled");
+    assert.equal(decadence.ambientUse, "6 hours");
+    assert.ok(pineapple);
+    assert.equal(pineapple.prepped, "10 days");
+    assert.equal(pineapple.ambientUse, "N/A");
+  });
+
+  it("assigns a life column of hours one count per name", () => {
+    const text = "Garlic Butter Pizza Sauce 12 hours 15 hours";
+    const result = packFromPdfText(`${HEADER}${text}`, "campaign-5.pdf");
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    const garlic = result.pack.rules.find((item) => item.name === "Garlic Butter");
+    const pizza = result.pack.rules.find((item) => item.name === "Pizza Sauce");
+    assert.ok(garlic);
+    assert.equal(garlic.ambientUse, "12 hours");
+    assert.ok(pizza);
+    assert.equal(pizza.ambientUse, "15 hours");
+  });
 });

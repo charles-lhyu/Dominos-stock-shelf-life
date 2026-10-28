@@ -78,13 +78,20 @@ function dayCountsIn(text: string) {
   return [...text.matchAll(/(\d+)\s*days?/gi)].map((match) => match[1]);
 }
 
+function hourCountsIn(text: string) {
+  return [...text.matchAll(/(\d+)\s*hours?/gi)].map((match) => match[1]);
+}
+
+type ColumnLife = { days?: string; hours?: string };
+
 /**
- * Name column then life column: "Pepperdew Pineapple Olives 25 days 10 days 10 days".
+ * Name column then life column: "Pepperdew Pineapple Olives 25 days 10 days 10 days"
+ * or "Garlic Butter Pizza Sauce 12 hours 15 hours".
  * Those counts belong one-per-name. The last name's window would otherwise start
- * at "25 days" and give Olives Pepperdew's life.
+ * at the first count and steal the earlier product's life.
  */
-function columnDayCounts(spans: NameSpan[], haystack: string) {
-  const assigned = new Map<number, string>();
+function columnLifeCounts(spans: NameSpan[], haystack: string) {
+  const assigned = new Map<number, ColumnLife>();
   let index = 0;
   while (index < spans.length) {
     let end = index;
@@ -98,10 +105,16 @@ function columnDayCounts(spans: NameSpan[], haystack: string) {
     if (size >= 2) {
       const from = spans[end].end;
       const nextStart = end + 1 < spans.length ? spans[end + 1].start : haystack.length;
-      const counts = dayCountsIn(haystack.slice(from, Math.min(nextStart, from + 160)));
-      if (counts.length === size) {
+      const slice = haystack.slice(from, Math.min(nextStart, from + 160));
+      const days = dayCountsIn(slice);
+      const hours = hourCountsIn(slice);
+      if (days.length === size) {
         for (let offset = 0; offset < size; offset += 1) {
-          assigned.set(index + offset, counts[offset]);
+          assigned.set(index + offset, { days: days[offset] });
+        }
+      } else if (hours.length === size) {
+        for (let offset = 0; offset < size; offset += 1) {
+          assigned.set(index + offset, { hours: hours[offset] });
         }
       }
     }
@@ -142,6 +155,102 @@ function rowCrop(spans: NameSpan[], index: number, haystack: string) {
   const nextStart = groupEnd + 1 < spans.length ? spans[groupEnd + 1].start : haystack.length;
   const end = Math.min(nextStart, from + 160);
   return haystack.slice(spans[index]!.start, end).trim();
+}
+
+const AMBIENT_LEAD =
+  /^(?:[\s,;:/]|n\/a)*((?:\d+)\s*hours?\s*ambient|ambient\s*[:\s]*(?:\d+)\s*hours?)/i;
+const CHILLED_LEAD =
+  /^(?:[\s,;:/]|n\/a)*((?:\d+)\s*hours?\s*chilled|chilled\s*[:\s]*(?:\d+)\s*hours?)/i;
+
+function ruleForSpanName(name: string): ShelfRule | undefined {
+  return BUNDLED_PACK.rules.find((rule) => nameKey(rule.name) === name);
+}
+
+function wantsHourAmbient(rule: ShelfRule | undefined) {
+  return Boolean(rule?.ambientUse && /hour/i.test(rule.ambientUse) && !/n\/a/i.test(rule.ambientUse));
+}
+
+function wantsChilledHour(rule: ShelfRule | undefined) {
+  return Boolean(rule?.prepped && /hour/i.test(rule.prepped) && /chilled/i.test(rule.prepped));
+}
+
+function takeLeadingMatch(window: string, pattern: RegExp): { token: string; rest: string } | null {
+  const match = window.match(pattern);
+  if (!match?.[1]) return null;
+  return { token: match[1], rest: `${window.slice(0, match.index ?? 0)}${window.slice((match.index ?? 0) + match[0].length)}` };
+}
+
+/**
+ * When a chilled/ambient cell is split across columns/rows, the next product name
+ * can land between the two halves. Move leading companion hours back to the owner
+ * and strip them from the following product's window.
+ */
+function resolveSplitLifeWindows(spans: NameSpan[], haystack: string): string[] {
+  const windows = spans.map((_, index) => lifeWindow(spans, index, haystack));
+  for (let index = 0; index < spans.length; index += 1) {
+    const owner = ruleForSpanName(spans[index]!.name);
+    if (!owner) continue;
+    const wordingChilled = /\bchilled\b/i.test(windows[index]!);
+    const wordingAmbient = /\bambient\b/i.test(windows[index]!);
+    const needAmbient = wantsHourAmbient(owner) && !wordingAmbient;
+    const needChilled = wantsChilledHour(owner) && !wordingChilled;
+    if (!needAmbient && !needChilled) continue;
+
+    let groupEnd = index;
+    while (
+      groupEnd + 1 < spans.length &&
+      isGlue(haystack.slice(spans[groupEnd]!.end, spans[groupEnd + 1]!.start))
+    ) {
+      groupEnd += 1;
+    }
+    const nextIndex = groupEnd + 1;
+    if (nextIndex >= spans.length) continue;
+    const nextOwner = ruleForSpanName(spans[nextIndex]!.name);
+    let nextWindow = windows[nextIndex]!;
+
+    if (needAmbient && !wantsHourAmbient(nextOwner)) {
+      const taken = takeLeadingMatch(nextWindow, AMBIENT_LEAD);
+      if (taken) {
+        windows[index] = `${windows[index]} ${taken.token}`;
+        nextWindow = taken.rest;
+      }
+    }
+    if (needChilled && !wantsChilledHour(nextOwner)) {
+      const taken = takeLeadingMatch(nextWindow, CHILLED_LEAD);
+      if (taken) {
+        windows[index] = `${windows[index]} ${taken.token}`;
+        nextWindow = taken.rest;
+      }
+    }
+    windows[nextIndex] = nextWindow;
+  }
+  return windows;
+}
+
+/**
+ * Life-only continuation lines (wrapped / spanned cells) join the previous product
+ * row before the flat haystack is built.
+ */
+function mergeContinuationLines(text: string): string {
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (lines.length <= 1) return text;
+  const merged: string[] = [];
+  for (const line of lines) {
+    const lower = line.toLowerCase();
+    const hasName = findNameSpans(lower).length > 0;
+    const looksLife = /(\d+\s*(?:hours?|days?)|\bchilled\b|\bambient\b|\bn\/a\b|date on)/i.test(
+      line,
+    );
+    if (!hasName && looksLife && merged.length > 0) {
+      merged[merged.length - 1] = `${merged[merged.length - 1]} ${line}`;
+    } else {
+      merged.push(line);
+    }
+  }
+  return merged.join("\n");
 }
 
 function takeSpan(spans: NameSpan[], name: string, cursor: Map<string, number>) {
@@ -280,13 +389,14 @@ function applyParsedDayCounts(
   next: ShelfRule,
   base: ShelfRule,
   window: string,
-  columnDay: string | undefined,
+  columnLife: ColumnLife | undefined,
 ) {
   const days = dayCountsIn(window);
   const deliveryN = dayField(base.fromDelivery);
   const useN = dayField(base.inUse);
   const preppedN =
     base.prepped && !/date on|bb date/i.test(base.prepped) ? dayField(base.prepped) : null;
+  const columnDay = columnLife?.days;
 
   if (deliveryN && useN) {
     if (days.length >= 2) {
@@ -313,6 +423,23 @@ function applyParsedDayCounts(
   const dayCount = columnDay ?? days[0];
   if (dayCount && deliveryN) next.fromDelivery = `${dayCount} days`;
   if (dayCount && preppedN) next.prepped = `${dayCount} days`;
+}
+
+function applyParsedHourCounts(
+  next: ShelfRule,
+  base: ShelfRule,
+  window: string,
+  columnLife: ColumnLife | undefined,
+) {
+  // Chilled/ambient wording owns the hour fields when present.
+  if (/\bchilled\b|\bambient\b/i.test(window)) return;
+  const hour = columnLife?.hours ?? hourCountsIn(window)[0];
+  if (!hour) return;
+  if (base.inUse && /hour/i.test(base.inUse)) next.inUse = `${hour} hours prepped`;
+  if (base.ambientUse && /hour/i.test(base.ambientUse)) next.ambientUse = `${hour} hours`;
+  if (base.also && /hour/i.test(base.also.value)) {
+    next.also = { ...base.also, value: `${hour} hours` };
+  }
 }
 
 async function renderPageCanvas(page: PdfjsPage, scale: number) {
@@ -443,11 +570,24 @@ async function extractPdfText(data: Uint8Array): Promise<string> {
   for (let pageNumber = 1; pageNumber <= doc.numPages; pageNumber += 1) {
     const page = await doc.getPage(pageNumber);
     const content = await page.getTextContent();
-    const line = content.items
-      .map((item) => ("str" in item ? String(item.str) : ""))
+    const items = content.items as Array<{
+      str?: string;
+      width?: number;
+      height?: number;
+      transform?: number[];
+    }>;
+    // Join left-to-right within a row band, then keep bands on separate lines so
+    // wrapped / spanned life cells can merge onto the product row above.
+    const lines = clusterPdfLines(pageNumber - 1, items);
+    if (lines.length > 0) {
+      chunks.push(lines.map((line) => line.text).join("\n"));
+      continue;
+    }
+    const fallback = items
+      .map((item) => item.str ?? "")
       .filter(Boolean)
       .join(" ");
-    chunks.push(line);
+    if (fallback) chunks.push(fallback);
   }
   return chunks.join("\n");
 }
@@ -462,7 +602,8 @@ export function packFromPdfText(text: string, fileName: string): { ok: true; pac
     }
   }
 
-  const flat = text.replace(/\s+/g, " ").trim();
+  const banded = mergeContinuationLines(text);
+  const flat = banded.replace(/\s+/g, " ").trim();
   if (flat.length < 40) {
     return { ok: false, error: "Could not read text from that PDF." };
   }
@@ -479,15 +620,16 @@ export function packFromPdfText(text: string, fileName: string): { ok: true; pac
   const haystack = flat.toLowerCase();
   const spans = findNameSpans(haystack);
   const spanCursor = new Map<string, number>();
-  const columnDays = columnDayCounts(spans, haystack);
+  const columnLives = columnLifeCounts(spans, haystack);
+  const lifeWindows = resolveSplitLifeWindows(spans, haystack);
 
   for (const base of BUNDLED_PACK.rules) {
     const needle = nameKey(base.name);
     if (needle.length < 3) continue;
     const spanIndex = takeSpan(spans, needle, spanCursor);
     if (spanIndex == null) continue;
-    const window = lifeWindow(spans, spanIndex, haystack);
-    const hours = window.match(/(\d+)\s*hours?/i);
+    const window = lifeWindows[spanIndex] ?? lifeWindow(spans, spanIndex, haystack);
+    const columnLife = columnLives.get(spanIndex);
     const next: ShelfRule = {
       ...base,
       aliases: [...base.aliases],
@@ -496,7 +638,7 @@ export function packFromPdfText(text: string, fileName: string): { ok: true; pac
       pdfCrop: rowCrop(spans, spanIndex, haystack),
     };
 
-    applyParsedDayCounts(next, base, window, columnDays.get(spanIndex));
+    applyParsedDayCounts(next, base, window, columnLife);
 
     // Divided prepped cells: "chilled" → prepped (chilled), "ambient" → ambientUse.
     if (/\bchilled\b|\bambient\b/i.test(window)) {
@@ -504,15 +646,7 @@ export function packFromPdfText(text: string, fileName: string): { ok: true; pac
       if (split.prepped) next.prepped = split.prepped;
       if (split.ambientUse) next.ambientUse = split.ambientUse;
     } else {
-      if (hours && base.inUse && /hour/i.test(base.inUse)) {
-        next.inUse = `${hours[1]} hours prepped`;
-      }
-      if (hours && base.ambientUse && /hour/i.test(base.ambientUse)) {
-        next.ambientUse = `${hours[1]} hours`;
-      }
-      if (hours && base.also && /hour/i.test(base.also.value)) {
-        next.also = { ...base.also, value: `${hours[1]} hours` };
-      }
+      applyParsedHourCounts(next, base, window, columnLife);
     }
 
     if (!used.has(next.id)) {

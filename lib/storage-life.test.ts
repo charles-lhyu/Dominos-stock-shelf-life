@@ -78,4 +78,21 @@ describe("chilled / ambient prepped cells", () => {
     assert.equal(rule.prepped, "12 hours chilled");
     assert.equal(rule.ambientUse, "4 hours");
   });
+
+  it("reclaims ambient hours printed after the next product name", () => {
+    const text =
+      "Prepared Double Decadence bases N/A 12 hours chilled Pineapple 6 hours ambient Date on pack 10 days";
+    const result = packFromPdfText(`${HEADER}${text}`, "campaign-5.pdf");
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    const decadence = result.pack.rules.find(
+      (item) => item.name === "Prepared Double Decadence bases",
+    );
+    const pineapple = result.pack.rules.find((item) => item.name === "Pineapple");
+    assert.ok(decadence);
+    assert.equal(decadence.prepped, "12 hours chilled");
+    assert.equal(decadence.ambientUse, "6 hours");
+    assert.ok(pineapple);
+    assert.equal(pineapple.ambientUse, "N/A");
+  });
 });
