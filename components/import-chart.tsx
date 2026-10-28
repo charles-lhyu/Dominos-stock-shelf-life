@@ -2305,8 +2305,8 @@ export function ImportChartButton({
                   All stored data
                 </h2>
                 <p className="text-sm text-stone-400">
-                  Stores saved on this device. Tap one to preview it. Export or import
-                  a JSON backup of the whole library.
+                  Store settings saved on this device. Tap a card to preview that store.
+                  Export or import a JSON backup of the whole library.
                 </p>
                 <div className="flex flex-wrap gap-2 pt-1">
                   <button
@@ -2354,6 +2354,15 @@ export function ImportChartButton({
                   storedStoreIds.map((id) => {
                     const label = nameFor(id);
                     const active = (previewStoreId ?? storeId) === id;
+                    const rows = deviceStored.filter((item) => item.storeId === id);
+                    const sample = rows[0];
+                    const datesLabel = sample?.showDayCounts
+                      ? "Days and hours"
+                      : sample?.compactDates
+                        ? "Short"
+                        : "Full";
+                    const listLabel = sample?.compactList ? "Compact" : "With tags";
+                    const campaignCount = rows.length;
                     return (
                       <button
                         key={id}
@@ -2365,18 +2374,39 @@ export function ImportChartButton({
                           setAllStoredOpen(false);
                         }}
                         className={cn(
-                          "flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors",
+                          "w-full rounded-xl border px-3 py-2.5 text-left transition-colors",
                           active
                             ? "border-sky-400/40 bg-sky-500/10"
                             : "border-white/10 bg-black/20 hover:bg-white/[0.06]",
                         )}
                       >
-                        <span className="min-w-0 truncate text-sm font-medium text-white">
-                          {label || "Unnamed store"}
-                        </span>
-                        <span className="shrink-0 font-mono text-sm text-stone-300">
-                          {id}
-                        </span>
+                        <div className="flex items-start justify-between gap-3">
+                          <span className="min-w-0 truncate text-sm font-medium text-white">
+                            {label || "Unnamed store"}
+                          </span>
+                          <span className="shrink-0 font-mono text-sm text-stone-300">
+                            {id}
+                          </span>
+                        </div>
+                        <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5">
+                          <div className="min-w-0">
+                            <p className="text-[0.65rem] font-semibold uppercase tracking-wider text-stone-500">
+                              Dates
+                            </p>
+                            <p className="truncate text-xs text-stone-200">{datesLabel}</p>
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[0.65rem] font-semibold uppercase tracking-wider text-stone-500">
+                              List
+                            </p>
+                            <p className="truncate text-xs text-stone-200">{listLabel}</p>
+                          </div>
+                        </div>
+                        <p className="mt-2 text-[0.7rem] text-stone-500">
+                          {campaignCount === 1
+                            ? "1 campaign preset"
+                            : `${campaignCount} campaign presets`}
+                        </p>
                       </button>
                     );
                   })
