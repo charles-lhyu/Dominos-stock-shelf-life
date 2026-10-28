@@ -209,6 +209,8 @@ export function StockDesk() {
   const animatingRef = useRef(false);
   const collapseProgressRef = useRef(0);
   const settleTimerRef = useRef(0);
+  /** Item details stay collapsed — scroll-up must not reopen the Campaign title. */
+  const itemDetailsOpenRef = useRef(false);
   const setHeaderModeRef = useRef<(collapsed: boolean) => void>(() => {});
   /** List place to restore when clearing a product opened from the chart. */
   const savedListScrollRef = useRef(0);
@@ -374,6 +376,8 @@ export function StockDesk() {
     let fromChipStrip = false;
 
     function setHeaderMode(collapsed: boolean) {
+      // Details keep the compact header — ignore expand requests until Back.
+      if (!collapsed && itemDetailsOpenRef.current) return;
       window.clearTimeout(settleTimerRef.current);
       collapseProgressRef.current = 0;
       headerCollapsedRef.current = collapsed;
@@ -408,6 +412,11 @@ export function StockDesk() {
       }
 
       if (scroller.scrollTop <= 0 && deltaY < 0) {
+        // Item details: keep the compact header; do not pull the titles back open.
+        if (itemDetailsOpenRef.current) {
+          collapseProgressRef.current = 0;
+          return true;
+        }
         collapseProgressRef.current += -deltaY;
         if (collapseProgressRef.current >= EXPAND_AT) setHeaderMode(false);
         return true;
@@ -675,12 +684,13 @@ export function StockDesk() {
       // Jump instantly so expand isn't fighting a mid-scroll lock.
       scroller.scrollTop = 0;
     }
-    // Always unfold the full header (not just the collapsed list top).
-    setHeaderModeRef.current(false);
+    // Item details stay collapsed; list go-top unfolds the Campaign title strip.
+    if (!itemDetailsOpenRef.current) setHeaderModeRef.current(false);
   }
 
   const hasChart = rules.length > 0;
   const itemOpen = Boolean(picked);
+  itemDetailsOpenRef.current = itemOpen;
   const browsing = hasChart && !itemOpen && !query.trim();
   const chartExpired =
     Boolean(today) &&
