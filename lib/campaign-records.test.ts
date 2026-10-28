@@ -324,7 +324,7 @@ describe("campaign library records", () => {
     assert.deepEqual(listStoreCampaigns(library, ""), []);
   });
 
-  it("shows a default only when the product has another storage option and is not hidden", () => {
+  it("shows storage defaults for multi-storage products and life defaults for single-storage", () => {
     const chart = pack("2026-09-07", "2026-11-17");
     chart.rules = [
       { ...chart.rules[0]!, sectionId: "frozen" },
@@ -349,7 +349,9 @@ describe("campaign library records", () => {
         },
       },
     });
-    assert.deepEqual(listStoreCampaigns(library, "12345")[0]?.preset.defaults, {});
+    assert.deepEqual(listStoreCampaigns(library, "12345")[0]?.preset.defaults, {
+      Dough: { section: null, life: "stock" },
+    });
 
     library = writeStoreSettings(library, "12345", "2026-09-07", "2026-11-17", {
       hidden: [],
@@ -364,7 +366,7 @@ describe("campaign library records", () => {
     const shown = listStoreCampaigns(library, "12345")[0]?.preset.defaults;
     assert.equal(shown?.Pepperoni?.section, "chilled");
     assert.equal(shown?.Pepperoni?.life, "stock");
-    assert.equal(shown?.Dough, undefined);
+    assert.deepEqual(shown?.Dough, { section: null, life: "stock" });
   });
 
   it("drops one hidden name or one product default from saved settings", () => {

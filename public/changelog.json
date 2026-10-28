@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.4.40",
+    "notes": [
+      "Storage and life tags on item details can be changed again"
+    ]
+  },
+  {
     "version": "1.4.39",
     "notes": [
       "Stored data shows a Show all button and the store name underneath"

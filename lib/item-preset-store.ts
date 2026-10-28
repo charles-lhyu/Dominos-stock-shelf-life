@@ -57,8 +57,9 @@ function normalizeDefaults(value: unknown): Record<string, ProductDefault> {
 }
 
 /**
- * A stored default is only useful when the product has more than one storage
- * row to choose from. Hidden products are off the list, so they keep none.
+ * Keep a storage choice when the product has more than one storage row.
+ * Keep a life choice even for a single storage row (item details tags).
+ * Hidden products are off the list, so they keep none.
  */
 export function retainProductDefaults(
   defaults: Record<string, ProductDefault>,
@@ -81,8 +82,12 @@ export function retainProductDefaults(
     const trimmed = name.trim();
     if (!trimmed || hiddenNames.has(trimmed)) continue;
     const sections = sectionsByName.get(trimmed);
-    if (!sections || sections.size < 2) continue;
-    kept[trimmed] = value;
+    if (!sections) continue;
+    if (sections.size >= 2) {
+      kept[trimmed] = value;
+      continue;
+    }
+    if (value.life) kept[trimmed] = { section: null, life: value.life };
   }
   return kept;
 }

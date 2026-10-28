@@ -509,14 +509,18 @@ export function StockDesk() {
   const expanded = pickedName ?? (shouldExpand(hits) ? hits[0]?.name ?? null : null);
   const expandedVariants = expanded ? variantsForName(expanded, rules, pack) : [];
   const expandedDefault = expanded ? productDefaults[expanded] : undefined;
+  // Item details follow the product's own tags first. List filters only fill in
+  // when that product has no saved choice yet.
   const activeVariant = pickVariant(
     expandedVariants,
-    sectionFilter !== "all" ? sectionFilter : (expandedDefault?.section ?? null),
+    expandedDefault?.section ??
+      (sectionFilter !== "all" ? sectionFilter : null),
   );
   const expandedKinds = activeVariant ? lifeKindsForRule(activeVariant.rule) : [];
   const activeLife = pickLifeKind(
     expandedKinds,
-    (lifeFilter !== "all" ? lifeFilter : (expandedDefault?.life ?? null)) ??
+    expandedDefault?.life ??
+      (lifeFilter !== "all" ? lifeFilter : null) ??
       (activeVariant ? calculatedLifeKind(activeVariant.rule) : null),
   );
   const others = expanded ? hits.filter((hit) => hit.name !== expanded) : hits;

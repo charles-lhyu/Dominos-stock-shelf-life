@@ -23,7 +23,17 @@ describe("product defaults worth storing", () => {
   it("keeps a product that has more than one storage option", () => {
     const kept = retainProductDefaults({ Pepperoni: pepperoni, Dough: dough }, rules, []);
     assert.deepEqual(kept.Pepperoni, pepperoni);
-    assert.equal(kept.Dough, undefined);
+    // Single storage: keep life only.
+    assert.deepEqual(kept.Dough, { section: null, life: "stock" });
+  });
+
+  it("keeps a life choice on a single-storage product", () => {
+    const kept = retainProductDefaults(
+      { Dough: { section: "frozen", life: "prepped" } },
+      rules,
+      [],
+    );
+    assert.deepEqual(kept.Dough, { section: null, life: "prepped" });
   });
 
   it("drops a hidden product even when it has several storage options", () => {

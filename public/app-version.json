@@ -1,6 +1,6 @@
 {
-  "version": "1.4.39",
+  "version": "1.4.40",
   "notes": [
-    "Stored data shows a Show all button and the store name underneath"
+    "Storage and life tags on item details can be changed again"
   ]
 }
