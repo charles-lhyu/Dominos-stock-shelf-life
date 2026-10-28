@@ -79,6 +79,7 @@ import {
 import { getCompactList, subscribeCompactList } from "@/lib/compact-list-store";
 import {
   applyAcceptedStoreChanges,
+  campaignKey,
   listStoreSettingChanges,
 } from "@/lib/campaign-records";
 import {
@@ -121,6 +122,7 @@ import {
   setProductDefault,
   subscribeItemPreset,
   type ItemPreset,
+  type ProductDefault,
 } from "@/lib/item-preset-store";
 import { prepClockTime, SECTION_ORDER, SECTION_TAG } from "@/lib/preview";
 import {
@@ -180,6 +182,34 @@ const SETTINGS_SECTION_IDS: SettingsSectionId[] = [
   "settings-system",
 ];
 
+type StoredCampaignDraft = {
+  issued: string;
+  validUntil: string;
+  onScreen: boolean;
+  hidden: HiddenEntry[];
+  baselineHiddenKeys: string[];
+  defaults: Record<string, ProductDefault>;
+  baselineDefaults: Record<string, ProductDefault>;
+};
+
+type StoredEditDraft = {
+  storeId: string;
+  storeName: string;
+  baselineStoreName: string;
+  campaigns: Record<string, StoredCampaignDraft>;
+};
+
+function copyDefaults(
+  defaults: Record<string, ProductDefault>,
+): Record<string, ProductDefault> {
+  const next: Record<string, ProductDefault> = {};
+  for (const [name, value] of Object.entries(defaults)) {
+    if (!value.section) continue;
+    next[name] = { section: value.section, life: null };
+  }
+  return next;
+}
+
 type BarcodeDetectorLike = {
   detect: (source: ImageBitmapSource) => Promise<Array<{ rawValue: string }>>;
 };
@@ -231,10 +261,8 @@ export function ImportChartButton({
   const [changesOpen, setChangesOpen] = useState(false);
   const [changeChoices, setChangeChoices] = useState<string[]>([]);
   const [storedEditing, setStoredEditing] = useState(false);
+  const [storedDraft, setStoredDraft] = useState<StoredEditDraft | null>(null);
   const [allStoredOpen, setAllStoredOpen] = useState(false);
-  const [storeNameDraft, setStoreNameDraft] = useState<{ storeId: string; value: string } | null>(
-    null,
-  );
   const storePromptRef = useRef<string | null>(null);
   const [activeSettingsSection, setActiveSettingsSection] =
     useState<SettingsSectionId>("settings-app");
@@ -355,7 +383,7 @@ export function ImportChartButton({
     setStoreMenuOpen(false);
     setStoreMenuAll(false);
     setStoredEditing(false);
-    setStoreNameDraft(null);
+    setStoredDraft(null);
     setActiveSettingsSection("settings-app");
     const raf = window.requestAnimationFrame(() => {
       settingsBodyRef.current?.scrollTo({ top: 0 });
@@ -403,8 +431,9 @@ export function ImportChartButton({
       setChangesOpen(false);
       setChangeChoices([]);
       setStoreDraft(getStoreId());
+      // Quit Settings while editing — drop the draft, do not apply.
       setStoredEditing(false);
-      setStoreNameDraft(null);
+      setStoredDraft(null);
       setAllStoredOpen(false);
       setStoreMenuOpen(false);
       setStoreMenuAll(false);
@@ -773,19 +802,113 @@ export function ImportChartButton({
         ]
       : savedRows;
   function nameFor(id: string) {
-    if (storeNameDraft?.storeId === id) return storeNameDraft.value;
+    if (storedDraft?.storeId === id) return storedDraft.storeName;
     return storeNames[id] ?? "";
   }
 
   function changeStoreName(id: string, value: string) {
-    setStoreNameDraft({ storeId: id, value: value.slice(0, 48) });
-    setStoreName(id, value);
+    setStoredDraft((draft) =>
+      draft && draft.storeId === id
+        ? { ...draft, storeName: value.slice(0, 48) }
+        : draft,
+    );
+  }
+
+  function beginStoredEdit() {
+    const targetStoreId = previewStoreId ?? storeId;
+    if (!targetStoreId) return;
+    const rows = previewStoreId ? previewRows : storedRows;
+    const campaigns: StoredEditDraft["campaigns"] = {};
+    for (const item of rows) {
+      const key = campaignKey(item.issued, item.validUntil);
+      if (!key) continue;
+      const defaults = copyDefaults(item.preset.defaults);
+      campaigns[key] = {
+        issued: item.issued,
+        validUntil: item.validUntil,
+        onScreen: !previewStoreId && chartOnScreen(item.issued, item.validUntil),
+        hidden: item.hidden.map((entry) => ({ ...entry })),
+        baselineHiddenKeys: item.hidden.map((entry) => hiddenEntryKey(entry)),
+        defaults,
+        baselineDefaults: copyDefaults(defaults),
+      };
+    }
+    setStoredDraft({
+      storeId: targetStoreId,
+      storeName: storeNames[targetStoreId] ?? "",
+      baselineStoreName: storeNames[targetStoreId] ?? "",
+      campaigns,
+    });
+    setStoredEditing(true);
+  }
+
+  function discardStoredEdit() {
+    setStoredEditing(false);
+    setStoredDraft(null);
+  }
+
+  function commitStoredEdit() {
+    const draft = storedDraft;
+    if (!draft) {
+      setStoredEditing(false);
+      return;
+    }
+    if (draft.storeName !== draft.baselineStoreName) {
+      setStoreName(draft.storeId, draft.storeName);
+    }
+    for (const campaign of Object.values(draft.campaigns)) {
+      const removedHidden = campaign.baselineHiddenKeys.filter(
+        (key) => !campaign.hidden.some((entry) => hiddenEntryKey(entry) === key),
+      );
+      for (const key of removedHidden) {
+        if (campaign.onScreen) unhideByKey(key);
+        else forgetSavedHidden(draft.storeId, campaign.issued, campaign.validUntil, key);
+      }
+      for (const name of Object.keys(campaign.baselineDefaults)) {
+        if (campaign.defaults[name]) continue;
+        if (campaign.onScreen) setProductDefault(name, { section: null, life: null });
+        else forgetSavedDefault(draft.storeId, campaign.issued, campaign.validUntil, name);
+      }
+      for (const [name, value] of Object.entries(campaign.defaults)) {
+        if (!value.section) continue;
+        if (campaign.baselineDefaults[name]?.section === value.section) continue;
+        if (campaign.onScreen) {
+          setProductDefault(name, { section: value.section }, desk.pack.rules);
+        } else {
+          writeSavedDefault(
+            draft.storeId,
+            campaign.issued,
+            campaign.validUntil,
+            name,
+            value.section,
+          );
+        }
+      }
+    }
+    setStoredEditing(false);
+    setStoredDraft(null);
   }
 
   function toggleStoredEditing() {
-    setStoredEditing((on) => {
-      if (on) setStoreNameDraft(null);
-      return !on;
+    if (storedEditing) commitStoredEdit();
+    else beginStoredEdit();
+  }
+
+  function patchStoredCampaign(
+    issued: string,
+    validUntil: string,
+    patch: (campaign: StoredCampaignDraft) => StoredCampaignDraft,
+  ) {
+    const key = campaignKey(issued, validUntil);
+    if (!key) return;
+    setStoredDraft((draft) => {
+      if (!draft) return draft;
+      const campaign = draft.campaigns[key];
+      if (!campaign) return draft;
+      return {
+        ...draft,
+        campaigns: { ...draft.campaigns, [key]: patch(campaign) },
+      };
     });
   }
 
@@ -796,73 +919,84 @@ export function ImportChartButton({
   }
 
   function removeHidden(
-    targetStoreId: string,
+    _targetStoreId: string,
     issued: string,
     validUntil: string,
     key: string,
-    onScreen: boolean,
+    _onScreen: boolean,
   ) {
-    if (onScreen) {
-      unhideByKey(key);
-      return;
-    }
-    forgetSavedHidden(targetStoreId, issued, validUntil, key);
+    patchStoredCampaign(issued, validUntil, (campaign) => ({
+      ...campaign,
+      hidden: campaign.hidden.filter((entry) => hiddenEntryKey(entry) !== key),
+    }));
   }
 
   function removeDefault(
-    targetStoreId: string,
+    _targetStoreId: string,
     issued: string,
     validUntil: string,
     name: string,
-    onScreen: boolean,
+    _onScreen: boolean,
   ) {
-    if (onScreen) {
-      setProductDefault(name, { section: null, life: null });
-      return;
-    }
-    forgetSavedDefault(targetStoreId, issued, validUntil, name);
+    patchStoredCampaign(issued, validUntil, (campaign) => {
+      const defaults = { ...campaign.defaults };
+      delete defaults[name];
+      return { ...campaign, defaults };
+    });
   }
 
   function changeDefault(
-    targetStoreId: string,
+    _targetStoreId: string,
     issued: string,
     validUntil: string,
     name: string,
     section: SectionId,
-    onScreen: boolean,
+    _onScreen: boolean,
   ) {
-    if (onScreen) {
-      setProductDefault(name, { section }, desk.pack.rules);
-      return;
-    }
-    writeSavedDefault(targetStoreId, issued, validUntil, name, section);
+    patchStoredCampaign(issued, validUntil, (campaign) => ({
+      ...campaign,
+      defaults: {
+        ...campaign.defaults,
+        [name]: { section, life: null },
+      },
+    }));
   }
 
   function removeAllHidden(
-    targetStoreId: string,
+    _targetStoreId: string,
     issued: string,
     validUntil: string,
-    onScreen: boolean,
+    _onScreen: boolean,
   ) {
-    if (onScreen) {
-      clearHiddenNames();
-      return;
-    }
-    clearSavedHidden(targetStoreId, issued, validUntil);
+    patchStoredCampaign(issued, validUntil, (campaign) => ({
+      ...campaign,
+      hidden: [],
+    }));
   }
 
   function removeAllDefaults(
-    targetStoreId: string,
+    _targetStoreId: string,
     issued: string,
     validUntil: string,
-    onScreen: boolean,
+    _onScreen: boolean,
   ) {
-    if (onScreen) {
-      clearProductDefaults();
-      return;
-    }
-    clearSavedDefaults(targetStoreId, issued, validUntil);
+    patchStoredCampaign(issued, validUntil, (campaign) => ({
+      ...campaign,
+      defaults: {},
+    }));
   }
+
+  const storedDisplayRows = (previewStoreId ? previewRows : storedRows).map((item) => {
+    if (!storedDraft) return item;
+    const key = campaignKey(item.issued, item.validUntil);
+    const campaign = key ? storedDraft.campaigns[key] : undefined;
+    if (!campaign) return item;
+    return {
+      ...item,
+      hidden: campaign.hidden,
+      preset: { ...item.preset, defaults: campaign.defaults },
+    };
+  });
 
   function syncNavCard(id: SettingsSectionId) {
     const nav = settingsNavRef.current;
@@ -1300,13 +1434,13 @@ export function ImportChartButton({
                 <p className="text-xs text-stone-500">
                   Set a store ID to see the hidden items and product defaults saved for it.
                 </p>
-              ) : (previewStoreId ? previewRows : storedRows).length === 0 ? (
+              ) : storedDisplayRows.length === 0 ? (
                 <p className="text-xs text-stone-500">
                   Nothing saved for store {previewStoreId ?? storeId} yet.
                 </p>
               ) : (
                 <div className="space-y-2">
-                  {(previewStoreId ? previewRows : storedRows).map((item) => {
+                  {storedDisplayRows.map((item) => {
                     const onScreen = !previewStoreId && chartOnScreen(item.issued, item.validUntil);
                     return (
                       <article
