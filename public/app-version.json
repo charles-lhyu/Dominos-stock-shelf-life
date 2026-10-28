@@ -1,8 +1,8 @@
 {
-  "version": "1.4.61",
+  "version": "2.0.0",
   "notes": [
-    "Product storage defaults are only saved when the item has more than one storage",
-    "Stored data lists name on the left and storage on the right; Edit lets you change storage",
-    "Stored data edits apply only after Done, with a change list to confirm or discard"
+    "Stored data is store-first: each store has name, dates, and list settings",
+    "Campaign presets under a store keep their own hidden items and product defaults, with name, issued, valid until, and version",
+    "Export and import Stored data as a JSON backup; import replaces everything saved on this device"
   ]
 }
