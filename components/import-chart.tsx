@@ -803,16 +803,23 @@ export function ImportChartButton({
     ]),
   ].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
   const storeQuery = storeDraft.trim().replace(/\s+/g, "");
-  const menuStoreIds =
-    storeMenuAll || !storeQuery
+  const filteredStoreIds =
+    !storeQuery || storeMenuAll
       ? storedStoreIds
       : storedStoreIds.filter((id) => id.startsWith(storeQuery));
+  // Keep the full list available when the typed filter matches nothing.
+  const menuStoreIds =
+    filteredStoreIds.length > 0 ? filteredStoreIds : storedStoreIds;
   const draftStoreId = normalizeStoreId(storeDraft);
   const previewStoreId = draftStoreId && draftStoreId !== storeId ? draftStoreId : null;
   const previewRows = previewStoreId
     ? deviceStored.filter((item) => item.storeId === previewStoreId)
     : [];
-  const storeMenuVisible = storeMenuOpen && menuStoreIds.length > 0;
+  const storeMenuVisible = storeMenuOpen && storedStoreIds.length > 0;
+  const showStoreCancel =
+    storedStoreIds.length > 0 ||
+    previewStoreId != null ||
+    storeDraft.trim() !== storeId;
   const storeChanges =
     storePrompt && desk.imported
       ? listStoreSettingChanges(
@@ -1467,75 +1474,83 @@ export function ImportChartButton({
               </label>
               <div className={cn("flex gap-2", storeMenuVisible && "relative z-20")}>
                 <div ref={storeFieldRef} className="relative min-w-0 flex-1">
-                  <Input
-                    id="store-id"
-                    inputMode="numeric"
-                    autoComplete="off"
-                    autoCorrect="off"
-                    spellCheck={false}
-                    maxLength={12}
-                    placeholder={storeId || "12345"}
-                    value={storeDraft}
-                    aria-invalid={storeIdError ? true : undefined}
-                    aria-expanded={storedStoreIds.length > 0 ? storeMenuOpen : undefined}
-                    aria-controls={storeMenuVisible ? "store-id-list" : undefined}
-                    aria-autocomplete={storedStoreIds.length > 0 ? "list" : undefined}
-                    onChange={(event) => {
-                      setStoreDraft(event.target.value);
-                      setStoreMenuAll(false);
-                      if (storeIdError) setStoreIdError(null);
-                      if (storedStoreIds.length > 0) setStoreMenuOpen(true);
-                    }}
-                    onFocus={() => {
-                      if (storedStoreIds.length > 0) setStoreMenuOpen(true);
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key === "Escape" && storeMenuOpen) {
-                        event.preventDefault();
-                        setStoreMenuOpen(false);
+                  <div className="relative">
+                    <Input
+                      id="store-id"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      maxLength={12}
+                      placeholder={storeId || "12345"}
+                      value={storeDraft}
+                      aria-invalid={storeIdError ? true : undefined}
+                      aria-expanded={storedStoreIds.length > 0 ? storeMenuOpen : undefined}
+                      aria-controls={storeMenuVisible ? "store-id-list" : undefined}
+                      aria-autocomplete={storedStoreIds.length > 0 ? "list" : undefined}
+                      onChange={(event) => {
+                        setStoreDraft(event.target.value);
                         setStoreMenuAll(false);
-                        return;
-                      }
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        commitStoreDraft();
-                      }
-                    }}
-                    className={cn(
-                      "h-12 rounded-xl border-white/10 bg-black/30 text-base text-white placeholder:text-stone-500",
-                      storedStoreIds.length > 0 && "pr-11",
-                      storeMenuVisible && "rounded-b-none",
-                    )}
-                  />
-                  {storedStoreIds.length > 0 ? (
-                    <button
-                      type="button"
-                      aria-label="Show stored store IDs"
-                      aria-expanded={storeMenuOpen}
-                      onMouseDown={(event) => event.preventDefault()}
-                      onClick={() => {
-                        if (storeMenuOpen && storeMenuAll) {
+                        if (storeIdError) setStoreIdError(null);
+                        if (storedStoreIds.length > 0) setStoreMenuOpen(true);
+                      }}
+                      onFocus={() => {
+                        if (storedStoreIds.length > 0) {
+                          setStoreMenuAll(true);
+                          setStoreMenuOpen(true);
+                        }
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Escape" && storeMenuOpen) {
+                          event.preventDefault();
                           setStoreMenuOpen(false);
                           setStoreMenuAll(false);
                           return;
                         }
-                        setStoreMenuAll(true);
-                        setStoreMenuOpen(true);
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          commitStoreDraft();
+                        }
                       }}
-                      className="absolute top-1/2 right-1.5 inline-flex size-9 -translate-y-1/2 items-center justify-center rounded-lg text-stone-300"
-                    >
-                      <ChevronDown
-                        className={cn("size-4 transition-transform", storeMenuOpen && "rotate-180")}
-                        aria-hidden
-                      />
-                    </button>
-                  ) : null}
+                      className={cn(
+                        "h-12 rounded-xl border-white/10 bg-black/30 text-base text-white placeholder:text-stone-500",
+                        storedStoreIds.length > 0 && "pr-11",
+                        storeMenuVisible && "rounded-b-none",
+                      )}
+                    />
+                    {storedStoreIds.length > 0 ? (
+                      <button
+                        type="button"
+                        aria-label="Show stored store IDs"
+                        aria-expanded={storeMenuOpen}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => {
+                          if (storeMenuOpen && storeMenuAll) {
+                            setStoreMenuOpen(false);
+                            setStoreMenuAll(false);
+                            return;
+                          }
+                          setStoreMenuAll(true);
+                          setStoreMenuOpen(true);
+                        }}
+                        className="absolute top-1/2 right-1.5 inline-flex size-9 -translate-y-1/2 items-center justify-center rounded-lg text-stone-300"
+                      >
+                        <ChevronDown
+                          className={cn(
+                            "size-4 transition-transform",
+                            storeMenuOpen && "rotate-180",
+                          )}
+                          aria-hidden
+                        />
+                      </button>
+                    ) : null}
+                  </div>
                   {storeMenuVisible ? (
                     <ul
                       id="store-id-list"
                       role="listbox"
                       aria-label="Stored store IDs"
-                      className="absolute top-full right-0 left-0 z-30 max-h-60 overflow-y-auto rounded-b-xl border border-t-0 border-white/10 bg-popover py-1 shadow-lg shadow-black/40"
+                      className="relative z-30 max-h-60 overflow-y-auto rounded-b-xl border border-t-0 border-white/10 bg-popover py-1 shadow-lg shadow-black/40"
                     >
                       {menuStoreIds.map((id) => {
                         const selected = id === storeDraft;
@@ -1570,13 +1585,11 @@ export function ImportChartButton({
                     </ul>
                   ) : null}
                 </div>
-                {(storeMenuVisible ||
-                  previewStoreId != null ||
-                  storeDraft.trim() !== storeId) && (
+                {showStoreCancel ? (
                   <Button
                     type="button"
                     variant="outline"
-                    className="h-12 shrink-0 rounded-xl border-white/15 px-3 text-white"
+                    className="h-12 shrink-0 self-start rounded-xl border-white/15 px-3 text-white"
                     disabled={storePrompt != null}
                     onClick={() => {
                       setStoreDraft(storeId);
@@ -1592,10 +1605,10 @@ export function ImportChartButton({
                   >
                     Cancel
                   </Button>
-                )}
+                ) : null}
                 <Button
                   type="button"
-                  className="h-12 shrink-0 rounded-xl px-3"
+                  className="h-12 shrink-0 self-start rounded-xl px-3"
                   disabled={normalizeStoreId(storeDraft) === storeId || storePrompt != null}
                   onClick={commitStoreDraft}
                 >
