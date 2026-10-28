@@ -176,9 +176,11 @@ export function ChartList({
   today,
   sectionFilter,
   lifeFilter,
+  sessionLife = null,
   productDefaults,
   onProductDefault,
   onLifeFilter,
+  onLifePrefer,
   onOpen,
   compact = false,
 }: {
@@ -189,10 +191,13 @@ export function ChartList({
   today: Date | null;
   sectionFilter: SectionId | "all";
   lifeFilter: LifeKind | "all";
+  /** Soft session pick while life filter is "all" — does not hide other lives. */
+  sessionLife?: LifeKind | null;
   productDefaults: Record<string, ProductDefault>;
   /** Storage default only — life is never saved per item. */
   onProductDefault: (name: string, section: SectionId) => void;
   onLifeFilter: (kind: LifeKind) => void;
+  onLifePrefer: (kind: LifeKind) => void;
   onOpen: (name: string, sectionId: SectionId) => void;
   compact?: boolean;
 }) {
@@ -235,8 +240,9 @@ export function ChartList({
       if (!active) return [];
 
       const kinds = lifeKindsForRule(active.rule);
-      // No per-item life default — list filter or the calculated life only.
-      const lifePreference = lifeFilter !== "all" ? lifeFilter : null;
+      // No per-item life default — shared filter / session pick, else calculated.
+      const lifePreference =
+        lifeFilter !== "all" ? lifeFilter : sessionLife;
       const activeLife = pickLifeKind(
         kinds,
         lifePreference ?? calculatedLifeKind(active.rule),
@@ -269,7 +275,8 @@ export function ChartList({
     }
   }
 
-  const activeLife: LifeKind = lifeFilter === "all" ? "stock" : lifeFilter;
+  const activeLife: LifeKind =
+    lifeFilter !== "all" ? lifeFilter : (sessionLife ?? "stock");
   const showHiddenControl = hiddenCount > 0 || showHidden;
   /** Narrow list: park Show hidden beside date sort instead of above / in the life chips. */
   const [tightSortRow, setTightSortRow] = useState(false);
@@ -291,6 +298,7 @@ export function ChartList({
   const actions: ListActions = {
     onOpen,
     onProductDefault,
+    onLifePrefer,
     compact,
     showHiddenChip: showHiddenInChips,
     nameSort,
@@ -376,6 +384,8 @@ type ListActions = {
   onOpen: (name: string, sectionId: SectionId) => void;
   /** Storage default only — life is never saved per item. */
   onProductDefault: (name: string, section: SectionId) => void;
+  /** Session life pick — applies to every row that supports that kind. */
+  onLifePrefer: (kind: LifeKind) => void;
   compact: boolean;
   showHiddenChip: boolean;
   nameSort: DirSort;
@@ -697,6 +707,7 @@ function renderCoverStack(
             compact={actions.compact}
             onOpen={actions.onOpen}
             onProductDefault={actions.onProductDefault}
+            onLifePrefer={actions.onLifePrefer}
           />
         ))}
       </ul>
@@ -820,6 +831,7 @@ function ToppingsSection({
                   compact={actions.compact}
                   onOpen={actions.onOpen}
                   onProductDefault={actions.onProductDefault}
+                  onLifePrefer={actions.onLifePrefer}
                 />
               ))}
             </ul>
@@ -836,12 +848,14 @@ function ProductRow({
   compact,
   onOpen,
   onProductDefault,
+  onLifePrefer,
 }: {
   row: ListRow;
   compact: boolean;
   onOpen: (name: string, sectionId: SectionId) => void;
   /** Storage default only — life is never saved per item. */
   onProductDefault: (name: string, section: SectionId) => void;
+  onLifePrefer: (kind: LifeKind) => void;
 }) {
   const { name, variants, active, kinds, activeLife, preview, hidden } = row;
 
@@ -923,14 +937,34 @@ function ProductRow({
               );
             })}
             {activeLife ? (
-              <span
-                className={cn(
-                  "shrink-0 rounded-md px-1.5 py-0.5 text-[0.6875rem] font-semibold tracking-wide ring-1",
-                  LIFE_ACTIVE[activeLife],
-                )}
-              >
-                {LIFE_KIND_META[activeLife].tag}
-              </span>
+              kinds.length > 1 ? (
+                <button
+                  type="button"
+                  aria-label={`Life: ${LIFE_KIND_META[activeLife].tag}. Tap to cycle.`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    const kindIndex = kinds.indexOf(activeLife);
+                    const next = kinds[(kindIndex + 1) % kinds.length]!;
+                    onLifePrefer(next);
+                  }}
+                  className={cn(
+                    "inline-flex touch-pan-y shrink-0 items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[0.6875rem] font-semibold tracking-wide ring-1",
+                    LIFE_ACTIVE[activeLife],
+                  )}
+                >
+                  {LIFE_KIND_META[activeLife].tag}
+                  <ChevronDown className="size-3 opacity-80" aria-hidden />
+                </button>
+              ) : (
+                <span
+                  className={cn(
+                    "shrink-0 rounded-md px-1.5 py-0.5 text-[0.6875rem] font-semibold tracking-wide ring-1",
+                    LIFE_ACTIVE[activeLife],
+                  )}
+                >
+                  {LIFE_KIND_META[activeLife].tag}
+                </span>
+              )
             ) : null}
           </div>
         ) : null}

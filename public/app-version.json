@@ -1,7 +1,7 @@
 {
-  "version": "1.4.52",
+  "version": "1.4.53",
   "notes": [
-    "Item life is never saved as a default - only storage is",
-    "Life on item details is session-only and resets when you leave"
+    "Life tags in the normal list are one-tap to cycle again",
+    "Cycling a life chip applies that life to every other item that has it"
   ]
 }

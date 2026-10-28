@@ -151,6 +151,8 @@ export function StockDesk() {
   const [picked, setPicked] = useState<string | null>(null);
   /** Session-only life on the open item — never written to product defaults. */
   const [detailLife, setDetailLife] = useState<LifeKind | null>(null);
+  /** Shared list life pick while filter is "all" — applies to every item that supports it. */
+  const [sessionLife, setSessionLife] = useState<LifeKind | null>(null);
   const preset = useSyncExternalStore(
     subscribeItemPreset,
     () => {
@@ -181,6 +183,15 @@ export function StockDesk() {
   const compactList = useSyncExternalStore(subscribeCompactList, getCompactList, () => false);
   const lifeFilter =
     compactList && preset.lifeFilter === "all" ? "stock" : preset.lifeFilter;
+  useEffect(() => {
+    if (lifeFilter !== "all") setSessionLife(null);
+  }, [lifeFilter]);
+
+  function preferLife(kind: LifeKind) {
+    setDetailLife(kind);
+    if (lifeFilter !== "all") setPresetLifeFilter(kind);
+    else setSessionLife(kind);
+  }
   const [settingsOpen, setSettingsOpen] = useState(false);
   /** Keep FABs unmounted until Settings finish closing so they don't jump. */
   const [overlayButtonsReady, setOverlayButtonsReady] = useState(true);
@@ -528,6 +539,7 @@ export function StockDesk() {
     expandedKinds,
     detailLife ??
       (lifeFilter !== "all" ? lifeFilter : null) ??
+      sessionLife ??
       (activeVariant ? calculatedLifeKind(activeVariant.rule) : null),
   );
   const others = expanded ? hits.filter((hit) => hit.name !== expanded) : hits;
@@ -1197,7 +1209,7 @@ export function StockDesk() {
                           key={kind}
                           type="button"
                           aria-pressed={selected}
-                          onClick={() => setDetailLife(kind)}
+                          onClick={() => preferLife(kind)}
                           className={cn(
                             "shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold tracking-wide ring-1",
                             selected
@@ -1237,7 +1249,7 @@ export function StockDesk() {
                 setProductDefault(expanded, { section: sectionId });
                 setDetailLife(null);
               }}
-              onPreferredLife={(life) => setDetailLife(life)}
+              onPreferredLife={preferLife}
               onHidden={clearSearch}
             />
           </div>
@@ -1282,9 +1294,11 @@ export function StockDesk() {
             today={today}
             sectionFilter={sectionFilter}
             lifeFilter={lifeFilter}
+            sessionLife={sessionLife}
             productDefaults={productDefaults}
             onProductDefault={(name, section) => setProductDefault(name, { section })}
             onLifeFilter={setPresetLifeFilter}
+            onLifePrefer={preferLife}
             onOpen={choose}
             compact={compactList}
           />
