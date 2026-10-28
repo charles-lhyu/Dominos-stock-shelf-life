@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.4.55",
+    "notes": [
+      "Frozen rows that span From delivery and In use now keep both lives (Pepperoni, Chorizo, Nduja, and the other spanned day rows)",
+      "Existing charts fill in the missing In use life on load"
+    ]
+  },
+  {
     "version": "1.4.54",
     "notes": [
       "Chart import keeps lives correct when a cell wraps or splits across rows or columns",

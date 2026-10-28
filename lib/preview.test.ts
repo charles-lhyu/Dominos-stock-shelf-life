@@ -29,9 +29,9 @@ describe("list use-by dates", () => {
     assert.deepEqual(lifeKindsForRule(frozen), ["stock", "prepped"]);
     const preview = datePreview(frozen, "2026-10-01", "stock", today);
     assert.equal(preview.when, "Mon 12 Oct 2026");
-    // Prepped reuses the chart's from-delivery life (no invented in-use field).
+    // Spanned in-use cell: Prepped is its own 12-day clock from the prep date.
     const prepped = datePreview(frozen, "2026-10-01", "prepped", today);
-    assert.equal(prepped.when, "Mon 12 Oct 2026");
+    assert.equal(prepped.when, "23:59 | Mon 12 Oct 2026");
     assert.equal(item.name, "Pepperoni");
   });
 

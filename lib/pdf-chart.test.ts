@@ -75,7 +75,7 @@ describe("PDF shelf life parsing", () => {
     assert.equal(bacon.inUse, "7 days");
   });
 
-  it("updates only from-delivery when the chart row has no separate in-use column", () => {
+  it("copies a spanned from-delivery / in-use day count onto both lives", () => {
     const text = "Pepperoni / Chorizo / Nduja Sausage 11 days Tandoori Chicken 10 days";
     const result = packFromPdfText(`${HEADER}${text}`, "campaign-5.pdf");
     assert.equal(result.ok, true);
@@ -86,8 +86,14 @@ describe("PDF shelf life parsing", () => {
       );
       assert.ok(rule, name);
       assert.equal(rule.fromDelivery, "11 days");
-      assert.equal(rule.inUse, undefined);
+      assert.equal(rule.inUse, "11 days");
     }
+    const tandoori = result.pack.rules.find(
+      (item) => item.name === "Tandoori Chicken" && item.sectionId === "frozen",
+    );
+    assert.ok(tandoori);
+    assert.equal(tandoori.fromDelivery, "10 days");
+    assert.equal(tandoori.inUse, "10 days");
   });
 
   it("assigns a life column one count per name instead of the first count", () => {

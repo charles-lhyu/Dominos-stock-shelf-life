@@ -40,7 +40,7 @@ function withChartCategory(rule: ShelfRule): ShelfRule {
 /**
  * Drop fields we invented that are not on the Campaign chart:
  * - chilled Chorizo / Nduja (frozen-only on the chart)
- * - duplicate inUse copied from fromDelivery when the chart has no in-use column
+ * - inUse copied onto a row that still has no in-use column on the bundled chart
  */
 function withoutInventedFields(rule: ShelfRule): ShelfRule | null {
   if (
@@ -67,11 +67,28 @@ function withoutInventedFields(rule: ShelfRule): ShelfRule | null {
   return rule;
 }
 
+/** Fill a missing in-use life when the bundled chart row has a spanned cell. */
+function withSpannedInUse(rule: ShelfRule): ShelfRule {
+  if (rule.inUse) return rule;
+  const bundled = BUNDLED_PACK.rules.find(
+    (item) => item.name === rule.name && item.sectionId === rule.sectionId,
+  );
+  if (!bundled?.inUse || !bundled.fromDelivery) return rule;
+  const deliveryN = bundled.fromDelivery.match(/^(\d+)\s*days?\b/i)?.[1];
+  const useN = bundled.inUse.match(/^(\d+)\s*days?\b/i)?.[1];
+  // Same day count spans both columns — keep the saved delivery count on in-use.
+  if (deliveryN && useN && deliveryN === useN && rule.fromDelivery) {
+    return { ...rule, inUse: rule.fromDelivery };
+  }
+  return { ...rule, inUse: bundled.inUse };
+}
+
 export function repairStoredRules(rules: ShelfRule[]): ShelfRule[] {
   const repaired: ShelfRule[] = [];
   for (const rule of rules) {
-    const current = withoutInventedFields(withChartCategory(rule));
-    if (!current) continue;
+    const stripped = withoutInventedFields(withChartCategory(rule));
+    if (!stripped) continue;
+    const current = withSpannedInUse(stripped);
     if (current.sectionId !== "ready" || !current.prepped) {
       repaired.push(current);
       continue;

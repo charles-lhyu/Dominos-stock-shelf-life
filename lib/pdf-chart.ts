@@ -382,8 +382,9 @@ function dayField(value: string | undefined) {
 /**
  * Map day counts from the PDF window onto delivery / in-use / prepped.
  * Only fields that exist on the chart row are updated — never invent a second
- * life column. Bacon (FROZEN) prints 10 days delivery + 7 days in use; a
- * single "7 days" after the name must not overwrite delivery.
+ * life column. A single day count that spans From delivery + In use (Pepperoni)
+ * updates both when those bundled lives match. Bacon prints 10 + 7; a lone
+ * "7 days" after the name must not overwrite delivery.
  */
 function applyParsedDayCounts(
   next: ShelfRule,
@@ -406,6 +407,12 @@ function applyParsedDayCounts(
     }
     const only = days[0] ?? columnDay;
     if (!only) return;
+    // Spanned one-cell covering both columns (same day life on the chart).
+    if (deliveryN === useN) {
+      next.fromDelivery = `${only} days`;
+      next.inUse = `${only} days`;
+      return;
+    }
     if (only === useN && only !== deliveryN) {
       next.inUse = `${only} days`;
       return;

@@ -28,4 +28,4 @@ The chart prints a life, not a calendar date. The delivery or prep date you ente
 - Hours, including the 48-hour mac and cheese prep and the 15-hour ambient sauces, are added on the store clock. 15 hours from 14:30 is 05:30, including the night the clocks go back.
 - Where the row says "Date on pack", that printed date is the unopened use-by. If the prepped life runs past it, follow the pack date. Opened and prepped dates must not go past the date on the original packaging.
 
-Pepperoni, Chorizo, and Nduja share one frozen from-delivery life on the chart (Prepped uses that remaining life). Only Pepperoni also has a chilled row (date on pack + 12 days prepped).
+Pepperoni, Chorizo, and Nduja share a frozen day life that spans From delivery and In use on the chart (both 12 days). Only Pepperoni also has a chilled row (date on pack + 12 days prepped).

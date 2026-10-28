@@ -88,12 +88,17 @@ const chilledOpen =
   "Once open, keep wrapped. This life applies while it stays chilled. If it has been ambient, do not return it to the chill — use it within 24 hours.";
 
 export const RULES: ShelfRule[] = [
-  // Frozen lives match the chart: one from-delivery count unless a separate
-  // in-use column is printed (Bacon 7 days, Mac n Cheese 48 hours).
+  // Frozen chart rows: a day count that spans From delivery + In use is stored
+  // on both fields. Separate in-use cells keep their own value (Bacon 7 days,
+  // Mac n Cheese 48 hours).
   ...group("frozen", "Toppings", ["Pepperoni", "Chorizo", "Nduja Sausage"], {
     fromDelivery: "12 days",
+    inUse: "12 days",
   }, { "Nduja Sausage": ["nduja"] }),
-  ...group("frozen", "Toppings", ["Tandoori Chicken"], { fromDelivery: "10 days" }, {
+  ...group("frozen", "Toppings", ["Tandoori Chicken"], {
+    fromDelivery: "10 days",
+    inUse: "10 days",
+  }, {
     "Tandoori Chicken": ["tandoori"],
   }),
   ...group("frozen", "Toppings", ["Bacon (FROZEN)"], {
@@ -103,21 +108,26 @@ export const RULES: ShelfRule[] = [
   }, { "Bacon (FROZEN)": ["frozen bacon", "bacon frozen"] }),
   ...group("frozen", "Toppings", ["NEW Chinese Style Chicken"], {
     fromDelivery: "9 days",
+    inUse: "9 days",
   }, { "NEW Chinese Style Chicken": ["chinese chicken", "chinese style chicken"] }),
   ...group(
     "frozen",
     "Toppings",
     ["Beef", "Chicken", "Hot Dog Slices", "Meatballs"],
-    { fromDelivery: "9 days" },
+    { fromDelivery: "9 days", inUse: "9 days" },
     { "Hot Dog Slices": ["hot dog", "hotdog"] },
   ),
-  ...group("frozen", "Toppings", ["Sausage"], { fromDelivery: "6 days" }),
+  ...group("frozen", "Toppings", ["Sausage"], {
+    fromDelivery: "6 days",
+    inUse: "6 days",
+  }),
   ...group(
     "frozen",
     "Sides",
     ["Chicken Strippers", "Chicken Kickers", "Chicken Tenders", "Chicken Boneless Bites"],
     {
       fromDelivery: "10 days",
+      inUse: "10 days",
       note: "Tender and boneless updated to 10 days.",
     },
     {
@@ -129,36 +139,54 @@ export const RULES: ShelfRule[] = [
   ),
   ...group("frozen", "Sides", ["Chicken Wings"], {
     fromDelivery: "9 days",
+    inUse: "9 days",
     note: "Prepped life is the remaining life of the wings, not a new clock.",
   }, { "Chicken Wings": ["wings"] }),
-  ...group("frozen", "Sides", ["Potato Wedges"], { fromDelivery: "7 days" }, {
+  ...group("frozen", "Sides", ["Potato Wedges"], {
+    fromDelivery: "7 days",
+    inUse: "7 days",
+  }, {
     "Potato Wedges": ["wedges"],
   }),
-  ...group("frozen", "Sides", ["Fries"], { fromDelivery: "7 days" }),
+  ...group("frozen", "Sides", ["Fries"], {
+    fromDelivery: "7 days",
+    inUse: "7 days",
+  }),
   ...group("frozen", "Sides", ["Mac n Cheese"], {
     fromDelivery: "6 days",
     inUse: "48 hours prepped",
   }, { "Mac n Cheese": ["mac and cheese", "macaroni cheese"] }),
   ...group("frozen", "Desserts", ["Double Chocolate & Caramel Cookies"], {
     fromDelivery: "14 days",
+    inUse: "14 days",
   }, { "Double Chocolate & Caramel Cookies": ["double chocolate cookies", "caramel cookies"] }),
   ...group("frozen", "Desserts", ["Dominos Cookies with Creme Egg"], {
     fromDelivery: "14 days",
+    inUse: "14 days",
   }, { "Dominos Cookies with Creme Egg": ["creme egg", "cream egg"] }),
-  ...group("frozen", "Desserts", ["Cookies"], { fromDelivery: "17 days" }),
+  ...group("frozen", "Desserts", ["Cookies"], {
+    fromDelivery: "17 days",
+    inUse: "17 days",
+  }),
   ...group("frozen", "Cheese", ["Cheese String - Garlic & Herb"], {
     fromDelivery: "7 days",
+    inUse: "7 days",
     note: "Keep stored in a clean, sanitised and lidded container.",
   }, { "Cheese String - Garlic & Herb": ["cheese string", "garlic herb"] }),
-  ...group("frozen", "Cheese", ["Goats Cheese"], { fromDelivery: "14 days" }, {
+  ...group("frozen", "Cheese", ["Goats Cheese"], {
+    fromDelivery: "14 days",
+    inUse: "14 days",
+  }, {
     "Goats Cheese": ["goat cheese", "goats cheese"],
   }),
   ...group("frozen", "Bases", ["Thin Crust Shells (All sizes)"], {
     fromDelivery: "21 days",
+    inUse: "21 days",
     note: chilledOpen,
   }, { "Thin Crust Shells (All sizes)": ["thin crust", "thin and crispy"] }),
   ...group("frozen", "Bases", ["Wraps"], {
     fromDelivery: "22 days",
+    inUse: "22 days",
     note: chilledOpen,
   }),
 

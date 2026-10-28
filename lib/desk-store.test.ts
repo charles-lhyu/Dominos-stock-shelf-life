@@ -101,7 +101,7 @@ describe("stored chart repair", () => {
     assert.equal(repaired[1], original[1]);
   });
 
-  it("drops an invented inUse that only copied fromDelivery", () => {
+  it("keeps a spanned in-use life that matches from-delivery on the chart", () => {
     const saved: ShelfRule = {
       id: "frozen:pepperoni",
       sectionId: "frozen",
@@ -114,7 +114,22 @@ describe("stored chart repair", () => {
     };
     const [repaired] = repairStoredRules([saved]);
     assert.equal(repaired?.fromDelivery, "12 days");
-    assert.equal(repaired?.inUse, undefined);
+    assert.equal(repaired?.inUse, "12 days");
+  });
+
+  it("fills a missing spanned in-use life from the saved from-delivery count", () => {
+    const saved: ShelfRule = {
+      id: "frozen:pepperoni",
+      sectionId: "frozen",
+      category: "Toppings",
+      name: "Pepperoni",
+      aliases: [],
+      sameAs: ["Chorizo", "Nduja Sausage"],
+      fromDelivery: "11 days",
+    };
+    const [repaired] = repairStoredRules([saved]);
+    assert.equal(repaired?.fromDelivery, "11 days");
+    assert.equal(repaired?.inUse, "11 days");
   });
 
   it("keeps bacon delivery and in-use when both are on the chart", () => {
