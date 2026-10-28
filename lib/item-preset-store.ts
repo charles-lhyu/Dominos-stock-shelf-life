@@ -8,9 +8,10 @@ const LAST_LIFE_KEY = "shelf-life-last-life";
 const SECTIONS = new Set<SectionId>(["frozen", "chilled", "ready", "ambient", "pack"]);
 const LIVES = new Set<LifeKind>(["stock", "prepped", "ambient"]);
 
-/** One product's chosen storage and life. Life `stock` is from delivery. */
+/** One product's chosen storage. Life is never stored per item. */
 export type ProductDefault = {
   section: SectionId | null;
+  /** Always null — kept for older saved payloads. */
   life: LifeKind | null;
 };
 
@@ -49,17 +50,16 @@ function normalizeDefaults(value: unknown): Record<string, ProductDefault> {
     if (!trimmed || !entry || typeof entry !== "object") continue;
     const raw = entry as Record<string, unknown>;
     const section = isSection(raw.section) ? raw.section : null;
-    const life = isLife(raw.life) ? raw.life : null;
-    if (!section && !life) continue;
-    defaults[trimmed] = { section, life };
+    // Per-item life defaults are not used — drop any stored life.
+    if (!section) continue;
+    defaults[trimmed] = { section, life: null };
   }
   return defaults;
 }
 
 /**
  * Keep a storage choice when the product has more than one storage row.
- * Keep a life choice even for a single storage row (item details tags).
- * Hidden products are off the list, so they keep none.
+ * Life is never kept. Hidden products keep none.
  */
 export function retainProductDefaults(
   defaults: Record<string, ProductDefault>,
@@ -82,12 +82,9 @@ export function retainProductDefaults(
     const trimmed = name.trim();
     if (!trimmed || hiddenNames.has(trimmed)) continue;
     const sections = sectionsByName.get(trimmed);
-    if (!sections) continue;
-    if (sections.size >= 2) {
-      kept[trimmed] = value;
-      continue;
-    }
-    if (value.life) kept[trimmed] = { section: null, life: value.life };
+    if (!sections || sections.size < 2) continue;
+    if (!value.section || !sections.has(value.section)) continue;
+    kept[trimmed] = { section: value.section, life: null };
   }
   return kept;
 }
@@ -101,7 +98,7 @@ function sameDefaults(
   if (aKeys.length !== bKeys.length) return false;
   return aKeys.every((key, index) => {
     if (key !== bKeys[index]) return false;
-    return a[key]?.section === b[key]?.section && a[key]?.life === b[key]?.life;
+    return a[key]?.section === b[key]?.section;
   });
 }
 
@@ -225,7 +222,7 @@ export function setPresetCategory(category: string | "all") {
   update({ category });
 }
 
-/** Remember one product's storage and life, for example Pepperoni as chilled from delivery. */
+/** Remember one product's storage, for example Pepperoni as chilled. Life is not saved. */
 export function setProductDefault(
   name: string,
   partial: { section?: SectionId | null; life?: LifeKind | null },
@@ -234,13 +231,10 @@ export function setProductDefault(
   const trimmed = name.trim();
   if (!trimmed) return;
   const current = preset.defaults[trimmed] ?? { section: null, life: null };
-  const next: ProductDefault = {
-    section: partial.section !== undefined ? partial.section : current.section,
-    life: partial.life !== undefined ? partial.life : current.life,
-  };
+  const section = partial.section !== undefined ? partial.section : current.section;
   const defaults = { ...preset.defaults };
-  if (!next.section && !next.life) delete defaults[trimmed];
-  else defaults[trimmed] = next;
+  if (!section) delete defaults[trimmed];
+  else defaults[trimmed] = { section, life: null };
   update({ defaults });
 }
 

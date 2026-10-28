@@ -2298,22 +2298,10 @@ function productDefaultLines(preset: ItemPreset): { name: string; line: string }
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([name, item]) => {
       const storage = item.section ? SECTION_TAG[item.section] : null;
-      const life =
-        item.life === "stock"
-          ? "From delivery"
-          : item.life === "prepped"
-            ? "Prepped"
-            : item.life === "ambient"
-              ? "Ambient"
-              : null;
-      const line =
-        storage && life
-          ? `${name} default is ${storage}, ${life}`
-          : storage
-            ? `${name} default is ${storage}`
-            : `${name} default is ${life}`;
-      return { name, line };
-    });
+      if (!storage) return null;
+      return { name, line: `${name} default is ${storage}` };
+    })
+    .filter((row): row is { name: string; line: string } => row != null);
 }
 
 function SettingsSectionTitle({ children }: { children: ReactNode }) {

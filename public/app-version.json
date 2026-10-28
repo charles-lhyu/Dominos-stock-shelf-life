@@ -1,7 +1,7 @@
 {
-  "version": "1.4.51",
+  "version": "1.4.52",
   "notes": [
-    "Compact storage chips tap to cycle instead of opening a menu",
-    "Changing storage no longer saves a life default with it"
+    "Item life is never saved as a default - only storage is",
+    "Life on item details is session-only and resets when you leave"
   ]
 }

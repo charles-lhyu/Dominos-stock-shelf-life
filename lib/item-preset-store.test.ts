@@ -14,7 +14,7 @@ function rule(name: string, sectionId: ShelfRule["sectionId"]): ShelfRule {
   };
 }
 
-const pepperoni: ProductDefault = { section: "chilled", life: "stock" };
+const pepperoni: ProductDefault = { section: "chilled", life: null };
 const dough: ProductDefault = { section: "frozen", life: "stock" };
 
 describe("product defaults worth storing", () => {
@@ -22,18 +22,18 @@ describe("product defaults worth storing", () => {
 
   it("keeps a product that has more than one storage option", () => {
     const kept = retainProductDefaults({ Pepperoni: pepperoni, Dough: dough }, rules, []);
-    assert.deepEqual(kept.Pepperoni, pepperoni);
-    // Single storage: keep life only.
-    assert.deepEqual(kept.Dough, { section: null, life: "stock" });
+    assert.deepEqual(kept.Pepperoni, { section: "chilled", life: null });
+    // Single storage: nothing to keep (life is never stored).
+    assert.equal(kept.Dough, undefined);
   });
 
-  it("keeps a life choice on a single-storage product", () => {
+  it("drops a life-only choice on a single-storage product", () => {
     const kept = retainProductDefaults(
       { Dough: { section: "frozen", life: "prepped" } },
       rules,
       [],
     );
-    assert.deepEqual(kept.Dough, { section: null, life: "prepped" });
+    assert.deepEqual(kept, {});
   });
 
   it("drops a hidden product even when it has several storage options", () => {

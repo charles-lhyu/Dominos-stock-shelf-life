@@ -404,33 +404,19 @@ export type StoreSettingChange = {
 };
 
 function defaultChoice(value: { section: string | null; life: string | null } | undefined) {
-  if (!value || (!value.section && !value.life)) return "None";
-  const storage =
-    value.section === "frozen"
-      ? "Frozen"
-      : value.section === "chilled"
-        ? "Chilled"
-        : value.section === "pack"
-          ? "On pack"
-          : value.section === "ready" || value.section === "ambient"
-            ? "Ambient"
-            : null;
-  const life =
-    value.life === "stock"
-      ? "From delivery"
-      : value.life === "prepped"
-        ? "Prepped"
-        : value.life === "ambient"
-          ? "Ambient"
-          : null;
-  return [storage, life].filter(Boolean).join(", ") || "None";
+  if (!value?.section) return "None";
+  if (value.section === "frozen") return "Frozen";
+  if (value.section === "chilled") return "Chilled";
+  if (value.section === "pack") return "On pack";
+  if (value.section === "ready" || value.section === "ambient") return "Ambient";
+  return "None";
 }
 
 function sameDefault(
   a: { section: string | null; life: string | null } | undefined,
   b: { section: string | null; life: string | null } | undefined,
 ) {
-  return (a?.section ?? null) === (b?.section ?? null) && (a?.life ?? null) === (b?.life ?? null);
+  return (a?.section ?? null) === (b?.section ?? null);
 }
 
 /** Differences between the screen and the store being loaded. Accepting a change takes the saved side. */

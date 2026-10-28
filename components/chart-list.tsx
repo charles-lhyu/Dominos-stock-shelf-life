@@ -190,8 +190,8 @@ export function ChartList({
   sectionFilter: SectionId | "all";
   lifeFilter: LifeKind | "all";
   productDefaults: Record<string, ProductDefault>;
-  /** Omit `life` when only storage changes — life is not part of the storage default. */
-  onProductDefault: (name: string, section: SectionId, life?: LifeKind | null) => void;
+  /** Storage default only — life is never saved per item. */
+  onProductDefault: (name: string, section: SectionId) => void;
   onLifeFilter: (kind: LifeKind) => void;
   onOpen: (name: string, sectionId: SectionId) => void;
   compact?: boolean;
@@ -235,7 +235,8 @@ export function ChartList({
       if (!active) return [];
 
       const kinds = lifeKindsForRule(active.rule);
-      const lifePreference = lifeFilter !== "all" ? lifeFilter : (saved?.life ?? null);
+      // No per-item life default — list filter or the calculated life only.
+      const lifePreference = lifeFilter !== "all" ? lifeFilter : null;
       const activeLife = pickLifeKind(
         kinds,
         lifePreference ?? calculatedLifeKind(active.rule),
@@ -373,8 +374,8 @@ export function ChartList({
 
 type ListActions = {
   onOpen: (name: string, sectionId: SectionId) => void;
-  /** Omit `life` when only storage changes — life is not part of the storage default. */
-  onProductDefault: (name: string, section: SectionId, life?: LifeKind | null) => void;
+  /** Storage default only — life is never saved per item. */
+  onProductDefault: (name: string, section: SectionId) => void;
   compact: boolean;
   showHiddenChip: boolean;
   nameSort: DirSort;
@@ -839,8 +840,8 @@ function ProductRow({
   row: ListRow;
   compact: boolean;
   onOpen: (name: string, sectionId: SectionId) => void;
-  /** Omit `life` when only storage changes — life is not part of the storage default. */
-  onProductDefault: (name: string, section: SectionId, life?: LifeKind | null) => void;
+  /** Storage default only — life is never saved per item. */
+  onProductDefault: (name: string, section: SectionId) => void;
 }) {
   const { name, variants, active, kinds, activeLife, preview, hidden } = row;
 
@@ -922,34 +923,14 @@ function ProductRow({
               );
             })}
             {activeLife ? (
-              kinds.length > 1 ? (
-                <button
-                  type="button"
-                  aria-label={`Life: ${LIFE_KIND_META[activeLife].tag}. Tap to cycle.`}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    const kindIndex = kinds.indexOf(activeLife);
-                    const next = kinds[(kindIndex + 1) % kinds.length]!;
-                    onProductDefault(name, active.sectionId, next);
-                  }}
-                  className={cn(
-                    "inline-flex touch-pan-y shrink-0 items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[0.6875rem] font-semibold tracking-wide ring-1",
-                    LIFE_ACTIVE[activeLife],
-                  )}
-                >
-                  {LIFE_KIND_META[activeLife].tag}
-                  <ChevronDown className="size-3 opacity-80" aria-hidden />
-                </button>
-              ) : (
-                <span
-                  className={cn(
-                    "shrink-0 rounded-md px-1.5 py-0.5 text-[0.6875rem] font-semibold tracking-wide ring-1",
-                    LIFE_ACTIVE[activeLife],
-                  )}
-                >
-                  {LIFE_KIND_META[activeLife].tag}
-                </span>
-              )
+              <span
+                className={cn(
+                  "shrink-0 rounded-md px-1.5 py-0.5 text-[0.6875rem] font-semibold tracking-wide ring-1",
+                  LIFE_ACTIVE[activeLife],
+                )}
+              >
+                {LIFE_KIND_META[activeLife].tag}
+              </span>
             ) : null}
           </div>
         ) : null}

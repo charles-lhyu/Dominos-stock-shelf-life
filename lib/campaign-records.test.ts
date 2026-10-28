@@ -324,7 +324,7 @@ describe("campaign library records", () => {
     assert.deepEqual(listStoreCampaigns(library, ""), []);
   });
 
-  it("shows storage defaults for multi-storage products and life defaults for single-storage", () => {
+  it("shows storage defaults for multi-storage products and drops life-only defaults", () => {
     const chart = pack("2026-09-07", "2026-11-17");
     chart.rules = [
       { ...chart.rules[0]!, sectionId: "frozen" },
@@ -349,9 +349,8 @@ describe("campaign library records", () => {
         },
       },
     });
-    assert.deepEqual(listStoreCampaigns(library, "12345")[0]?.preset.defaults, {
-      Dough: { section: null, life: "stock" },
-    });
+    // Hidden multi-storage and single-storage life defaults are both dropped.
+    assert.deepEqual(listStoreCampaigns(library, "12345")[0]?.preset.defaults, {});
 
     library = writeStoreSettings(library, "12345", "2026-09-07", "2026-11-17", {
       hidden: [],
@@ -364,9 +363,8 @@ describe("campaign library records", () => {
       },
     });
     const shown = listStoreCampaigns(library, "12345")[0]?.preset.defaults;
-    assert.equal(shown?.Pepperoni?.section, "chilled");
-    assert.equal(shown?.Pepperoni?.life, "stock");
-    assert.deepEqual(shown?.Dough, { section: null, life: "stock" });
+    assert.deepEqual(shown?.Pepperoni, { section: "chilled", life: null });
+    assert.equal(shown?.Dough, undefined);
   });
 
   it("drops one hidden name or one product default from saved settings", () => {
@@ -395,7 +393,7 @@ describe("campaign library records", () => {
     assert.equal(dropAllStoredDefaults(clearedDefaults), clearedDefaults);
   });
 
-  it("keeps a product default such as pepperoni chilled from delivery", () => {
+  it("keeps a product storage default such as pepperoni chilled", () => {
     const library = writeStoreSettings(emptyCampaignLibrary(), "12345", "2026-09-07", "2026-11-17", {
       hidden: [],
       preset: {
@@ -405,7 +403,8 @@ describe("campaign library records", () => {
     });
     const saved = readStoreSettings(library, "12345", "2026-09-07", "2026-11-17");
     assert.equal(saved?.preset.defaults.Pepperoni?.section, "chilled");
-    assert.equal(saved?.preset.defaults.Pepperoni?.life, "stock");
+    // Life is never kept on a product default.
+    assert.equal(saved?.preset.defaults.Pepperoni?.life, null);
   });
 
   it("stores short dates and day counts with the store and loads them back", () => {

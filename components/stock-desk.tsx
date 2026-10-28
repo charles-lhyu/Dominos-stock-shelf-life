@@ -149,6 +149,8 @@ export function StockDesk() {
   const desk = useSyncExternalStore(subscribeDesk, getDeskState, getDeskState);
   const [query, setQuery] = useState("");
   const [picked, setPicked] = useState<string | null>(null);
+  /** Session-only life on the open item — never written to product defaults. */
+  const [detailLife, setDetailLife] = useState<LifeKind | null>(null);
   const preset = useSyncExternalStore(
     subscribeItemPreset,
     () => {
@@ -515,8 +517,7 @@ export function StockDesk() {
   const expanded = pickedName ?? (shouldExpand(hits) ? hits[0]?.name ?? null : null);
   const expandedVariants = expanded ? variantsForName(expanded, rules, pack) : [];
   const expandedDefault = expanded ? productDefaults[expanded] : undefined;
-  // Item details follow the product's own tags first. List filters only fill in
-  // when that product has no saved choice yet.
+  // Storage default first; list filter fills in when that product has no saved storage.
   const activeVariant = pickVariant(
     expandedVariants,
     expandedDefault?.section ??
@@ -525,7 +526,7 @@ export function StockDesk() {
   const expandedKinds = activeVariant ? lifeKindsForRule(activeVariant.rule) : [];
   const activeLife = pickLifeKind(
     expandedKinds,
-    expandedDefault?.life ??
+    detailLife ??
       (lifeFilter !== "all" ? lifeFilter : null) ??
       (activeVariant ? calculatedLifeKind(activeVariant.rule) : null),
   );
@@ -544,6 +545,7 @@ export function StockDesk() {
     showItemFromTopRef.current = true;
     setQuery("");
     setPicked(name);
+    setDetailLife(null);
     inputRef.current?.blur();
     setSearchFocused(false);
   }
@@ -551,6 +553,7 @@ export function StockDesk() {
   function clearSearch() {
     setQuery("");
     setPicked(null);
+    setDetailLife(null);
     inputRef.current?.blur();
     setSearchFocused(false);
 
@@ -1169,6 +1172,7 @@ export function StockDesk() {
                               setProductDefault(expanded, {
                                 section: variant.sectionId,
                               });
+                              setDetailLife(null);
                             }
                           }}
                           className={cn(
@@ -1193,14 +1197,7 @@ export function StockDesk() {
                           key={kind}
                           type="button"
                           aria-pressed={selected}
-                          onClick={() => {
-                            if (expanded && activeVariant) {
-                              setProductDefault(expanded, {
-                                section: activeVariant.sectionId,
-                                life: kind,
-                              });
-                            }
-                          }}
+                          onClick={() => setDetailLife(kind)}
                           className={cn(
                             "shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold tracking-wide ring-1",
                             selected
@@ -1237,16 +1234,10 @@ export function StockDesk() {
               kinds={expandedKinds}
               onPreferredSection={(sectionId) => {
                 if (!expanded) return;
-                // Storage default only — life is chosen separately, not with storage.
                 setProductDefault(expanded, { section: sectionId });
+                setDetailLife(null);
               }}
-              onPreferredLife={(life) => {
-                if (!expanded || !activeVariant) return;
-                setProductDefault(expanded, {
-                  section: activeVariant.sectionId,
-                  life,
-                });
-              }}
+              onPreferredLife={(life) => setDetailLife(life)}
               onHidden={clearSearch}
             />
           </div>
@@ -1292,12 +1283,7 @@ export function StockDesk() {
             sectionFilter={sectionFilter}
             lifeFilter={lifeFilter}
             productDefaults={productDefaults}
-            onProductDefault={(name, section, life) =>
-              setProductDefault(
-                name,
-                life === undefined ? { section } : { section, life },
-              )
-            }
+            onProductDefault={(name, section) => setProductDefault(name, { section })}
             onLifeFilter={setPresetLifeFilter}
             onOpen={choose}
             compact={compactList}
