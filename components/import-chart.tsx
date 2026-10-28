@@ -2482,40 +2482,29 @@ function StoredCampaignDetails({
                 className={cn(
                   storedRowClass(index),
                   invalid && "ring-1 ring-inset ring-amber-400/35",
-                  canPick && "items-start py-1.5",
                 )}
               >
                 <div className="min-w-0 flex-1">
-                  <div className="flex min-w-0 items-center justify-between gap-2">
-                    <span
-                      className={cn(
-                        "min-w-0 truncate font-medium",
-                        invalid && "text-amber-100",
-                      )}
-                    >
-                      {entry.name}
-                    </span>
-                    {canPick ? null : (
-                      <span
-                        className={cn(
-                          "shrink-0 text-xs tabular-nums",
-                          invalid ? "text-amber-100/80" : "text-stone-400",
-                        )}
-                      >
-                        {entry.storage}
-                      </span>
+                  <span
+                    className={cn(
+                      "block truncate font-medium",
+                      invalid && "text-amber-100",
                     )}
-                  </div>
+                  >
+                    {entry.name}
+                  </span>
                   {invalid ? (
                     <span className="mt-0.5 block truncate text-[0.7rem] text-amber-100/70">
                       {invalid.detail}
                     </span>
                   ) : null}
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
                   {canPick ? (
                     <div
                       role="group"
                       aria-label={`${entry.name} storage default`}
-                      className="mt-1.5 flex flex-wrap gap-1"
+                      className="flex items-center gap-1"
                     >
                       {options.map((section) => {
                         const selected = entry.section === section;
@@ -2537,30 +2526,32 @@ function StoredCampaignDetails({
                         );
                       })}
                     </div>
+                  ) : (
+                    <span
+                      className={cn(
+                        "text-xs tabular-nums",
+                        invalid ? "text-amber-100/80" : "text-stone-400",
+                      )}
+                    >
+                      {entry.storage}
+                    </span>
+                  )}
+                  {invalid && invalid.update && onUpdateInvalidDefault ? (
+                    <button
+                      type="button"
+                      onClick={() => onUpdateInvalidDefault(entry.name)}
+                      className="rounded-md px-2 py-0.5 text-[0.65rem] font-semibold text-amber-100 ring-1 ring-amber-400/35"
+                    >
+                      Update
+                    </button>
                   ) : null}
-                </div>
-                {invalid ? (
-                  <div className="flex shrink-0 items-center gap-1 self-center">
-                    {invalid.update && onUpdateInvalidDefault ? (
-                      <button
-                        type="button"
-                        onClick={() => onUpdateInvalidDefault(entry.name)}
-                        className="rounded-md px-2 py-0.5 text-[0.65rem] font-semibold text-amber-100 ring-1 ring-amber-400/35"
-                      >
-                        Update
-                      </button>
-                    ) : null}
+                  {invalid || editing ? (
                     <RemoveMark
                       label={`Remove ${entry.name} default`}
                       onClick={() => onRemoveDefault(entry.name)}
                     />
-                  </div>
-                ) : editing ? (
-                  <RemoveMark
-                    label={`Remove ${entry.name} default`}
-                    onClick={() => onRemoveDefault(entry.name)}
-                  />
-                ) : null}
+                  ) : null}
+                </div>
               </li>
             );
           })}
