@@ -2704,13 +2704,16 @@ export function ImportChartButton({
                 const storeSelectItems = Object.fromEntries(
                   deviceStoreSettings.map((store) => [
                     store.storeId,
-                    `${store.storeId}${
-                      nameFor(store.storeId) || store.name
-                        ? ` · ${nameFor(store.storeId) || store.name}`
-                        : ""
-                    }`,
+                    store.storeId,
                   ]),
                 );
+                const storeSelectMenuLabel = (storeId: string) => {
+                  const store = deviceStoreSettings.find(
+                    (entry) => entry.storeId === storeId,
+                  );
+                  const label = nameFor(storeId) || store?.name || "";
+                  return label ? `${storeId} · ${label}` : storeId;
+                };
                 const previewDatesLabel = previewStore
                   ? previewStore.showDayCounts
                     ? "Days and hours"
@@ -2756,7 +2759,7 @@ export function ImportChartButton({
                                   key={store.storeId}
                                   value={store.storeId}
                                 >
-                                  {storeSelectItems[store.storeId]}
+                                  {storeSelectMenuLabel(store.storeId)}
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -2779,11 +2782,11 @@ export function ImportChartButton({
                           All stored data
                         </h2>
                       )}
-                      {!previewStore ? (
-                        <p className="text-sm text-stone-400">
-                          Store settings saved on this device. Tap a card to preview.
-                        </p>
-                      ) : null}
+                      <p className="text-sm text-stone-400">
+                        {previewStore
+                          ? "Preview this store's settings and campaign presets."
+                          : "Store settings saved on this device. Tap a card to preview."}
+                      </p>
                       <div className="flex flex-wrap gap-2 pt-1">
                         <button
                           type="button"
