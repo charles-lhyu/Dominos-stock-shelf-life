@@ -219,6 +219,7 @@ export function ImportChartButton({
   const [changesOpen, setChangesOpen] = useState(false);
   const [changeChoices, setChangeChoices] = useState<string[]>([]);
   const [storedEditing, setStoredEditing] = useState(false);
+  const [allStoredOpen, setAllStoredOpen] = useState(false);
   const [storeNameDraft, setStoreNameDraft] = useState<{ storeId: string; value: string } | null>(
     null,
   );
@@ -387,6 +388,7 @@ export function ImportChartButton({
       setStoreDraft(getStoreId());
       setStoredEditing(false);
       setStoreNameDraft(null);
+      setAllStoredOpen(false);
       setStoreMenuOpen(false);
       setStoreMenuAll(false);
     }
@@ -1197,18 +1199,36 @@ export function ImportChartButton({
             </div>
             <div className="space-y-2 border-t border-white/10 pt-3">
               <div className="flex items-center justify-between gap-2">
-                <p className="min-w-0 truncate text-sm font-medium text-stone-300">
-                  {storedHeading(previewStoreId ?? storeId, nameFor(previewStoreId ?? storeId))}
-                </p>
+                <div className="flex min-w-0 items-center gap-2">
+                  <p className="text-sm font-medium text-stone-300">Stored data</p>
+                  {deviceStored.length > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => setAllStoredOpen(true)}
+                      className="shrink-0 text-xs font-semibold text-sky-300 underline-offset-2 hover:underline"
+                    >
+                      Show all
+                    </button>
+                  ) : null}
+                </div>
                 {previewStoreId ?? storeId ? (
                   <StoredEditButton editing={storedEditing} onToggle={toggleStoredEditing} />
                 ) : null}
               </div>
-              {storedEditing && (previewStoreId ?? storeId) ? (
-                <StoreNameField
-                  value={nameFor(previewStoreId ?? storeId)}
-                  onChange={(value) => changeStoreName(previewStoreId ?? storeId, value)}
-                />
+              {previewStoreId ?? storeId ? (
+                storedEditing ? (
+                  <StoreNameField
+                    value={nameFor(previewStoreId ?? storeId)}
+                    onChange={(value) => changeStoreName(previewStoreId ?? storeId, value)}
+                  />
+                ) : (
+                  <div className="space-y-0.5 px-0.5">
+                    <p className="text-xs text-stone-500">Store name</p>
+                    <p className="truncate text-sm text-stone-200">
+                      {nameFor(previewStoreId ?? storeId) || "Not set"}
+                    </p>
+                  </div>
+                )
               ) : null}
               {!(previewStoreId ?? storeId) ? (
                 <p className="text-xs text-stone-500">
@@ -1949,6 +1969,72 @@ export function ImportChartButton({
           </div>
         </DialogContent>
       </Dialog>
+      <Dialog open={allStoredOpen} onOpenChange={setAllStoredOpen}>
+        <DialogContent
+          showCloseButton={false}
+          overlayClassName="z-[60] bg-black/50"
+          className="top-1/2! left-1/2! z-[60] flex h-[min(40rem,calc(100dvh-2.5rem))] max-h-[calc(100dvh-2.5rem)] w-[calc(100%-1.25rem)] max-w-lg -translate-x-1/2! -translate-y-1/2! flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-lg"
+        >
+          <DialogHeader className="shrink-0 space-y-2 border-b border-white/10 px-4 py-3 pr-14">
+            <DialogTitle className="font-display text-xl text-white">
+              All stored data
+            </DialogTitle>
+            <DialogDescription className="text-sm text-stone-400">
+              Every store saved on this device. Tap one to preview it below.
+            </DialogDescription>
+            <button
+              type="button"
+              className="absolute top-3 right-3 inline-flex size-10 items-center justify-center rounded-full bg-white/10 text-white"
+              aria-label="Close all stored data"
+              onClick={() => setAllStoredOpen(false)}
+            >
+              <X className="size-5" />
+            </button>
+          </DialogHeader>
+          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-3">
+            {deviceStored.length === 0 ? (
+              <p className="text-sm text-stone-500">Nothing is saved on this device yet.</p>
+            ) : (
+              deviceStored.map((item) => {
+                const label = nameFor(item.storeId);
+                const active = (previewStoreId ?? storeId) === item.storeId;
+                return (
+                  <button
+                    key={`${item.storeId}|${item.issued}|${item.validUntil}`}
+                    type="button"
+                    onClick={() => {
+                      setStoreDraft(item.storeId);
+                      setStoreMenuOpen(false);
+                      setStoreMenuAll(false);
+                      setAllStoredOpen(false);
+                    }}
+                    className={cn(
+                      "w-full rounded-xl border px-3 py-2.5 text-left transition-colors",
+                      active
+                        ? "border-sky-400/40 bg-sky-500/10"
+                        : "border-white/10 bg-black/20 hover:bg-white/[0.06]",
+                    )}
+                  >
+                    <p className="truncate text-sm font-medium text-white">
+                      {label || `Store ${item.storeId}`}
+                    </p>
+                    {label ? (
+                      <p className="text-xs text-stone-400">Store {item.storeId}</p>
+                    ) : null}
+                    <p className="mt-1 truncate text-sm text-stone-200">
+                      {item.title || "Shelf life chart"}
+                    </p>
+                    <p className="mt-0.5 text-xs text-stone-500">
+                      Issued {formatShortDate(item.issued)} · Valid until{" "}
+                      {formatShortDate(item.validUntil)}
+                    </p>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </Dialog>
 
     <Dialog open={confirmReset} onOpenChange={setConfirmReset}>
@@ -2039,12 +2125,6 @@ export function ImportChartButton({
     </Dialog>
     </>
   );
-}
-
-function storedHeading(storeId: string, name: string) {
-  if (!storeId) return "Stored for this store";
-  if (!name) return `Stored for store ${storeId}`;
-  return `Stored for ${name} · ${storeId}`;
 }
 
 function StoreNameField({

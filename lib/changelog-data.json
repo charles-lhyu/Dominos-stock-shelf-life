@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.4.39",
+    "notes": [
+      "Stored data shows a Show all button and the store name underneath"
+    ]
+  },
+  {
     "version": "1.4.38",
     "notes": [
       "Compact list stays as you left it when loading another store",

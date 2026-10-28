@@ -1,7 +1,6 @@
 {
-  "version": "1.4.38",
+  "version": "1.4.39",
   "notes": [
-    "Compact list stays as you left it when loading another store",
-    "Opening an item no longer collapses the chart header"
+    "Stored data shows a Show all button and the store name underneath"
   ]
 }
