@@ -47,6 +47,8 @@ import {
 } from "@/components/ui/select";
 import {
   adoptStoreForCampaign,
+  clearSavedDefaults,
+  clearSavedHidden,
   forgetSavedDefault,
   forgetSavedHidden,
   hydrateCampaignLibrary,
@@ -72,6 +74,7 @@ import {
   writeDebugDays,
 } from "@/lib/debug-store";
 import {
+  clearHiddenNames,
   getHiddenNames,
   getHiddenNamesServer,
   subscribeHidden,
@@ -85,6 +88,7 @@ import {
 import { clearPdfCrops, replacePdfCrops } from "@/lib/pdf-crop-images";
 import { parsePdfChartFile } from "@/lib/pdf-chart";
 import {
+  clearProductDefaults,
   getItemPreset,
   getItemPresetServer,
   hydrateItemPresetStore,
@@ -612,6 +616,22 @@ export function ImportChartButton({
     forgetSavedDefault(storeId, issued, validUntil, name);
   }
 
+  function removeAllHidden(issued: string, validUntil: string, onScreen: boolean) {
+    if (onScreen) {
+      clearHiddenNames();
+      return;
+    }
+    clearSavedHidden(storeId, issued, validUntil);
+  }
+
+  function removeAllDefaults(issued: string, validUntil: string, onScreen: boolean) {
+    if (onScreen) {
+      clearProductDefaults();
+      return;
+    }
+    clearSavedDefaults(storeId, issued, validUntil);
+  }
+
   function syncNavCard(id: SettingsSectionId) {
     const nav = settingsNavRef.current;
     if (!nav) return;
@@ -772,7 +792,7 @@ export function ImportChartButton({
         <Settings className={compact ? "size-4" : "size-5"} />
       </DialogTrigger>
       <DialogContent
-        className="relative flex h-[90dvh] max-h-[90dvh] w-[calc(100%-1.25rem)] max-w-md flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-md"
+        className="top-[max(0.5rem,env(safe-area-inset-top))]! flex h-[calc(100dvh-max(0.5rem,env(safe-area-inset-top))-0.5rem)] max-h-[calc(100dvh-max(0.5rem,env(safe-area-inset-top))-0.5rem)] w-[calc(100%-1.25rem)] max-w-md translate-y-0! flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-md"
         showCloseButton={false}
       >
         <DialogHeader className="shrink-0 border-b border-white/10 px-4 py-3 pr-14">
@@ -972,6 +992,12 @@ export function ImportChartButton({
                           }
                           onRemoveDefault={(name) =>
                             removeDefault(item.issued, item.validUntil, name, onScreen)
+                          }
+                          onRemoveAllHidden={() =>
+                            removeAllHidden(item.issued, item.validUntil, onScreen)
+                          }
+                          onRemoveAllDefaults={() =>
+                            removeAllDefaults(item.issued, item.validUntil, onScreen)
                           }
                         />
                       </article>
@@ -1720,6 +1746,20 @@ export function ImportChartButton({
                     name,
                   )
                 }
+                onRemoveAllHidden={() =>
+                  clearSavedHidden(
+                    selectedOther.storeId,
+                    selectedOther.issued,
+                    selectedOther.validUntil,
+                  )
+                }
+                onRemoveAllDefaults={() =>
+                  clearSavedDefaults(
+                    selectedOther.storeId,
+                    selectedOther.issued,
+                    selectedOther.validUntil,
+                  )
+                }
               />
             </div>
           ) : (
@@ -1799,27 +1839,50 @@ function RemoveMark({ label, onClick }: { label: string; onClick: () => void }) 
   );
 }
 
+function storedRowClass(index: number) {
+  return cn(
+    "flex min-h-8 items-center justify-between gap-2 rounded-md px-2",
+    index % 2 === 0 ? "bg-white/[0.035]" : "bg-white/[0.09]",
+  );
+}
+
 function StoredCampaignDetails({
   item,
   editing,
   onRemoveHidden,
   onRemoveDefault,
+  onRemoveAllHidden,
+  onRemoveAllDefaults,
 }: {
   item: { hidden: string[]; preset: ItemPreset };
   editing: boolean;
   onRemoveHidden: (name: string) => void;
   onRemoveDefault: (name: string) => void;
+  onRemoveAllHidden: () => void;
+  onRemoveAllDefaults: () => void;
 }) {
   const defaults = productDefaultLines(item.preset);
   return (
     <>
-      <p className="mt-2 text-xs text-stone-500">Hidden</p>
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <p className="text-xs text-stone-500">Hidden</p>
+        {editing && item.hidden.length > 0 ? (
+          <button
+            type="button"
+            aria-label="Remove all hidden"
+            onClick={onRemoveAllHidden}
+            className="text-xs font-semibold text-red-400"
+          >
+            Remove all
+          </button>
+        ) : null}
+      </div>
       {item.hidden.length === 0 ? (
-        <p className="text-sm text-stone-200">None</p>
+        <p className="px-2 text-sm text-stone-200">None</p>
       ) : (
         <ul className="text-sm text-stone-200">
-          {item.hidden.map((name) => (
-            <li key={name} className="flex items-center justify-between gap-2">
+          {item.hidden.map((name, index) => (
+            <li key={name} className={storedRowClass(index)}>
               <span className="min-w-0 truncate">{name}</span>
               {editing ? (
                 <RemoveMark label={`Remove ${name}`} onClick={() => onRemoveHidden(name)} />
@@ -1828,13 +1891,25 @@ function StoredCampaignDetails({
           ))}
         </ul>
       )}
-      <p className="mt-2 text-xs text-stone-500">Defaults</p>
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <p className="text-xs text-stone-500">Defaults</p>
+        {editing && defaults.length > 0 ? (
+          <button
+            type="button"
+            aria-label="Remove all defaults"
+            onClick={onRemoveAllDefaults}
+            className="text-xs font-semibold text-red-400"
+          >
+            Remove all
+          </button>
+        ) : null}
+      </div>
       {defaults.length === 0 ? (
-        <p className="text-sm text-stone-200">None</p>
+        <p className="px-2 text-sm text-stone-200">None</p>
       ) : (
         <ul className="text-sm text-stone-200">
-          {defaults.map((entry) => (
-            <li key={entry.name} className="flex items-center justify-between gap-2">
+          {defaults.map((entry, index) => (
+            <li key={entry.name} className={storedRowClass(index)}>
               <span className="min-w-0">{entry.line}</span>
               {editing ? (
                 <RemoveMark

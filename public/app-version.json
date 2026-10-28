@@ -1,7 +1,8 @@
 {
-  "version": "1.4.22",
+  "version": "1.4.23",
   "notes": [
-    "Hidden items sit in stored data",
-    "Edit turns on a red cross to remove a hidden item or a product default"
+    "Settings sits just below the top of the screen so more of it is visible",
+    "Stored rows alternate colour so the remove cross lines up",
+    "Hidden and Defaults each have Remove all"
   ]
 }

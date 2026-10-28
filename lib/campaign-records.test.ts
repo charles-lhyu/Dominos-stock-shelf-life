@@ -3,6 +3,8 @@ import { describe, it } from "node:test";
 import {
   campaignKey,
   emptyCampaignLibrary,
+  dropAllStoredDefaults,
+  dropAllStoredHidden,
   dropStoredDefault,
   dropStoredHidden,
   listCampaignSummaries,
@@ -379,6 +381,12 @@ describe("campaign library records", () => {
     assert.equal(defaults.preset.defaults.Pepperoni, undefined);
     assert.equal(defaults.preset.defaults.Ham?.section, "frozen");
     assert.equal(dropStoredDefault(defaults, "Pepperoni"), defaults);
+    const clearedHidden = dropAllStoredHidden(settings);
+    assert.deepEqual(clearedHidden.hidden, []);
+    assert.equal(dropAllStoredHidden(clearedHidden), clearedHidden);
+    const clearedDefaults = dropAllStoredDefaults(settings);
+    assert.deepEqual(clearedDefaults.preset.defaults, {});
+    assert.equal(dropAllStoredDefaults(clearedDefaults), clearedDefaults);
   });
 
   it("keeps a product default such as pepperoni chilled from delivery", () => {

@@ -239,6 +239,12 @@ export function setProductDefault(
   update({ defaults });
 }
 
+export function clearProductDefaults() {
+  hydrateItemPresetStore();
+  if (Object.keys(preset.defaults).length === 0) return;
+  update({ defaults: {} });
+}
+
 export function replaceItemPreset(value: unknown) {
   hydrateItemPresetStore();
   const next = normalizeItemPreset(value);

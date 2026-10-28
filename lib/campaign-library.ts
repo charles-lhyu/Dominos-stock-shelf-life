@@ -4,6 +4,8 @@ import {
   listCampaignSummaries,
   listDeviceStored,
   listStoreCampaigns,
+  dropAllStoredDefaults,
+  dropAllStoredHidden,
   dropStoredDefault,
   dropStoredHidden,
   parseCampaignLibrary,
@@ -165,6 +167,14 @@ export function forgetSavedDefault(
   name: string,
 ) {
   updateSavedCampaign(storeId, issued, validUntil, (saved) => dropStoredDefault(saved, name));
+}
+
+export function clearSavedHidden(storeId: string, issued: string, validUntil: string) {
+  updateSavedCampaign(storeId, issued, validUntil, dropAllStoredHidden);
+}
+
+export function clearSavedDefaults(storeId: string, issued: string, validUntil: string) {
+  updateSavedCampaign(storeId, issued, validUntil, dropAllStoredDefaults);
 }
 
 export function subscribeStoredStore(listener: () => void) {

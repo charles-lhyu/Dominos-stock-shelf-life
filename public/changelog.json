@@ -1,5 +1,13 @@
 [
   {
+    "version": "1.4.23",
+    "notes": [
+      "Settings sits just below the top of the screen so more of it is visible",
+      "Stored rows alternate colour so the remove cross lines up",
+      "Hidden and Defaults each have Remove all"
+    ]
+  },
+  {
     "version": "1.4.22",
     "notes": [
       "Hidden items sit in stored data",

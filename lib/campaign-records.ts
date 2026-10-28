@@ -245,6 +245,16 @@ export function dropStoredDefault(
   return { ...settings, preset: { ...settings.preset, defaults } };
 }
 
+export function dropAllStoredHidden(settings: StoreCampaignSettings): StoreCampaignSettings {
+  if (settings.hidden.length === 0) return settings;
+  return { ...settings, hidden: [] };
+}
+
+export function dropAllStoredDefaults(settings: StoreCampaignSettings): StoreCampaignSettings {
+  if (Object.keys(settings.preset.defaults).length === 0) return settings;
+  return { ...settings, preset: { ...settings.preset, defaults: {} } };
+}
+
 const EMPTY_SETTINGS: StoreCampaignSettings = {
   hidden: [],
   preset: DEFAULT_ITEM_PRESET,
