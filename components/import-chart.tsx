@@ -396,6 +396,10 @@ export function ImportChartButton({
     storeId?: string;
   } | null>(null);
   const [allStoredOpen, setAllStoredOpen] = useState(false);
+  /** Store id being previewed inside Show all; null = card list. */
+  const [allStoredPreviewId, setAllStoredPreviewId] = useState<string | null>(
+    null,
+  );
   const [storeSettingsOpen, setStoreSettingsOpen] = useState(true);
   const [campaignPresetsOpen, setCampaignPresetsOpen] = useState(true);
   const storedImportInputRef = useRef<HTMLInputElement>(null);
@@ -544,6 +548,15 @@ export function ImportChartButton({
   }, [open]);
 
   useEffect(() => {
+    if (!allStoredPreviewId) return;
+    if (
+      !deviceStoreSettings.some((store) => store.storeId === allStoredPreviewId)
+    ) {
+      setAllStoredPreviewId(null);
+    }
+  }, [allStoredPreviewId, deviceStoreSettings]);
+
+  useEffect(() => {
     if (!storeMenuOpen) return;
     function onPointerDown(event: PointerEvent) {
       const target = event.target;
@@ -562,6 +575,7 @@ export function ImportChartButton({
     // Close All stored first; keep Settings open until a second dismiss.
     if (!next && allStoredOpen) {
       setAllStoredOpen(false);
+      setAllStoredPreviewId(null);
       return;
     }
     if (next) {
@@ -596,6 +610,7 @@ export function ImportChartButton({
       setStoredConfirmOpen(false);
       setStoredImportConfirm(null);
       setAllStoredOpen(false);
+      setAllStoredPreviewId(null);
       setStoreMenuOpen(false);
       setStoreMenuAll(false);
     }
@@ -1858,7 +1873,10 @@ export function ImportChartButton({
                   <button
                     type="button"
                     disabled={storedEditing}
-                    onClick={() => setAllStoredOpen(true)}
+                    onClick={() => {
+                      setAllStoredPreviewId(null);
+                      setAllStoredOpen(true);
+                    }}
                     className="shrink-0 text-xs font-semibold text-sky-300 underline-offset-2 hover:underline disabled:opacity-40"
                   >
                     Show all
@@ -2659,7 +2677,10 @@ export function ImportChartButton({
               type="button"
               className="absolute inset-0 bg-black/55 backdrop-blur-md supports-backdrop-filter:backdrop-blur-md"
               aria-label="Dismiss all stored data"
-              onClick={() => setAllStoredOpen(false)}
+              onClick={() => {
+                setAllStoredOpen(false);
+                setAllStoredPreviewId(null);
+              }}
             />
             <div
               role="dialog"
@@ -2669,110 +2690,276 @@ export function ImportChartButton({
               onClick={(event) => event.stopPropagation()}
               onKeyDown={(event) => event.stopPropagation()}
             >
-              <div className="relative shrink-0 space-y-2 border-b border-white/10 px-4 py-3 pr-14">
-                <h2
-                  id="all-stored-title"
-                  className="font-display text-xl font-medium text-white"
-                >
-                  All stored data
-                </h2>
-                <p className="text-sm text-stone-400">
-                  Store settings saved on this device. Tap a card to preview that store.
-                  Export or import a JSON backup of the whole library.
-                </p>
-                <div className="flex flex-wrap gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={exportStoredData}
-                    className="rounded-lg px-2.5 py-1 text-xs font-semibold text-stone-200 ring-1 ring-white/15"
-                  >
-                    Export
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => storedImportInputRef.current?.click()}
-                    className="rounded-lg px-2.5 py-1 text-xs font-semibold text-stone-200 ring-1 ring-white/15"
-                  >
-                    Import
-                  </button>
-                  <input
-                    ref={storedImportInputRef}
-                    type="file"
-                    accept="application/json,.json"
-                    className="hidden"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0] ?? null;
-                      event.target.value = "";
-                      onStoredImportFile(file);
-                    }}
-                  />
-                </div>
-                <button
-                  type="button"
-                  className="absolute top-3 right-3 inline-flex size-10 items-center justify-center rounded-full bg-white/10 text-white"
-                  aria-label="Close all stored data"
-                  onClick={() => setAllStoredOpen(false)}
-                >
-                  <X className="size-5" />
-                </button>
-              </div>
-              <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-4 py-3">
-                {deviceStoreSettings.length === 0 ? (
-                  <p className="text-sm text-stone-500">
-                    Nothing is saved on this device yet. Import a backup to load stores
-                    and campaign presets.
-                  </p>
-                ) : (
-                  deviceStoreSettings.map((store) => {
-                    const label = nameFor(store.storeId) || store.name;
-                    const active = (previewStoreId ?? storeId) === store.storeId;
-                    const datesLabel = store.showDayCounts
-                      ? "Days and hours"
-                      : store.compactDates
-                        ? "Short"
-                        : "Full";
-                    const listLabel = store.compactList ? "Compact" : "Normal";
-                    return (
-                      <button
-                        key={store.storeId}
-                        type="button"
-                        onClick={() => {
-                          setStoreDraft(store.storeId);
-                          setStoreMenuOpen(false);
-                          setStoreMenuAll(false);
-                          setAllStoredOpen(false);
-                        }}
-                        className={cn(
-                          "w-full rounded-lg border px-2.5 py-2 text-left transition-colors",
-                          active
-                            ? "border-sky-400/40 bg-sky-500/10"
-                            : "border-white/10 bg-black/20 hover:bg-white/[0.06]",
-                        )}
+              {(() => {
+                const previewStore = allStoredPreviewId
+                  ? deviceStoreSettings.find(
+                      (store) => store.storeId === allStoredPreviewId,
+                    )
+                  : null;
+                const previewCampaigns = allStoredPreviewId
+                  ? deviceStored.filter(
+                      (item) => item.storeId === allStoredPreviewId,
+                    )
+                  : [];
+                const storeSelectItems = Object.fromEntries(
+                  deviceStoreSettings.map((store) => [
+                    store.storeId,
+                    `${store.storeId}${
+                      nameFor(store.storeId) || store.name
+                        ? ` · ${nameFor(store.storeId) || store.name}`
+                        : ""
+                    }`,
+                  ]),
+                );
+                const previewDatesLabel = previewStore
+                  ? previewStore.showDayCounts
+                    ? "Days and hours"
+                    : previewStore.compactDates
+                      ? "Short"
+                      : "Full"
+                  : "";
+                const previewListLabel = previewStore
+                  ? previewStore.compactList
+                    ? "Compact"
+                    : "Normal"
+                  : "";
+
+                return (
+                  <>
+                    <div className="relative shrink-0 space-y-2 border-b border-white/10 px-4 py-3 pr-14">
+                      <h2
+                        id="all-stored-title"
+                        className="font-display text-xl font-medium text-white"
                       >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="min-w-0 truncate text-sm font-medium text-white">
-                            {label || "Unnamed store"}
-                          </span>
-                          <span className="shrink-0 font-mono text-xs text-stone-300">
-                            {store.storeId}
-                          </span>
+                        {previewStore
+                          ? nameFor(previewStore.storeId) ||
+                            previewStore.name ||
+                            `Store ${previewStore.storeId}`
+                          : "All stored data"}
+                      </h2>
+                      <p className="text-sm text-stone-400">
+                        {previewStore
+                          ? "Preview this store's settings and campaign presets."
+                          : "Store settings saved on this device. Tap a card to preview."}
+                      </p>
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={exportStoredData}
+                          className="rounded-lg px-2.5 py-1 text-xs font-semibold text-stone-200 ring-1 ring-white/15"
+                        >
+                          Export
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => storedImportInputRef.current?.click()}
+                          className="rounded-lg px-2.5 py-1 text-xs font-semibold text-stone-200 ring-1 ring-white/15"
+                        >
+                          Import
+                        </button>
+                        <input
+                          ref={storedImportInputRef}
+                          type="file"
+                          accept="application/json,.json"
+                          className="hidden"
+                          onChange={(event) => {
+                            const file = event.target.files?.[0] ?? null;
+                            event.target.value = "";
+                            onStoredImportFile(file);
+                          }}
+                        />
+                      </div>
+                      {previewStore ? (
+                        <div className="flex items-center gap-2 pt-1">
+                          <Select
+                            value={previewStore.storeId}
+                            items={storeSelectItems}
+                            onValueChange={(value) => {
+                              if (typeof value === "string" && value) {
+                                setAllStoredPreviewId(value);
+                                setStoreDraft(value);
+                              }
+                            }}
+                          >
+                            <SelectTrigger
+                              aria-label="Preview store"
+                              className="h-11 min-w-0 flex-1 rounded-xl border-white/10 bg-black/30 px-3 text-white hover:bg-black/40 focus-visible:border-white/20 focus-visible:ring-white/15 dark:bg-black/30 [&_svg]:text-stone-400"
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent
+                              align="start"
+                              alignItemWithTrigger={false}
+                              className="z-[120] rounded-xl border-white/10 bg-popover p-1"
+                            >
+                              {deviceStoreSettings.map((store) => (
+                                <SelectItem
+                                  key={store.storeId}
+                                  value={store.storeId}
+                                >
+                                  {storeSelectItems[store.storeId]}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <button
+                            type="button"
+                            aria-label="Back to store list"
+                            onClick={() => setAllStoredPreviewId(null)}
+                            className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-xl px-3 text-xs font-semibold text-stone-200 ring-1 ring-white/15"
+                          >
+                            <X className="size-3.5" aria-hidden />
+                            Clear
+                          </button>
                         </div>
-                        <p className="mt-0.5 truncate text-[0.7rem] text-stone-400">
-                          Dates {datesLabel}
-                          <span className="text-stone-600"> · </span>
-                          List {listLabel}
-                          <span className="text-stone-600"> · </span>
-                          {store.campaignCount === 0
-                            ? "No presets"
-                            : store.campaignCount === 1
-                              ? "1 preset"
-                              : `${store.campaignCount} presets`}
-                        </p>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="absolute top-3 right-3 inline-flex size-10 items-center justify-center rounded-full bg-white/10 text-white"
+                        aria-label="Close all stored data"
+                        onClick={() => {
+                          setAllStoredOpen(false);
+                          setAllStoredPreviewId(null);
+                        }}
+                      >
+                        <X className="size-5" />
                       </button>
-                    );
-                  })
-                )}
-              </div>
+                    </div>
+                    <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-3">
+                      {previewStore ? (
+                        <>
+                          <div className="space-y-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2.5">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">
+                              Store settings
+                            </p>
+                            <div className="space-y-0.5">
+                              <p className="text-xs text-stone-500">Name</p>
+                              <p className="truncate text-sm text-stone-200">
+                                {nameFor(previewStore.storeId) ||
+                                  previewStore.name ||
+                                  "Not set"}
+                              </p>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="space-y-0.5">
+                                <p className="text-xs text-stone-500">Dates</p>
+                                <p className="text-sm text-stone-200">
+                                  {previewDatesLabel}
+                                </p>
+                              </div>
+                              <div className="space-y-0.5">
+                                <p className="text-xs text-stone-500">List</p>
+                                <p className="text-sm text-stone-200">
+                                  {previewListLabel}
+                                </p>
+                              </div>
+                            </div>
+                            <p className="font-mono text-xs text-stone-400">
+                              ID {previewStore.storeId}
+                            </p>
+                          </div>
+                          <div className="space-y-2">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">
+                              Campaign presets
+                              {previewCampaigns.length > 0
+                                ? ` · ${previewCampaigns.length}`
+                                : ""}
+                            </p>
+                            {previewCampaigns.length === 0 ? (
+                              <p className="text-sm text-stone-500">
+                                No campaign presets saved for this store yet.
+                              </p>
+                            ) : (
+                              previewCampaigns.map((item) => (
+                                <article
+                                  key={`${item.issued}|${item.validUntil}`}
+                                  className="rounded-xl border border-white/10 bg-black/20 px-3 py-2.5"
+                                >
+                                  <p className="min-w-0 truncate text-sm font-medium text-white">
+                                    {item.title}
+                                  </p>
+                                  <p className="mt-0.5 text-xs text-stone-400">
+                                    Issued {formatShortDate(item.issued)} · Valid
+                                    until {formatShortDate(item.validUntil)}
+                                    {item.version
+                                      ? ` · Version ${item.version}`
+                                      : ""}
+                                  </p>
+                                  <p className="mt-1 text-[0.7rem] text-stone-500">
+                                    Hidden {item.hidden.length}
+                                    <span className="text-stone-600"> · </span>
+                                    Defaults{" "}
+                                    {
+                                      Object.keys(item.preset.defaults).length
+                                    }
+                                  </p>
+                                </article>
+                              ))
+                            )}
+                          </div>
+                        </>
+                      ) : deviceStoreSettings.length === 0 ? (
+                        <p className="text-sm text-stone-500">
+                          Nothing is saved on this device yet. Import a backup to
+                          load stores and campaign presets.
+                        </p>
+                      ) : (
+                        deviceStoreSettings.map((store) => {
+                          const label = nameFor(store.storeId) || store.name;
+                          const active =
+                            (previewStoreId ?? storeId) === store.storeId;
+                          const datesLabel = store.showDayCounts
+                            ? "Days and hours"
+                            : store.compactDates
+                              ? "Short"
+                              : "Full";
+                          const listLabel = store.compactList
+                            ? "Compact"
+                            : "Normal";
+                          return (
+                            <button
+                              key={store.storeId}
+                              type="button"
+                              onClick={() => {
+                                setAllStoredPreviewId(store.storeId);
+                                setStoreDraft(store.storeId);
+                                setStoreMenuOpen(false);
+                                setStoreMenuAll(false);
+                              }}
+                              className={cn(
+                                "w-full rounded-lg border px-2.5 py-2 text-left transition-colors",
+                                active
+                                  ? "border-sky-400/40 bg-sky-500/10"
+                                  : "border-white/10 bg-black/20 hover:bg-white/[0.06]",
+                              )}
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="min-w-0 truncate text-sm font-medium text-white">
+                                  {label || "Unnamed store"}
+                                </span>
+                                <span className="shrink-0 font-mono text-xs text-stone-300">
+                                  {store.storeId}
+                                </span>
+                              </div>
+                              <p className="mt-0.5 truncate text-[0.7rem] text-stone-400">
+                                Dates {datesLabel}
+                                <span className="text-stone-600"> · </span>
+                                List {listLabel}
+                                <span className="text-stone-600"> · </span>
+                                {store.campaignCount === 0
+                                  ? "No presets"
+                                  : store.campaignCount === 1
+                                    ? "1 preset"
+                                    : `${store.campaignCount} presets`}
+                              </p>
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           </div>
         ) : null}
