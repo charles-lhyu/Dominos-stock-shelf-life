@@ -283,6 +283,7 @@ const EMPTY_SETTINGS: StoreCampaignSettings = {
  * and a store with nothing yet keeps the settings currently on screen.
  * `keepCurrent: true` writes the screen onto the new store.
  * `keepCurrent: false` loads that store's saved copy, or clears the screen when it has none.
+ * `nextSettings` writes that copy onto the new store and restores it, leaving the previous store with the screen.
  */
 export function planStoreChange(input: {
   library: CampaignLibrary;
@@ -292,6 +293,8 @@ export function planStoreChange(input: {
   validUntil: string;
   current: StoreCampaignSettings;
   keepCurrent?: boolean;
+  /** Settings to write on the new store after the previous store is saved. */
+  nextSettings?: StoreCampaignSettings;
 }): { library: CampaignLibrary; restore: StoreCampaignSettings | null } {
   const key = campaignKey(input.issued, input.validUntil);
   if (!key) return { library: input.library, restore: null };
@@ -306,6 +309,16 @@ export function planStoreChange(input: {
     );
   }
   if (!input.nextStoreId) return { library, restore: null };
+  if (input.nextSettings && input.previousStoreId !== input.nextStoreId) {
+    library = writeStoreSettings(
+      library,
+      input.nextStoreId,
+      input.issued,
+      input.validUntil,
+      input.nextSettings,
+    );
+    return { library, restore: input.nextSettings };
+  }
   if (input.previousStoreId !== input.nextStoreId && input.keepCurrent === false) {
     const existing = readStoreSettings(
       library,
@@ -332,6 +345,137 @@ export function planStoreChange(input: {
     input.current,
   );
   return { library, restore: null };
+}
+
+export type StoreSettingChange = {
+  id: string;
+  group: "Dates" | "Hidden" | "Defaults";
+  label: string;
+  from: string;
+  to: string;
+};
+
+function defaultChoice(value: { section: string | null; life: string | null } | undefined) {
+  if (!value || (!value.section && !value.life)) return "None";
+  const storage =
+    value.section === "frozen"
+      ? "Frozen"
+      : value.section === "chilled"
+        ? "Chilled"
+        : value.section === "pack"
+          ? "On pack"
+          : value.section === "ready" || value.section === "ambient"
+            ? "Ambient"
+            : null;
+  const life =
+    value.life === "stock"
+      ? "From delivery"
+      : value.life === "prepped"
+        ? "Prepped"
+        : value.life === "ambient"
+          ? "Ambient"
+          : null;
+  return [storage, life].filter(Boolean).join(", ") || "None";
+}
+
+function sameDefault(
+  a: { section: string | null; life: string | null } | undefined,
+  b: { section: string | null; life: string | null } | undefined,
+) {
+  return (a?.section ?? null) === (b?.section ?? null) && (a?.life ?? null) === (b?.life ?? null);
+}
+
+/** Differences between the screen and the store being loaded. Accepting a change takes the saved side. */
+export function listStoreSettingChanges(
+  current: StoreCampaignSettings,
+  saved: StoreCampaignSettings | null,
+): StoreSettingChange[] {
+  const target = saved ?? EMPTY_SETTINGS;
+  const changes: StoreSettingChange[] = [];
+  if ((current.showDayCounts === true) !== (target.showDayCounts === true)) {
+    changes.push({
+      id: "dates:days",
+      group: "Dates",
+      label: "Day counts",
+      from: current.showDayCounts ? "On" : "Off",
+      to: target.showDayCounts ? "On" : "Off",
+    });
+  }
+  if ((current.compactDates === true) !== (target.compactDates === true)) {
+    changes.push({
+      id: "dates:compact",
+      group: "Dates",
+      label: "Date display",
+      from: current.compactDates ? "Short" : "Full",
+      to: target.compactDates ? "Short" : "Full",
+    });
+  }
+  const hidden = new Set([...current.hidden, ...target.hidden]);
+  for (const name of [...hidden].sort((a, b) => a.localeCompare(b))) {
+    const onScreen = current.hidden.includes(name);
+    const onSaved = target.hidden.includes(name);
+    if (onScreen === onSaved) continue;
+    changes.push({
+      id: `hidden:${name}`,
+      group: "Hidden",
+      label: name,
+      from: onScreen ? "Hidden" : "Shown",
+      to: onSaved ? "Hidden" : "Shown",
+    });
+  }
+  const defaults = new Set([
+    ...Object.keys(current.preset.defaults),
+    ...Object.keys(target.preset.defaults),
+  ]);
+  for (const name of [...defaults].sort((a, b) => a.localeCompare(b))) {
+    const from = current.preset.defaults[name];
+    const to = target.preset.defaults[name];
+    if (sameDefault(from, to)) continue;
+    changes.push({
+      id: `default:${name}`,
+      group: "Defaults",
+      label: name,
+      from: defaultChoice(from),
+      to: defaultChoice(to),
+    });
+  }
+  return changes;
+}
+
+/** Screen settings, with each accepted change replaced by the saved store's value. */
+export function applyAcceptedStoreChanges(
+  current: StoreCampaignSettings,
+  saved: StoreCampaignSettings | null,
+  acceptedIds: Iterable<string>,
+): StoreCampaignSettings {
+  const target = saved ?? EMPTY_SETTINGS;
+  const accepted = new Set(acceptedIds);
+  const hidden = new Set(current.hidden);
+  for (const name of new Set([...current.hidden, ...target.hidden])) {
+    if (!accepted.has(`hidden:${name}`)) continue;
+    if (target.hidden.includes(name)) hidden.add(name);
+    else hidden.delete(name);
+  }
+  const defaults = { ...current.preset.defaults };
+  for (const name of new Set([
+    ...Object.keys(current.preset.defaults),
+    ...Object.keys(target.preset.defaults),
+  ])) {
+    if (!accepted.has(`default:${name}`)) continue;
+    const next = target.preset.defaults[name];
+    if (next) defaults[name] = { section: next.section, life: next.life };
+    else delete defaults[name];
+  }
+  return {
+    hidden: [...hidden].sort((a, b) => a.localeCompare(b)),
+    preset: { ...current.preset, defaults },
+    compactDates: accepted.has("dates:compact")
+      ? target.compactDates === true
+      : current.compactDates === true,
+    showDayCounts: accepted.has("dates:days")
+      ? target.showDayCounts === true
+      : current.showDayCounts === true,
+  };
 }
 
 export type StoreCampaignView = {

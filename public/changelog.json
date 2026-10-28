@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.4.31",
+    "notes": [
+      "Confirm can show each change and let you accept only the ones you want"
+    ]
+  },
+  {
     "version": "1.4.30",
     "notes": [
       "Confirm asks whether to keep the current settings or load the saved store"

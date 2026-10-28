@@ -338,6 +338,7 @@ export function adoptStoreForCampaign(
   previousStoreId: string,
   nextStoreId: string,
   keepCurrent?: boolean,
+  nextSettings?: StoreCampaignSettings,
 ) {
   hydrateCampaignLibrary();
   hydrateStoreIdStore();
@@ -353,6 +354,7 @@ export function adoptStoreForCampaign(
     validUntil,
     current: currentSettings(),
     keepCurrent,
+    nextSettings,
   });
   commitLibrary(planned.library);
   if (planned.restore) applySettings(planned.restore, desk.pack.rules);

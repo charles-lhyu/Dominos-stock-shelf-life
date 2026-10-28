@@ -67,7 +67,14 @@ import {
 import { CHANGELOG } from "@/lib/changelog";
 import { parseChartPack } from "@/lib/chart-pack";
 import { formatCompactDate, formatLongDate, formatShortDate } from "@/lib/dates";
-import { getCompactDateFormat } from "@/lib/date-format-store";
+import {
+  getCompactDateFormat,
+  subscribeDateFormat,
+} from "@/lib/date-format-store";
+import {
+  applyAcceptedStoreChanges,
+  listStoreSettingChanges,
+} from "@/lib/campaign-records";
 import {
   readDebug,
   readDebugDays,
@@ -201,6 +208,8 @@ export function ImportChartButton({
   const [storePrompt, setStorePrompt] = useState<{ next: string; hasSaved: boolean } | null>(
     null,
   );
+  const [changesOpen, setChangesOpen] = useState(false);
+  const [changeChoices, setChangeChoices] = useState<string[]>([]);
   const [otherStoredOpen, setOtherStoredOpen] = useState(false);
   const [otherStoredKey, setOtherStoredKey] = useState<string | null>(null);
   const [storedEditing, setStoredEditing] = useState(false);
@@ -222,6 +231,11 @@ export function ImportChartButton({
   const debugDays = useSyncExternalStore(
     subscribeDebug,
     readDebugDays,
+    () => false,
+  );
+  const compactDates = useSyncExternalStore(
+    subscribeDateFormat,
+    getCompactDateFormat,
     () => false,
   );
   const hiddenNames = useSyncExternalStore(
@@ -346,6 +360,8 @@ export function ImportChartButton({
       settingsJumpLock.current = false;
       storePromptRef.current = null;
       setStorePrompt(null);
+      setChangesOpen(false);
+      setChangeChoices([]);
       setStoreDraft(getStoreId());
       setStoredEditing(false);
       setOtherStoredOpen(false);
@@ -360,10 +376,16 @@ export function ImportChartButton({
     adoptStoreForCampaign(previous, next, keepCurrent);
   }
 
-  function cancelStorePrompt() {
-    if (!storePromptRef.current) return;
+  function closeStorePrompt() {
     storePromptRef.current = null;
     setStorePrompt(null);
+    setChangesOpen(false);
+    setChangeChoices([]);
+  }
+
+  function cancelStorePrompt() {
+    if (!storePromptRef.current) return;
+    closeStorePrompt();
     setStoreDraft(getStoreId());
   }
 
@@ -371,9 +393,33 @@ export function ImportChartButton({
     const next = storePromptRef.current;
     if (!next) return;
     const previous = getStoreId();
-    storePromptRef.current = null;
-    setStorePrompt(null);
+    closeStorePrompt();
     applyStoreChange(previous, next, keepCurrent);
+  }
+
+  function acceptSelectedChanges() {
+    const next = storePromptRef.current;
+    if (!next || !desk.imported || changeChoices.length === 0) return;
+    const previous = getStoreId();
+    const saved = readSavedCampaignSettings(
+      next,
+      desk.pack.chart.issued,
+      desk.pack.chart.validUntil,
+    );
+    const merged = applyAcceptedStoreChanges(
+      {
+        hidden: [...getHiddenNames()],
+        preset: getItemPreset(),
+        compactDates: getCompactDateFormat(),
+        showDayCounts: readDebugDays(),
+      },
+      saved,
+      changeChoices,
+    );
+    closeStorePrompt();
+    setStoreId(next);
+    setStoreDraft(next);
+    adoptStoreForCampaign(previous, next, undefined, merged);
   }
 
   function commitStoreDraft() {
@@ -412,6 +458,8 @@ export function ImportChartButton({
     }
     storePromptRef.current = next;
     setStoreDraft(next);
+    setChangesOpen(false);
+    setChangeChoices([]);
     setStorePrompt({ next, hasSaved: saved != null });
   }
 
@@ -592,6 +640,25 @@ export function ImportChartButton({
     otherStored.find((item) => deviceStoredKey(item) === otherStoredKey) ??
     otherStored[0] ??
     null;
+  const storeChanges =
+    storePrompt && desk.imported
+      ? listStoreSettingChanges(
+          {
+            hidden: hiddenNames,
+            preset: itemPreset,
+            compactDates,
+            showDayCounts: debugDays,
+          },
+          readSavedCampaignSettings(
+            storePrompt.next,
+            desk.pack.chart.issued,
+            desk.pack.chart.validUntil,
+          ),
+        )
+      : [];
+  const allChangesSelected =
+    storeChanges.length > 0 &&
+    storeChanges.every((change) => changeChoices.includes(change.id));
 
   function chartOnScreen(issued: string, validUntil: string) {
     return (
@@ -1659,14 +1726,14 @@ export function ImportChartButton({
         <DialogContent
           showCloseButton={false}
           overlayClassName="z-[60] bg-black/50"
-          className="relative z-[60] max-w-sm gap-0 overflow-hidden rounded-2xl p-0"
+          className="z-[60] max-h-[min(40rem,calc(100dvh-2rem))] max-w-sm gap-0 overflow-y-auto rounded-2xl p-0"
         >
           <DialogHeader className="space-y-2 px-4 pt-4 pr-14 pb-2">
             <DialogTitle className="font-display text-xl text-white">Keep settings?</DialogTitle>
             <DialogDescription className="text-sm text-stone-400">
               {storePrompt?.hasSaved
-                ? `Store ${storePrompt.next} already has hidden items and product defaults for this chart. Keep what is on screen, or load the saved copy.`
-                : `Store ${storePrompt?.next ?? ""} has nothing saved for this chart. Keep what is on screen, or start fresh.`}
+                ? `Store ${storePrompt.next} already has settings for this chart. Keep what is on screen, load the saved copy, or choose which changes to accept.`
+                : `Store ${storePrompt?.next ?? ""} has nothing saved for this chart. Keep what is on screen, start fresh, or choose which changes to accept.`}
             </DialogDescription>
             <button
               type="button"
@@ -1689,6 +1756,86 @@ export function ImportChartButton({
             >
               {storePrompt?.hasSaved ? "Use saved" : "Start fresh"}
             </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 rounded-xl border-white/15 text-white"
+              aria-expanded={changesOpen}
+              onClick={() => setChangesOpen((open) => !open)}
+            >
+              {changesOpen ? "Hide changes" : "Show changes"}
+            </Button>
+            {changesOpen ? (
+              <div className="rounded-xl border border-white/10 bg-black/20 p-2">
+                {storeChanges.length === 0 ? (
+                  <p className="px-2 py-3 text-sm text-stone-400">
+                    This chart already matches.
+                  </p>
+                ) : (
+                  <>
+                    <div className="flex justify-end px-1 pb-1">
+                      <button
+                        type="button"
+                        className="text-xs font-medium text-stone-300 underline-offset-2 hover:underline"
+                        onClick={() =>
+                          setChangeChoices(
+                            allChangesSelected
+                              ? []
+                              : storeChanges.map((change) => change.id),
+                          )
+                        }
+                      >
+                        {allChangesSelected ? "Clear" : "Select all"}
+                      </button>
+                    </div>
+                    <ul className="max-h-52 space-y-2 overflow-y-auto">
+                      {storeChanges.map((change, index) => {
+                        const showGroup =
+                          index === 0 || storeChanges[index - 1]?.group !== change.group;
+                        const checked = changeChoices.includes(change.id);
+                        return (
+                          <li key={change.id}>
+                            {showGroup ? (
+                              <p className="px-1 pt-1 text-xs font-medium tracking-wide text-stone-500 uppercase">
+                                {change.group}
+                              </p>
+                            ) : null}
+                            <label className="flex cursor-pointer items-start gap-3 rounded-lg px-1 py-1.5 hover:bg-white/5">
+                              <input
+                                type="checkbox"
+                                className="mt-1 size-4 accent-white"
+                                checked={checked}
+                                onChange={() =>
+                                  setChangeChoices((current) =>
+                                    current.includes(change.id)
+                                      ? current.filter((id) => id !== change.id)
+                                      : [...current, change.id],
+                                  )
+                                }
+                              />
+                              <span className="min-w-0">
+                                <span className="block text-sm text-white">{change.label}</span>
+                                <span className="block text-xs text-stone-400">
+                                  {change.from} → {change.to}
+                                </span>
+                              </span>
+                            </label>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    <Button
+                      type="button"
+                      className="mt-2 h-11 w-full rounded-xl"
+                      disabled={changeChoices.length === 0}
+                      onClick={acceptSelectedChanges}
+                    >
+                      Accept selected
+                    </Button>
+                  </>
+                )}
+              </div>
+            ) : null}
             <Button
               type="button"
               variant="outline"

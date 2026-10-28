@@ -10,6 +10,8 @@ import {
   listCampaignSummaries,
   listDeviceStored,
   listStoreCampaigns,
+  listStoreSettingChanges,
+  applyAcceptedStoreChanges,
   parseCampaignLibrary,
   planStoreChange,
   readStoreSettings,
@@ -437,5 +439,61 @@ describe("campaign library records", () => {
     );
     assert.equal(plain?.compactDates, false);
     assert.equal(plain?.showDayCounts, false);
+  });
+
+  it("lists store changes and applies only the accepted ones", () => {
+    const current = {
+      hidden: ["Bacon"],
+      preset: {
+        ...preset,
+        defaults: { Pepperoni: { section: "chilled" as const, life: "stock" as const } },
+      },
+      compactDates: false,
+      showDayCounts: false,
+    };
+    const saved = {
+      hidden: ["Olives"],
+      preset: {
+        ...preset,
+        defaults: { Pepperoni: { section: "frozen" as const, life: "stock" as const } },
+      },
+      compactDates: true,
+      showDayCounts: false,
+    };
+    const changes = listStoreSettingChanges(current, saved);
+    assert.deepEqual(
+      changes.map((change) => change.id),
+      ["dates:compact", "hidden:Bacon", "hidden:Olives", "default:Pepperoni"],
+    );
+    assert.equal(changes.find((change) => change.id === "dates:compact")?.to, "Short");
+    const merged = applyAcceptedStoreChanges(current, saved, ["hidden:Olives", "dates:compact"]);
+    assert.deepEqual(merged.hidden, ["Bacon", "Olives"]);
+    assert.equal(merged.compactDates, true);
+    assert.equal(merged.preset.defaults.Pepperoni?.section, "chilled");
+    assert.equal(applyAcceptedStoreChanges(current, null, []).compactDates, false);
+    let library = upsertCampaign(
+      emptyCampaignLibrary(),
+      pack("2026-09-07", "2026-11-17"),
+      "a.pdf",
+      "t1",
+    );
+    library = writeStoreSettings(library, "99999", "2026-09-07", "2026-11-17", saved);
+    const planned = planStoreChange({
+      library,
+      previousStoreId: "12345",
+      nextStoreId: "99999",
+      issued: "2026-09-07",
+      validUntil: "2026-11-17",
+      current,
+      nextSettings: merged,
+    });
+    const previous = readStoreSettings(planned.library, "12345", "2026-09-07", "2026-11-17");
+    const next = readStoreSettings(planned.library, "99999", "2026-09-07", "2026-11-17");
+    assert.deepEqual(previous?.hidden, ["Bacon"]);
+    assert.equal(previous?.compactDates, false);
+    assert.deepEqual(next?.hidden, ["Bacon", "Olives"]);
+    assert.equal(next?.compactDates, true);
+    assert.equal(next?.preset.defaults.Pepperoni?.section, "chilled");
+    assert.equal(planned.restore?.compactDates, true);
   });
 });
