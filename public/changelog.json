@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.4.48",
+    "notes": [
+      "Opening an item no longer fills the search bar"
+    ]
+  },
+  {
     "version": "1.4.47",
     "notes": [
       "Show hidden moves beside the date sort when the list is narrow"

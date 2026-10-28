@@ -504,7 +504,13 @@ export function StockDesk() {
   const hits = searchNames(query, rules).filter(
     (hit) => !hidden.has(hit.name) || hit.name === picked,
   );
-  const pickedName = picked && hits.some((hit) => hit.name === picked) ? picked : null;
+  // Picked details stay open with an empty search box (choose no longer fills the query).
+  const pickedName =
+    picked && rulesForName(picked, rules).length > 0
+      ? !query.trim() || hits.some((hit) => hit.name === picked)
+        ? picked
+        : null
+      : null;
   const expanded = pickedName ?? (shouldExpand(hits) ? hits[0]?.name ?? null : null);
   const expandedVariants = expanded ? variantsForName(expanded, rules, pack) : [];
   const expandedDefault = expanded ? productDefaults[expanded] : undefined;
@@ -532,9 +538,10 @@ export function StockDesk() {
       savedListScrollRef.current = mainRef.current?.scrollTop ?? 0;
     }
     // Item details keep the compact header (Campaign title strip stays hidden).
+    // Leave the search box empty — details are driven by `picked`, not the query.
     setHeaderModeRef.current(true);
     showItemFromTopRef.current = true;
-    setQuery(name);
+    setQuery("");
     setPicked(name);
     inputRef.current?.blur();
     setSearchFocused(false);
@@ -568,7 +575,7 @@ export function StockDesk() {
 
   backRef.current = {
     settingsOpen,
-    itemOpen: Boolean(query.trim()),
+    itemOpen: Boolean(picked) || Boolean(query.trim()),
     closeSettings: () => setSettingsOpenSafe(false),
     leaveItem: clearSearch,
   };
@@ -638,7 +645,8 @@ export function StockDesk() {
   }
 
   const hasChart = rules.length > 0;
-  const browsing = hasChart && !query.trim();
+  const itemOpen = Boolean(picked);
+  const browsing = hasChart && !itemOpen && !query.trim();
   const chartExpired =
     Boolean(today) &&
     Boolean(chart.validUntil) &&
@@ -894,7 +902,7 @@ export function StockDesk() {
                   onBlur={() => setSearchFocused(false)}
                   onChange={(event) => {
                     const next = event.target.value;
-                    if (!query.trim() && next.trim()) {
+                    if (!picked && !query.trim() && next.trim()) {
                       savedListScrollRef.current = mainRef.current?.scrollTop ?? 0;
                     }
                     setQuery(next);
@@ -903,14 +911,14 @@ export function StockDesk() {
                 />
                 <button
                   type="button"
-                  aria-label="Clear search"
-                  disabled={!query.trim()}
+                  aria-label={picked ? "Close item" : "Clear search"}
+                  disabled={!query.trim() && !picked}
                   tabIndex={-1}
                   className={cn(
                     "absolute top-1/2 right-1.5 flex size-7 -translate-y-1/2 items-center justify-center rounded-lg transition-[opacity,background-color,color] duration-200",
-                    !query.trim()
+                    !query.trim() && !picked
                       ? "pointer-events-none text-white opacity-35"
-                      : searchFocused
+                      : searchFocused || picked
                         ? "text-red-300 opacity-100 hover:bg-red-500/30 hover:text-red-200"
                         : "text-red-400 opacity-40 hover:bg-red-500/25 hover:text-red-300 hover:opacity-100",
                   )}
@@ -1133,7 +1141,7 @@ export function StockDesk() {
           </button>
         ) : null}
 
-        {hasChart && query.trim() && hits.length === 0 ? (
+        {hasChart && !itemOpen && query.trim() && hits.length === 0 ? (
           <p className="mt-5 rounded-2xl border border-dashed border-white/20 bg-card/80 px-5 py-8 text-center">
             <span className="font-display text-2xl text-white">Not on this chart</span>
             <span className="mt-2 block text-sm text-stone-400">
@@ -1246,7 +1254,7 @@ export function StockDesk() {
           </div>
         ) : null}
 
-        {hasChart && !query.trim() ? (
+        {hasChart && browsing ? (
           <ChartList
             pack={pack}
             category={category}
@@ -1272,7 +1280,7 @@ export function StockDesk() {
         ) : null}
       </main>
 
-      {hasChart && !query.trim() && overlayButtonsReady ? (
+      {browsing && overlayButtonsReady ? (
         <button
           type="button"
           data-go-top=""
