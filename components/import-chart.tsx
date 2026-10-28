@@ -202,6 +202,8 @@ export function ImportChartButton({
   const [otherStoredKey, setOtherStoredKey] = useState<string | null>(null);
   const [storedEditing, setStoredEditing] = useState(false);
   const storePromptRef = useRef<string | null>(null);
+  const settingsOpenRef = useRef(false);
+  const storeCommitTimer = useRef<number | null>(null);
   const [activeSettingsSection, setActiveSettingsSection] =
     useState<SettingsSectionId>("settings-app");
   const [settingsEndPad, setSettingsEndPad] = useState(0);
@@ -291,6 +293,8 @@ export function ImportChartButton({
     listStoredOnDeviceServer,
   );
 
+  settingsOpenRef.current = open;
+
   useEffect(() => () => stopScan(), []);
 
   useEffect(() => {
@@ -307,6 +311,14 @@ export function ImportChartButton({
   }, [open]);
 
   function handleOpenChange(next: boolean) {
+    // The store-id confirm opens from the field blur during the same tap.
+    // That tap would otherwise dismiss Settings before the confirm can show.
+    if (!next && storePromptRef.current) return;
+    settingsOpenRef.current = next;
+    if (!next && storeCommitTimer.current != null) {
+      window.clearTimeout(storeCommitTimer.current);
+      storeCommitTimer.current = null;
+    }
     if (next) {
       hydrateStoreIdStore();
       setStoreDraft(getStoreId());
@@ -390,6 +402,17 @@ export function ImportChartButton({
     storePromptRef.current = next;
     setStoreDraft(next);
     setStorePrompt({ next, hasSaved: saved != null });
+  }
+
+  function scheduleStoreCommit() {
+    if (storeCommitTimer.current != null) {
+      window.clearTimeout(storeCommitTimer.current);
+    }
+    storeCommitTimer.current = window.setTimeout(() => {
+      storeCommitTimer.current = null;
+      if (!settingsOpenRef.current) return;
+      commitStoreDraft();
+    }, 0);
   }
 
   function resetChart() {
@@ -915,7 +938,7 @@ export function ImportChartButton({
                     setStoreDraft(event.target.value);
                     if (storeIdError) setStoreIdError(null);
                   }}
-                  onBlur={commitStoreDraft}
+                  onBlur={scheduleStoreCommit}
                   onKeyDown={(event) => {
                     if (event.key === "Enter") {
                       event.preventDefault();
@@ -1550,6 +1573,56 @@ export function ImportChartButton({
           />
         </div>
       </DialogContent>
+      <Dialog
+        open={storePrompt != null}
+        onOpenChange={(next) => {
+          if (!next) cancelStorePrompt();
+        }}
+      >
+        <DialogContent
+          showCloseButton={false}
+          overlayClassName="z-[60] bg-black/50"
+          className="relative z-[60] max-w-sm gap-0 overflow-hidden rounded-2xl p-0"
+        >
+          <DialogHeader className="space-y-2 px-4 pt-4 pr-14 pb-2">
+            <DialogTitle className="font-display text-xl text-white">Keep settings?</DialogTitle>
+            <DialogDescription className="text-sm text-stone-400">
+              {storePrompt?.hasSaved
+                ? `Store ${storePrompt.next} already has hidden items and product defaults for this chart. Keep what is on screen, or load the saved copy.`
+                : `Store ${storePrompt?.next ?? ""} has nothing saved for this chart. Keep what is on screen, or start fresh.`}
+            </DialogDescription>
+            <button
+              type="button"
+              className="absolute top-3 right-3 inline-flex size-10 items-center justify-center rounded-full bg-white/10 text-white"
+              aria-label="Close keep settings"
+              onClick={cancelStorePrompt}
+            >
+              <X className="size-5" />
+            </button>
+          </DialogHeader>
+          <div className="grid gap-2 border-t border-white/10 p-4">
+            <Button type="button" className="h-11 rounded-xl" onClick={() => confirmStorePrompt(true)}>
+              Keep settings
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 rounded-xl border-white/15 text-white"
+              onClick={() => confirmStorePrompt(false)}
+            >
+              {storePrompt?.hasSaved ? "Use saved" : "Start fresh"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 rounded-xl border-white/15 text-white"
+              onClick={cancelStorePrompt}
+            >
+              Cancel
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Dialog>
 
     <Dialog open={confirmReset} onOpenChange={setConfirmReset}>
@@ -1610,61 +1683,6 @@ export function ImportChartButton({
         }}
       />
     ) : null}
-
-    <Dialog
-      open={storePrompt != null}
-      onOpenChange={(next) => {
-        if (!next) cancelStorePrompt();
-      }}
-    >
-      <DialogContent
-        showCloseButton={false}
-        overlayClassName="z-[60] bg-black/50"
-        className="relative z-[60] max-w-sm gap-0 overflow-hidden rounded-2xl p-0"
-      >
-        <DialogHeader className="space-y-2 px-4 pt-4 pr-14 pb-2">
-          <DialogTitle className="font-display text-xl text-white">Keep settings?</DialogTitle>
-          <DialogDescription className="text-sm text-stone-400">
-            {storePrompt?.hasSaved
-              ? `Store ${storePrompt.next} already has hidden items and product defaults for this chart. Keep what is on screen, or load the saved copy.`
-              : `Store ${storePrompt?.next ?? ""} has nothing saved for this chart. Keep what is on screen, or start fresh.`}
-          </DialogDescription>
-          <button
-            type="button"
-            className="absolute top-3 right-3 inline-flex size-10 items-center justify-center rounded-full bg-white/10 text-white"
-            aria-label="Close keep settings"
-            onClick={cancelStorePrompt}
-          >
-            <X className="size-5" />
-          </button>
-        </DialogHeader>
-        <div className="grid gap-2 border-t border-white/10 p-4">
-          <Button
-            type="button"
-            className="h-11 rounded-xl"
-            onClick={() => confirmStorePrompt(true)}
-          >
-            Keep settings
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            className="h-11 rounded-xl border-white/15 text-white"
-            onClick={() => confirmStorePrompt(false)}
-          >
-            {storePrompt?.hasSaved ? "Use saved" : "Start fresh"}
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            className="h-11 rounded-xl border-white/15 text-white"
-            onClick={cancelStorePrompt}
-          >
-            Cancel
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
 
     <Dialog open={otherStoredOpen} onOpenChange={setOtherStoredOpen}>
       <DialogContent

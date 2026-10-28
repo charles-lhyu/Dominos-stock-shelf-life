@@ -1,8 +1,6 @@
 {
-  "version": "1.4.23",
+  "version": "1.4.24",
   "notes": [
-    "Settings sits just below the top of the screen so more of it is visible",
-    "Stored rows alternate colour so the remove cross lines up",
-    "Hidden and Defaults each have Remove all"
+    "Changing the store ID stays in Settings and asks whether to keep the current settings"
   ]
 }
