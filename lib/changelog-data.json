@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.4.59",
+    "notes": [
+      "Saved presets and hidden names update when chart titles change (Bacon (FROZEN) → Bacon, NEW Chinese Style Chicken → Chinese Style Chicken)"
+    ]
+  },
+  {
     "version": "1.4.58",
     "notes": [
       "Debug days/hours mode counts remaining days including today"

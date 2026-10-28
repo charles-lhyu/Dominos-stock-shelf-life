@@ -1,3 +1,5 @@
+import { canonicalProductName, migrateProductNames } from "./chart-name-migrate";
+
 const STORAGE_KEY = "shelf-life-hidden-names";
 const listeners = new Set<() => void>();
 /** Stable empty list for useSyncExternalStore getServerSnapshot. */
@@ -9,7 +11,23 @@ function readNames(): string[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter((item): item is string => typeof item === "string" && item.trim() !== "");
+    const before = parsed
+      .filter((item): item is string => typeof item === "string")
+      .map((item) => item.trim())
+      .filter((item) => item !== "")
+      .sort((a, b) => a.localeCompare(b));
+    const migrated = migrateProductNames(before);
+    if (
+      before.length !== migrated.length ||
+      before.some((item, index) => item !== migrated[index])
+    ) {
+      try {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+      } catch {
+        // Ignore quota / private mode.
+      }
+    }
+    return migrated;
   } catch {
     return [];
   }
@@ -45,18 +63,21 @@ export function getHiddenNamesServer(): string[] {
 }
 
 export function isNameHidden(name: string): boolean {
-  return names().includes(name);
+  return names().includes(canonicalProductName(name));
 }
 
 export function hideProductName(name: string) {
+  const trimmed = canonicalProductName(name);
+  if (!trimmed) return;
   const next = names();
-  if (next.includes(name)) return;
-  cached = [...next, name].sort((a, b) => a.localeCompare(b));
+  if (next.includes(trimmed)) return;
+  cached = [...next, trimmed].sort((a, b) => a.localeCompare(b));
   writeNames(cached);
 }
 
 export function unhideProductName(name: string) {
-  cached = names().filter((item) => item !== name);
+  const trimmed = canonicalProductName(name);
+  cached = names().filter((item) => item !== trimmed);
   writeNames(cached);
 }
 
@@ -66,14 +87,9 @@ export function clearHiddenNames() {
 }
 
 export function replaceHiddenNames(next: string[]) {
-  const cleaned = [
-    ...new Set(
-      next
-        .filter((item) => typeof item === "string")
-        .map((item) => item.trim())
-        .filter((item) => item !== ""),
-    ),
-  ].sort((a, b) => a.localeCompare(b));
+  const cleaned = migrateProductNames(
+    next.filter((item) => typeof item === "string").map((item) => item.trim()),
+  );
   const current = names();
   if (current.length === cleaned.length && current.every((item, index) => item === cleaned[index])) {
     return;

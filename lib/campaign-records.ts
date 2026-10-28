@@ -1,3 +1,4 @@
+import { migrateProductNames } from "./chart-name-migrate";
 import {
   DEFAULT_ITEM_PRESET,
   normalizeItemPreset,
@@ -97,14 +98,9 @@ export function stripPackImages(pack: ChartPack): ChartPack {
 
 function hiddenNames(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
-  return [
-    ...new Set(
-      value
-        .filter((item): item is string => typeof item === "string")
-        .map((item) => item.trim())
-        .filter((item) => item !== ""),
-    ),
-  ].sort((a, b) => a.localeCompare(b));
+  return migrateProductNames(
+    value.filter((item): item is string => typeof item === "string").map((item) => item.trim()),
+  );
 }
 
 function sameHidden(a: string[], b: string[]): boolean {

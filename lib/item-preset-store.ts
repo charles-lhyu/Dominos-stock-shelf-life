@@ -1,3 +1,7 @@
+import {
+  canonicalProductName,
+  migrateProductDefaultEntries,
+} from "./chart-name-migrate";
 import type { LifeKind } from "./preview";
 import type { SectionId, ShelfRule } from "./types";
 
@@ -54,7 +58,8 @@ function normalizeDefaults(value: unknown): Record<string, ProductDefault> {
     if (!section) continue;
     defaults[trimmed] = { section, life: null };
   }
-  return defaults;
+  // Bacon (FROZEN) → Bacon, NEW Chinese Style Chicken → Chinese Style Chicken, etc.
+  return migrateProductDefaultEntries(defaults);
 }
 
 /**
@@ -78,7 +83,7 @@ export function retainProductDefaults(
     sectionsByName.set(name, sections);
   }
   const kept: Record<string, ProductDefault> = {};
-  for (const [name, value] of Object.entries(defaults)) {
+  for (const [name, value] of Object.entries(migrateProductDefaultEntries(defaults))) {
     const trimmed = name.trim();
     if (!trimmed || hiddenNames.has(trimmed)) continue;
     const sections = sectionsByName.get(trimmed);
@@ -165,7 +170,14 @@ export function hydrateItemPresetStore() {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (raw) {
-      preset = normalizeItemPreset(JSON.parse(raw));
+      const parsed = normalizeItemPreset(JSON.parse(raw));
+      preset = parsed;
+      // Persist renamed keys (Bacon (FROZEN) → Bacon) so old labels leave storage.
+      try {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(preset));
+      } catch {
+        // Ignore quota / private mode.
+      }
       return;
     }
   } catch {
@@ -228,7 +240,7 @@ export function setProductDefault(
   partial: { section?: SectionId | null; life?: LifeKind | null },
 ) {
   hydrateItemPresetStore();
-  const trimmed = name.trim();
+  const trimmed = canonicalProductName(name);
   if (!trimmed) return;
   const current = preset.defaults[trimmed] ?? { section: null, life: null };
   const section = partial.section !== undefined ? partial.section : current.section;

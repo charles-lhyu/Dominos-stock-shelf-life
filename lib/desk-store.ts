@@ -1,4 +1,5 @@
 import { BUNDLED_PACK, EMPTY_PACK, parseChartPack } from "./chart-pack";
+import { CHART_PRODUCT_RENAMES } from "./chart-name-migrate";
 import { toIsoDate } from "./dates";
 import type { ChartPack, ShelfRule } from "./types";
 
@@ -37,14 +38,8 @@ function withChartCategory(rule: ShelfRule): ShelfRule {
   return { ...rule, category: bundled.category };
 }
 
-/** Chart labels that are storage / NEW markers, not the product title. */
-const CHART_NAME_RENAMES: Record<string, { name: string; sectionId?: ShelfRule["sectionId"] }> = {
-  "Bacon (FROZEN)": { name: "Bacon", sectionId: "frozen" },
-  "NEW Chinese Style Chicken": { name: "Chinese Style Chicken" },
-};
-
 function withChartDisplayName(rule: ShelfRule): ShelfRule {
-  const rename = CHART_NAME_RENAMES[rule.name];
+  const rename = CHART_PRODUCT_RENAMES[rule.name];
   let next = rule;
   if (rename && (!rename.sectionId || rename.sectionId === rule.sectionId)) {
     const idSlug = rename.name
