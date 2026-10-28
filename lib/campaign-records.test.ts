@@ -257,6 +257,19 @@ describe("campaign library records", () => {
     );
   });
 
+  it("keeps unnamed stores that only have display settings after parse", () => {
+    const library = writeStoreSettingsRecord(emptyCampaignLibrary(), "77", {
+      name: "",
+      compactDates: true,
+      showDayCounts: false,
+      compactList: true,
+    });
+    const parsed = parseCampaignLibrary(JSON.parse(JSON.stringify(library)));
+    assert.equal(parsed.stores["77"]?.settings.compactDates, true);
+    assert.equal(parsed.stores["77"]?.settings.compactList, true);
+    assert.equal(Object.keys(parsed.stores["77"]?.campaigns ?? {}).length, 0);
+  });
+
   it("keeps the screen for a store that has no saved copy, and keeps the previous store when the id is cleared", () => {
     const library = writeStoreSettings(
       emptyCampaignLibrary(),

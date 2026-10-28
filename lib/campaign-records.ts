@@ -331,9 +331,9 @@ export function parseCampaignLibrary(value: unknown): CampaignLibrary {
             if (preset) campaigns[key] = preset;
           }
         }
-        if (settings.name || Object.keys(campaigns).length > 0) {
-          stores[storeId] = { settings, campaigns };
-        }
+        // Keep every store record, including empty name / no campaigns yet
+        // (display settings may be the only thing saved).
+        stores[storeId] = { settings, campaigns };
         continue;
       }
 

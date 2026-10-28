@@ -121,11 +121,17 @@ export function hydrateCampaignLibrary() {
     library = emptyCampaignLibrary();
     hadRaw = true;
   }
+  // Always rebuild list snapshots. commitLibrary(library) is a no-op when the
+  // parsed object was just assigned to `library` (same reference), which left
+  // Show all / Store ID empty until something was edited.
+  refreshSnapshot();
   if (hadRaw) {
     // Rewrite once so legacy flat stores land as store-first on disk.
-    commitLibrary(library);
-  } else {
-    refreshSnapshot();
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(library));
+    } catch {
+      // Ignore quota / private mode.
+    }
   }
 }
 
@@ -498,3 +504,4 @@ subscribeItemPreset(autosave);
 subscribeDateFormat(autosave);
 subscribeDebug(autosave);
 subscribeCompactList(autosave);
+subscribeStoreId(autosave);
