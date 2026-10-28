@@ -1,6 +1,6 @@
 {
-  "version": "1.4.31",
+  "version": "1.4.32",
   "notes": [
-    "Confirm can show each change and let you accept only the ones you want"
+    "The store ID dropdown button shows every saved store, even when the field already has a number"
   ]
 }

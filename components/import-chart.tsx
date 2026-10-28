@@ -205,6 +205,7 @@ export function ImportChartButton({
   const [storeDraft, setStoreDraft] = useState("");
   const [storeIdError, setStoreIdError] = useState<string | null>(null);
   const [storeMenuOpen, setStoreMenuOpen] = useState(false);
+  const [storeMenuAll, setStoreMenuAll] = useState(false);
   const [storePrompt, setStorePrompt] = useState<{ next: string; hasSaved: boolean } | null>(
     null,
   );
@@ -317,6 +318,7 @@ export function ImportChartButton({
     setStoreDraft(getStoreId());
     setStoreIdError(null);
     setStoreMenuOpen(false);
+    setStoreMenuAll(false);
     setStoredEditing(false);
     setActiveSettingsSection("settings-app");
     const raf = window.requestAnimationFrame(() => {
@@ -331,6 +333,7 @@ export function ImportChartButton({
       const field = storeFieldRef.current;
       if (!field || !(event.target instanceof Node) || field.contains(event.target)) return;
       setStoreMenuOpen(false);
+      setStoreMenuAll(false);
     }
     document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
@@ -343,6 +346,7 @@ export function ImportChartButton({
       setStoreDraft(getStoreId());
       setStoreIdError(null);
       setStoreMenuOpen(false);
+      setStoreMenuAll(false);
       setUrl(desk.sourceUrl);
       setConfirmReset(false);
       setChangelogOpen(false);
@@ -366,6 +370,7 @@ export function ImportChartButton({
       setStoredEditing(false);
       setOtherStoredOpen(false);
       setStoreMenuOpen(false);
+      setStoreMenuAll(false);
     }
     setOpen(next);
   }
@@ -424,6 +429,7 @@ export function ImportChartButton({
 
   function commitStoreDraft() {
     setStoreMenuOpen(false);
+    setStoreMenuAll(false);
     const next = normalizeStoreId(storeDraft);
     if (next == null) {
       setStoreIdError("Store ID is numbers only, up to 8 digits.");
@@ -624,15 +630,16 @@ export function ImportChartButton({
   );
   const storedStoreIds = [...new Set(deviceStored.map((item) => item.storeId))];
   const storeQuery = storeDraft.trim().replace(/\s+/g, "");
-  const filteredStoreIds = storeQuery
-    ? storedStoreIds.filter((id) => id.startsWith(storeQuery))
-    : storedStoreIds;
+  const menuStoreIds =
+    storeMenuAll || !storeQuery
+      ? storedStoreIds
+      : storedStoreIds.filter((id) => id.startsWith(storeQuery));
   const draftStoreId = normalizeStoreId(storeDraft);
   const previewStoreId = draftStoreId && draftStoreId !== storeId ? draftStoreId : null;
   const previewRows = previewStoreId
     ? deviceStored.filter((item) => item.storeId === previewStoreId)
     : [];
-  const storeMenuVisible = storeMenuOpen && filteredStoreIds.length > 0;
+  const storeMenuVisible = storeMenuOpen && menuStoreIds.length > 0;
   const otherStored = deviceStored.filter(
     (item) => item.storeId !== (previewStoreId ?? storeId),
   );
@@ -1020,6 +1027,7 @@ export function ImportChartButton({
                     aria-autocomplete={storedStoreIds.length > 0 ? "list" : undefined}
                     onChange={(event) => {
                       setStoreDraft(event.target.value);
+                      setStoreMenuAll(false);
                       if (storeIdError) setStoreIdError(null);
                       if (storedStoreIds.length > 0) setStoreMenuOpen(true);
                     }}
@@ -1030,6 +1038,7 @@ export function ImportChartButton({
                       if (event.key === "Escape" && storeMenuOpen) {
                         event.preventDefault();
                         setStoreMenuOpen(false);
+                        setStoreMenuAll(false);
                         return;
                       }
                       if (event.key === "Enter") {
@@ -1049,7 +1058,15 @@ export function ImportChartButton({
                       aria-label="Show stored store IDs"
                       aria-expanded={storeMenuOpen}
                       onMouseDown={(event) => event.preventDefault()}
-                      onClick={() => setStoreMenuOpen((open) => !open)}
+                      onClick={() => {
+                        if (storeMenuOpen && storeMenuAll) {
+                          setStoreMenuOpen(false);
+                          setStoreMenuAll(false);
+                          return;
+                        }
+                        setStoreMenuAll(true);
+                        setStoreMenuOpen(true);
+                      }}
                       className="absolute top-1/2 right-1.5 inline-flex size-9 -translate-y-1/2 items-center justify-center rounded-lg text-stone-300"
                     >
                       <ChevronDown
@@ -1065,7 +1082,7 @@ export function ImportChartButton({
                       aria-label="Stored store IDs"
                       className="absolute top-full right-0 left-0 z-30 max-h-60 overflow-y-auto rounded-b-xl border border-t-0 border-white/10 bg-popover py-1 shadow-lg shadow-black/40"
                     >
-                      {filteredStoreIds.map((id) => {
+                      {menuStoreIds.map((id) => {
                         const selected = id === storeDraft;
                         return (
                           <li key={id}>
@@ -1078,6 +1095,7 @@ export function ImportChartButton({
                                 setStoreDraft(id);
                                 setStoreIdError(null);
                                 setStoreMenuOpen(false);
+                                setStoreMenuAll(false);
                               }}
                               className={cn(
                                 "flex h-11 w-full items-center px-3 text-left font-mono text-base text-white",
