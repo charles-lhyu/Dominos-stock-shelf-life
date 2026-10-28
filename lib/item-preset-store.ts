@@ -243,10 +243,30 @@ export function setPresetCategory(category: string | "all") {
   update({ category });
 }
 
-/** Remember one product's storage, for example Pepperoni as chilled. Life is not saved. */
+function sectionsForProduct(name: string, rules: ShelfRule[]): Set<SectionId> {
+  const trimmed = canonicalProductName(name);
+  const sections = new Set<SectionId>();
+  if (!trimmed) return sections;
+  for (const rule of rules) {
+    if (rule.name.trim() === trimmed) sections.add(rule.sectionId);
+  }
+  return sections;
+}
+
+/** True when the chart has more than one storage row for this product. */
+export function productHasMultipleStorages(name: string, rules: ShelfRule[]): boolean {
+  return sectionsForProduct(name, rules).size > 1;
+}
+
+/**
+ * Remember one product's storage, for example Pepperoni as chilled.
+ * Life is not saved. Single-storage products are never stored — there is
+ * nothing to choose — and any leftover default for that name is dropped.
+ */
 export function setProductDefault(
   name: string,
   partial: { section?: SectionId | null; life?: LifeKind | null },
+  rules: ShelfRule[] = [],
 ) {
   hydrateItemPresetStore();
   const trimmed = canonicalProductName(name);
@@ -261,9 +281,25 @@ export function setProductDefault(
     if (key === trimmed) continue;
     if (canonicalProductName(key) === trimmed) delete defaults[key];
   }
-  if (!section) delete defaults[trimmed];
-  else defaults[trimmed] = { section, life: null };
+  if (!section) {
+    delete defaults[trimmed];
+  } else if (rules.length > 0 && !productHasMultipleStorages(trimmed, rules)) {
+    delete defaults[trimmed];
+  } else {
+    defaults[trimmed] = { section, life: null };
+  }
   update({ defaults });
+}
+
+/** Drop defaults that are not worth keeping for the current chart. */
+export function pruneProductDefaults(
+  rules: ShelfRule[],
+  hidden: Iterable<string | HiddenEntry> = [],
+) {
+  hydrateItemPresetStore();
+  const next = retainProductDefaults(preset.defaults, rules, hidden);
+  if (sameDefaults(preset.defaults, next)) return;
+  update({ defaults: next });
 }
 
 /** Remove one stored default by its exact saved key (including old chart labels). */
@@ -280,6 +316,7 @@ export function removeProductDefault(name: string) {
 export function applyProductDefaultUpdate(
   fromName: string,
   next: { name: string; section: SectionId },
+  rules: ShelfRule[] = [],
 ) {
   hydrateItemPresetStore();
   const from = fromName.trim();
@@ -290,6 +327,11 @@ export function applyProductDefaultUpdate(
   for (const key of Object.keys(defaults)) {
     if (key === to) continue;
     if (canonicalProductName(key) === to) delete defaults[key];
+  }
+  // Single-storage products have nothing to choose — drop instead of rewriting.
+  if (rules.length > 0 && !productHasMultipleStorages(to, rules)) {
+    update({ defaults });
+    return;
   }
   defaults[to] = { section: next.section, life: null };
   update({ defaults });

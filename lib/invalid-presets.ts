@@ -101,6 +101,17 @@ export function listInvalidProductDefaults(
       continue;
     }
 
+    // One storage row: nothing to choose — flag for remove, never Update.
+    if (sections.size < 2) {
+      invalid.push({
+        name,
+        section,
+        reason: "not-needed",
+        detail: `${name} only has one storage on this chart`,
+      });
+      continue;
+    }
+
     if (!section || !sections.has(section)) {
       const fallback = [...sections][0];
       invalid.push({
@@ -111,16 +122,6 @@ export function listInvalidProductDefaults(
           ? `${name} has no ${storageLabel(section).toLowerCase()} row on this chart`
           : `${name} has no storage chosen`,
         update: fallback ? { name, section: fallback } : undefined,
-      });
-      continue;
-    }
-
-    if (sections.size < 2) {
-      invalid.push({
-        name,
-        section,
-        reason: "not-needed",
-        detail: `${name} only has one storage on this chart`,
       });
     }
   }

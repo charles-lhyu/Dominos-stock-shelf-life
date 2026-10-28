@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { retainProductDefaults, type ProductDefault } from "./item-preset-store";
+import {
+  productHasMultipleStorages,
+  retainProductDefaults,
+  type ProductDefault,
+} from "./item-preset-store";
 import type { ShelfRule } from "./types";
 
 function rule(name: string, sectionId: ShelfRule["sectionId"]): ShelfRule {
@@ -39,5 +43,11 @@ describe("product defaults worth storing", () => {
   it("drops a hidden product even when it has several storage options", () => {
     const kept = retainProductDefaults({ Pepperoni: pepperoni }, rules, ["Pepperoni"]);
     assert.deepEqual(kept, {});
+  });
+
+  it("reports multi-storage only when the chart has more than one row", () => {
+    assert.equal(productHasMultipleStorages("Pepperoni", rules), true);
+    assert.equal(productHasMultipleStorages("Dough", rules), false);
+    assert.equal(productHasMultipleStorages("Mystery", rules), false);
   });
 });

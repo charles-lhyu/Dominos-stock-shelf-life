@@ -50,21 +50,31 @@ describe("invalid product defaults", () => {
     assert.equal(invalid[0]?.update, undefined);
   });
 
-  it("flags a storage the chart no longer has for that product", () => {
+  it("flags a wrong storage on a multi-storage product with an update", () => {
     const invalid = listInvalidProductDefaults(
-      { Dough: { section: "chilled", life: null } },
+      { Bacon: { section: "ready", life: null } },
       baconRules,
     );
     assert.equal(invalid[0]?.reason, "wrong-storage");
-    assert.deepEqual(invalid[0]?.update, { name: "Dough", section: "frozen" });
+    assert.deepEqual(invalid[0]?.update, { name: "Bacon", section: "frozen" });
   });
 
-  it("flags a single-storage default as not needed", () => {
+  it("flags a single-storage default as not needed, with no update", () => {
     const invalid = listInvalidProductDefaults(
       { Dough: { section: "frozen", life: null } },
       baconRules,
     );
     assert.equal(invalid[0]?.reason, "not-needed");
+    assert.equal(invalid[0]?.update, undefined);
+  });
+
+  it("flags a wrong storage on a single-storage product as not needed", () => {
+    const invalid = listInvalidProductDefaults(
+      { Dough: { section: "chilled", life: null } },
+      baconRules,
+    );
+    assert.equal(invalid[0]?.reason, "not-needed");
+    assert.equal(invalid[0]?.update, undefined);
   });
 
   it("applies renames when building chart defaults for the list", () => {

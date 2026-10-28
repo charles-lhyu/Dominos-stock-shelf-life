@@ -729,7 +729,7 @@ export function ImportChartButton({
 
   function updateInvalidDefault(item: InvalidProductDefault) {
     if (!item.update) return;
-    applyProductDefaultUpdate(item.name, item.update);
+    applyProductDefaultUpdate(item.name, item.update, desk.pack.rules);
   }
 
   function removeInvalidDefault(item: InvalidProductDefault) {
@@ -738,7 +738,7 @@ export function ImportChartButton({
 
   function updateAllInvalidDefaults() {
     for (const item of invalidDefaults) {
-      if (item.update) applyProductDefaultUpdate(item.name, item.update);
+      if (item.update) applyProductDefaultUpdate(item.name, item.update, desk.pack.rules);
     }
   }
 

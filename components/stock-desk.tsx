@@ -62,6 +62,7 @@ import {
   getItemPreset,
   getItemPresetServer,
   hydrateItemPresetStore,
+  pruneProductDefaults,
   setPresetCategory,
   setProductDefault,
   setPresetLifeFilter,
@@ -269,6 +270,12 @@ export function StockDesk() {
     captureActiveCampaign();
     setToday(new Date());
   }, []);
+
+  // Drop leftovers like Dough frozen — only multi-storage choices belong in Stored data.
+  useEffect(() => {
+    if (!imported || rules.length === 0) return;
+    pruneProductDefaults(rules, hiddenEntries);
+  }, [imported, rules, hiddenEntries]);
 
   useEffect(() => subscribeAppUpdateAvailable(setAppUpdate), []);
 
@@ -564,7 +571,7 @@ export function StockDesk() {
   const others = expanded ? hits.filter((hit) => hit.name !== expanded) : hits;
 
   function choose(name: string, sectionId?: SectionId) {
-    if (sectionId) setProductDefault(name, { section: sectionId });
+    if (sectionId) setProductDefault(name, { section: sectionId }, rules);
     // Snapshot the list only while it is still showing. A product opened from
     // "also matches" must not replace that place with the detail's scroll.
     if (!picked) {
@@ -1216,9 +1223,11 @@ export function StockDesk() {
                           aria-pressed={selected}
                           onClick={() => {
                             if (expanded) {
-                              setProductDefault(expanded, {
-                                section: variant.sectionId,
-                              });
+                              setProductDefault(
+                                expanded,
+                                { section: variant.sectionId },
+                                rules,
+                              );
                               setDetailLife(null);
                             }
                           }}
@@ -1281,7 +1290,7 @@ export function StockDesk() {
               kinds={expandedKinds}
               onPreferredSection={(sectionId) => {
                 if (!expanded) return;
-                setProductDefault(expanded, { section: sectionId });
+                setProductDefault(expanded, { section: sectionId }, rules);
                 setDetailLife(null);
               }}
               onPreferredLife={preferLife}
@@ -1331,7 +1340,9 @@ export function StockDesk() {
             lifeFilter={lifeFilter}
             sessionLife={sessionLife}
             productDefaults={productDefaults}
-            onProductDefault={(name, section) => setProductDefault(name, { section })}
+            onProductDefault={(name, section) =>
+              setProductDefault(name, { section }, rules)
+            }
             onLifeFilter={setPresetLifeFilter}
             onLifePrefer={preferLife}
             onOpen={choose}
