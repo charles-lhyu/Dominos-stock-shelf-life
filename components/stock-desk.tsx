@@ -677,15 +677,15 @@ export function StockDesk() {
 
         <div
           className={cn(
-            "min-w-0 space-y-2 px-4 pt-2 transition-[padding] duration-300",
-            headerCollapsed ? "pb-2" : "pb-3",
+            "min-w-0 space-y-2 px-4 transition-[padding] duration-300",
+            headerCollapsed ? "pt-0 pb-2" : "pt-2 pb-3",
           )}
         >
           <div
             className={cn(
               "grid transition-[grid-template-rows,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
               headerCollapsed
-                ? "pointer-events-none grid-rows-[0fr] opacity-0"
+                ? "pointer-events-none my-0! grid-rows-[0fr] opacity-0"
                 : "grid-rows-[1fr] opacity-100",
             )}
             aria-hidden={headerCollapsed}
@@ -779,7 +779,7 @@ export function StockDesk() {
             className={cn(
               "grid transition-[grid-template-rows,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
               headerCollapsed
-                ? "pointer-events-none grid-rows-[0fr] opacity-0"
+                ? "pointer-events-none my-0! grid-rows-[0fr] opacity-0"
                 : "grid-rows-[1fr] opacity-100",
             )}
             aria-hidden={headerCollapsed}
@@ -808,7 +808,7 @@ export function StockDesk() {
 
           <div
             className={cn(
-              "flex items-stretch gap-2 border-white/10 transition-[padding,border-color] duration-300",
+              "flex items-stretch gap-2 border-white/10 transition-[padding,border-color,margin] duration-300",
               headerCollapsed ? "border-t-0 pt-0" : "border-t pt-3",
             )}
           >
