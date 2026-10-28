@@ -285,7 +285,7 @@ function applySettings(settings: StoreCampaignSettings, rules: ShelfRule[]) {
     replaceItemPreset(next.preset);
     setCompactDateFormat(next.compactDates === true);
     writeDebugDays(next.showDayCounts === true);
-    setCompactList(next.compactList === true);
+    // Compact list stays a session view; page load restores it via captureActiveCampaign.
   } finally {
     applying = false;
   }
@@ -302,6 +302,7 @@ function handleImportedPack(pack: ChartPack, sourceUrl: string) {
   try {
     if (saved) {
       applySettings(saved, pack.rules);
+      setCompactList(saved.compactList === true);
     } else if (storeId && campaignKey(issued, validUntil)) {
       clearHiddenNames();
       resetItemPreset();

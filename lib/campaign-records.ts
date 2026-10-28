@@ -397,7 +397,7 @@ export function planStoreChange(input: {
 
 export type StoreSettingChange = {
   id: string;
-  group: "Dates" | "List" | "Hidden" | "Defaults";
+  group: "Dates" | "Hidden" | "Defaults";
   label: string;
   from: string;
   to: string;
@@ -456,15 +456,6 @@ export function listStoreSettingChanges(
       label: "Date display",
       from: current.compactDates ? "Short" : "Full",
       to: target.compactDates ? "Short" : "Full",
-    });
-  }
-  if ((current.compactList === true) !== (target.compactList === true)) {
-    changes.push({
-      id: "list:compact",
-      group: "List",
-      label: "Compact list",
-      from: current.compactList ? "On" : "Off",
-      to: target.compactList ? "On" : "Off",
     });
   }
   const hidden = new Set([...current.hidden, ...target.hidden]);
@@ -532,9 +523,8 @@ export function applyAcceptedStoreChanges(
     showDayCounts: accepted.has("dates:days")
       ? target.showDayCounts === true
       : current.showDayCounts === true,
-    compactList: accepted.has("list:compact")
-      ? target.compactList === true
-      : current.compactList === true,
+    // Compact list is a session view; keep whichever side is current on screen.
+    compactList: current.compactList === true,
   };
 }
 

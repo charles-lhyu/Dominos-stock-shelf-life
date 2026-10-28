@@ -530,10 +530,6 @@ export function StockDesk() {
       savedListCollapsedRef.current = headerCollapsedRef.current;
     }
     showItemFromTopRef.current = true;
-    headerCollapsedRef.current = true;
-    listScrollableRef.current = true;
-    setHeaderCollapsed(true);
-    setListScrollable(true);
     setQuery(name);
     setPicked(name);
     inputRef.current?.blur();
