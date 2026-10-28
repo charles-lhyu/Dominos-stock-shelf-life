@@ -762,13 +762,14 @@ export function StockDesk() {
                 }
                 onClick={() => writeDebugDays(!debugDays)}
                 className={cn(
-                  "inline-flex size-8 shrink-0 items-center justify-center rounded-full ring-1 transition-colors",
+                  "inline-flex h-8 shrink-0 items-center gap-1 rounded-full px-2.5 text-[0.65rem] font-semibold uppercase tracking-wide ring-1 transition-colors",
                   debugDays
                     ? "bg-sky-500/25 text-sky-100 ring-sky-300/50"
                     : "bg-white/10 text-stone-400 ring-white/25",
                 )}
               >
-                <Bug className="size-4" aria-hidden />
+                <Bug className="size-3.5 shrink-0" aria-hidden />
+                Days
               </button>
             ) : null}
             <ImportChartButton
