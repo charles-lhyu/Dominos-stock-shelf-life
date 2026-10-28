@@ -880,28 +880,29 @@ export function ImportChartButton({
   const storeMenuVisible = storeMenuOpen && storedStoreIds.length > 0;
   const showStoreClear = storeDraft.trim().length > 0;
 
+  function syncStoreMenuPos() {
+    const field = storeFieldRef.current;
+    if (!field) return;
+    const rect = field.getBoundingClientRect();
+    setStoreMenuPos({
+      top: rect.bottom + 4,
+      left: rect.left,
+      width: rect.width,
+    });
+  }
+
   useLayoutEffect(() => {
     if (!storeMenuVisible) {
       setStoreMenuPos(null);
       return;
     }
-    function updatePos() {
-      const field = storeFieldRef.current;
-      if (!field) return;
-      const rect = field.getBoundingClientRect();
-      setStoreMenuPos({
-        top: rect.bottom + 4,
-        left: rect.left,
-        width: rect.width,
-      });
-    }
-    updatePos();
+    syncStoreMenuPos();
     const body = settingsBodyRef.current;
-    window.addEventListener("resize", updatePos);
-    body?.addEventListener("scroll", updatePos, { passive: true });
+    window.addEventListener("resize", syncStoreMenuPos);
+    body?.addEventListener("scroll", syncStoreMenuPos, { passive: true });
     return () => {
-      window.removeEventListener("resize", updatePos);
-      body?.removeEventListener("scroll", updatePos);
+      window.removeEventListener("resize", syncStoreMenuPos);
+      body?.removeEventListener("scroll", syncStoreMenuPos);
     };
   }, [storeMenuVisible, menuStoreIds.length, storeDraft, showStoreClear]);
   const storeChanges =
@@ -1662,12 +1663,16 @@ export function ImportChartButton({
                         setStoreDraft(event.target.value);
                         setStoreMenuAll(false);
                         if (storeIdError) setStoreIdError(null);
-                        if (storedStoreIds.length > 0) setStoreMenuOpen(true);
+                        if (storedStoreIds.length > 0) {
+                          setStoreMenuOpen(true);
+                          requestAnimationFrame(syncStoreMenuPos);
+                        }
                       }}
                       onFocus={() => {
                         if (storedStoreIds.length > 0) {
                           setStoreMenuAll(false);
                           setStoreMenuOpen(true);
+                          syncStoreMenuPos();
                         }
                       }}
                       onKeyDown={(event) => {
@@ -1705,6 +1710,7 @@ export function ImportChartButton({
                               if (storedStoreIds.length > 0) {
                                 setStoreMenuAll(false);
                                 setStoreMenuOpen(true);
+                                syncStoreMenuPos();
                               } else {
                                 setStoreMenuOpen(false);
                                 setStoreMenuAll(false);
@@ -1729,6 +1735,7 @@ export function ImportChartButton({
                               }
                               setStoreMenuAll(true);
                               setStoreMenuOpen(true);
+                              syncStoreMenuPos();
                             }}
                             className="inline-flex size-9 items-center justify-center rounded-lg text-stone-300"
                           >
@@ -1746,58 +1753,71 @@ export function ImportChartButton({
                   </div>
                   {storeMenuVisible && storeMenuPos
                     ? createPortal(
-                        <ul
-                          ref={storeMenuListRef}
-                          id="store-id-list"
-                          role="listbox"
-                          aria-label="Stored store IDs"
+                        <div
+                          data-base-ui-portal=""
                           style={{
+                            position: "fixed",
                             top: storeMenuPos.top,
                             left: storeMenuPos.left,
                             width: storeMenuPos.width,
+                            zIndex: 110,
                           }}
-                          className="fixed z-[80] max-h-60 overflow-y-auto rounded-xl border border-white/10 bg-popover py-1 shadow-lg shadow-black/40 ring-1 ring-white/10"
                         >
-                          {menuStoreIds.length === 0 ? (
-                            <li className="px-3 py-2.5 text-sm text-stone-500">
-                              No matching stores
-                            </li>
-                          ) : (
-                            menuStoreIds.map((id) => {
-                              const selected = id === storeDraft;
-                              return (
-                                <li key={id}>
-                                  <button
-                                    type="button"
-                                    role="option"
-                                    aria-selected={selected}
-                                    onMouseDown={(event) => event.preventDefault()}
-                                    onClick={() => {
-                                      setStoreDraft(id);
-                                      setStoreIdError(null);
-                                      setStoreMenuOpen(false);
-                                      setStoreMenuAll(false);
-                                    }}
-                                    className={cn(
-                                      "flex h-11 w-full items-center gap-2 px-3 text-left text-base text-white",
-                                      selected
-                                        ? "bg-sky-500/20"
-                                        : "hover:bg-white/[0.06]",
-                                    )}
-                                  >
-                                    <span className="shrink-0 font-mono">{id}</span>
-                                    {storeNames[id] ? (
-                                      <span className="min-w-0 truncate text-sm text-stone-300">
-                                        {storeNames[id]}
+                          <ul
+                            ref={storeMenuListRef}
+                            id="store-id-list"
+                            role="listbox"
+                            aria-label="Stored store IDs"
+                            className="max-h-60 overflow-y-auto rounded-xl border border-white/10 bg-popover py-1 shadow-lg shadow-black/40 ring-1 ring-white/10"
+                          >
+                            {menuStoreIds.length === 0 ? (
+                              <li className="px-3 py-2.5 text-sm text-stone-500">
+                                No matching stores
+                              </li>
+                            ) : (
+                              menuStoreIds.map((id) => {
+                                const selected = id === storeDraft;
+                                return (
+                                  <li key={id}>
+                                    <button
+                                      type="button"
+                                      role="option"
+                                      aria-selected={selected}
+                                      onMouseDown={(event) =>
+                                        event.preventDefault()
+                                      }
+                                      onClick={() => {
+                                        setStoreDraft(id);
+                                        setStoreIdError(null);
+                                        setStoreMenuOpen(false);
+                                        setStoreMenuAll(false);
+                                      }}
+                                      className={cn(
+                                        "flex h-11 w-full items-center gap-2 px-3 text-left text-base text-white",
+                                        selected
+                                          ? "bg-sky-500/20"
+                                          : "hover:bg-white/[0.06]",
+                                      )}
+                                    >
+                                      <span className="shrink-0 font-mono">
+                                        {id}
                                       </span>
-                                    ) : null}
-                                  </button>
-                                </li>
-                              );
-                            })
-                          )}
-                        </ul>,
-                        document.body,
+                                      {storeNames[id] ? (
+                                        <span className="min-w-0 truncate text-sm text-stone-300">
+                                          {storeNames[id]}
+                                        </span>
+                                      ) : null}
+                                    </button>
+                                  </li>
+                                );
+                              })
+                            )}
+                          </ul>
+                        </div>,
+                        // Nest inside the Settings dialog portal so the modal
+                        // does not mark the list inert / aria-hidden.
+                        storeFieldRef.current?.closest("[data-base-ui-portal]") ??
+                          document.body,
                       )
                     : null}
                 </div>
