@@ -337,7 +337,7 @@ export function ChartList({
       {compact ? (
         <div className="sticky top-0 z-50 -mx-4 h-0 w-[calc(100%+2rem)] overflow-visible">
           <div
-            className="absolute top-1.5 right-4 flex flex-nowrap items-center gap-1"
+            className="absolute top-3.5 right-4 flex flex-nowrap items-center gap-1"
             role="group"
             aria-label="Life date filter"
           >
@@ -552,7 +552,7 @@ function renderCoverStack(
       <div
         data-section-header=""
         data-sort-key={sortKey}
-        className="sticky top-0 -mx-4 w-[calc(100%+2rem)] overflow-visible border-b border-white/10 bg-[#0f1624] px-4 pt-1 pb-1.5"
+        className="sticky top-0 -mx-4 w-[calc(100%+2rem)] overflow-visible border-b border-white/10 bg-[#0f1624] px-4 pt-3 pb-1.5"
         style={{ zIndex: 10 + index }}
       >
         <button
@@ -662,7 +662,7 @@ function ToppingsSection({
       <div
         data-section-header=""
         data-sort-key="toppings"
-        className="sticky top-0 -mx-4 w-[calc(100%+2rem)] overflow-visible border-b border-white/10 bg-[#0f1624] px-4 pt-1 pb-1.5"
+        className="sticky top-0 -mx-4 w-[calc(100%+2rem)] overflow-visible border-b border-white/10 bg-[#0f1624] px-4 pt-3 pb-1.5"
         style={{ zIndex }}
       >
         <button
