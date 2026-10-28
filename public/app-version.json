@@ -1,7 +1,7 @@
 {
-  "version": "1.4.56",
+  "version": "1.4.57",
   "notes": [
-    "Bacon (FROZEN) shows as Bacon with frozen storage, same item as chilled Bacon",
-    "NEW Chinese Style Chicken shows as Chinese Style Chicken with a New tag"
+    "New sits at the end of the category filters for chart NEW items",
+    "New is only a filter — the list still groups items under their real categories"
   ]
 }

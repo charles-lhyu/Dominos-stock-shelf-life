@@ -2,7 +2,16 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { RULES } from "./chart";
 import { addHoursToLocal, formatDateTime } from "./dates";
-import { calculatedLifeKind, datePreview, lifeKindsForRule, pickLifeKind } from "./preview";
+import {
+  calculatedLifeKind,
+  categoriesInPack,
+  datePreview,
+  lifeKindsForRule,
+  NEW_CATEGORY_FILTER,
+  pickLifeKind,
+  uniqueNamesInCategory,
+} from "./preview";
+import { BUNDLED_PACK } from "./chart-pack";
 
 const today = new Date(2026, 9, 24);
 
@@ -11,6 +20,15 @@ function rule(name: string) {
   assert.ok(found, name);
   return found;
 }
+
+describe("new category filter", () => {
+  it("lists NEW-tagged products without adding a New chart category", () => {
+    const names = uniqueNamesInCategory(RULES, NEW_CATEGORY_FILTER);
+    assert.ok(names.includes("Chinese Style Chicken"));
+    assert.equal(categoriesInPack(BUNDLED_PACK).includes("New"), false);
+    assert.equal(categoriesInPack(BUNDLED_PACK).includes("new"), false);
+  });
+});
 
 describe("list use-by dates", () => {
   it("shows sliced gherkins' 16-day prep use-by instead of Date on pack", () => {

@@ -170,6 +170,19 @@ const TOPPING_GROUP_ORDER: Record<ToppingGroup, number> = {
   other: 2,
 };
 
+/** Filter chip value for chart NEW markers — not a real product category. */
+export const NEW_CATEGORY_FILTER = "new";
+
+export function isNewCategoryFilter(category: string | "all"): boolean {
+  return category === NEW_CATEGORY_FILTER;
+}
+
+function ruleMatchesCategory(rule: { category: string; tags?: string[] }, category: string | "all") {
+  if (category === "all") return true;
+  if (isNewCategoryFilter(category)) return rule.tags?.includes("new") ?? false;
+  return rule.category === category;
+}
+
 /** Unique product counts per storage filter chip (ready counted under Ambient). */
 export function sectionNameCounts(
   rules: ShelfRule[],
@@ -182,7 +195,7 @@ export function sectionNameCounts(
   >;
 
   for (const rule of rules) {
-    if (category !== "all" && rule.category !== category) continue;
+    if (!ruleMatchesCategory(rule, category)) continue;
     all.add(rule.name);
     const bucket: SectionId = rule.sectionId === "ready" ? "ambient" : rule.sectionId;
     bySection[bucket]?.add(rule.name);
@@ -200,12 +213,12 @@ export function uniqueNamesInCategory(rules: ShelfRule[], category: string | "al
   const names: string[] = [];
   const seen = new Set<string>();
   for (const rule of rules) {
-    if (category !== "all" && rule.category !== category) continue;
+    if (!ruleMatchesCategory(rule, category)) continue;
     if (seen.has(rule.name)) continue;
     seen.add(rule.name);
     names.push(rule.name);
   }
-  if (category === "Toppings") {
+  if (category === "Toppings" || isNewCategoryFilter(category)) {
     names.sort(
       (a, b) => TOPPING_GROUP_ORDER[toppingGroup(a)] - TOPPING_GROUP_ORDER[toppingGroup(b)],
     );

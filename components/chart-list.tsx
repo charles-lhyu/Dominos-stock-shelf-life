@@ -22,6 +22,7 @@ import {
   categoriesInPack,
   calculatedLifeKind,
   datePreview,
+  isNewCategoryFilter,
   LIFE_KIND_META,
   LIFE_KINDS,
   lifeKindsForRule,
@@ -213,7 +214,10 @@ export function ChartList({
   );
   const hidden = new Set(hiddenNames);
   const hiddenCount = hiddenNames.length;
-  const categories = category === "all" ? categoriesInPack(pack) : [category];
+  // "New" is a filter chip only — list sections stay the real chart categories.
+  const newOnly = isNewCategoryFilter(category);
+  const categories =
+    category === "all" || newOnly ? categoriesInPack(pack) : [category];
   const blocks: StickyBlock[] = [];
 
   for (const cat of categories) {
@@ -224,6 +228,9 @@ export function ChartList({
       let variants = variantsForName(name, pack.rules, pack).filter(
         (item) => item.rule.category === cat,
       );
+      if (newOnly) {
+        variants = variants.filter((item) => item.rule.tags?.includes("new"));
+      }
       if (sectionFilter !== "all") {
         variants = variants.filter((item) =>
           sectionMatchesFilter(item.sectionId, sectionFilter),

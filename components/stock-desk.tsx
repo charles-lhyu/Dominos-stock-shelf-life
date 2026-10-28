@@ -81,6 +81,8 @@ import {
 import {
   calculatedLifeKind,
   categoriesInPack,
+  isNewCategoryFilter,
+  NEW_CATEGORY_FILTER,
   LIFE_KIND_META,
   LIFE_KINDS,
   lifeKindsForRule,
@@ -252,6 +254,7 @@ export function StockDesk() {
     ]),
   ) as Record<string, number>;
   const categoryTotal = uniqueNamesInCategory(visibleRules, "all").length;
+  const newCategoryCount = uniqueNamesInCategory(visibleRules, NEW_CATEGORY_FILTER).length;
   const storageCounts = sectionNameCounts(visibleRules, category);
 
   useEffect(() => {
@@ -494,10 +497,17 @@ export function StockDesk() {
   }, [rules]);
 
   useEffect(() => {
-    if (category !== "all" && !categories.includes(category)) {
+    if (
+      category !== "all" &&
+      !isNewCategoryFilter(category) &&
+      !categories.includes(category)
+    ) {
       setPresetCategory("all");
     }
-  }, [categories, category]);
+    if (isNewCategoryFilter(category) && newCategoryCount === 0) {
+      setPresetCategory("all");
+    }
+  }, [categories, category, newCategoryCount]);
 
   useEffect(() => {
     const counts = sectionNameCounts(rules, category);
@@ -1018,6 +1028,14 @@ export function StockDesk() {
                         {item} <ChipCount value={categoryCounts[item] ?? 0} />
                       </FilterChip>
                     ))}
+                    {newCategoryCount > 0 ? (
+                      <FilterChip
+                        selected={isNewCategoryFilter(category)}
+                        onClick={() => setPresetCategory(NEW_CATEGORY_FILTER)}
+                      >
+                        New <ChipCount value={newCategoryCount} />
+                      </FilterChip>
+                    ) : null}
                   </DragScroll>
                   <DragScroll role="group" aria-label="Storage filters">
                     <FilterChip
@@ -1088,6 +1106,14 @@ export function StockDesk() {
                           value: item,
                           label: `${item} (${categoryCounts[item] ?? 0})`,
                         })),
+                        ...(newCategoryCount > 0
+                          ? [
+                              {
+                                value: NEW_CATEGORY_FILTER,
+                                label: `New (${newCategoryCount})`,
+                              },
+                            ]
+                          : []),
                       ]}
                     />
                     <FilterSelect

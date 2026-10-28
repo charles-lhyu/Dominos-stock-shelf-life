@@ -1,5 +1,12 @@
 [
   {
+    "version": "1.4.57",
+    "notes": [
+      "New sits at the end of the category filters for chart NEW items",
+      "New is only a filter — the list still groups items under their real categories"
+    ]
+  },
+  {
     "version": "1.4.56",
     "notes": [
       "Bacon (FROZEN) shows as Bacon with frozen storage, same item as chilled Bacon",
