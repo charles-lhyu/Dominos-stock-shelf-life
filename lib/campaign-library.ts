@@ -77,7 +77,10 @@ function refreshSnapshot() {
   const device = listDeviceStored(library);
   deviceSnapshot = device.length === 0 ? EMPTY_DEVICE : device;
   storedCache = new Map();
-  const names = library.storeNames ?? EMPTY_STORE_NAMES;
+  const names: Record<string, string> = {};
+  for (const [storeId, store] of Object.entries(library.stores)) {
+    if (store.settings.name) names[storeId] = store.settings.name;
+  }
   storeNameSnapshot = Object.keys(names).length === 0 ? EMPTY_STORE_NAMES : names;
 }
 
@@ -98,13 +101,46 @@ function commitLibrary(next: CampaignLibrary) {
 export function hydrateCampaignLibrary() {
   if (hydrated || typeof window === "undefined") return;
   hydrated = true;
+  let hadRaw = false;
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (raw) library = parseCampaignLibrary(JSON.parse(raw));
+    if (raw) {
+      hadRaw = true;
+      library = parseCampaignLibrary(JSON.parse(raw));
+    }
   } catch {
     library = emptyCampaignLibrary();
+    hadRaw = true;
   }
-  refreshSnapshot();
+  if (hadRaw) {
+    // Rewrite once so legacy flat stores land as store-first on disk.
+    commitLibrary(library);
+  } else {
+    refreshSnapshot();
+  }
+}
+
+/** Snapshot of the device Stored data library (charts + store presets). */
+export function getCampaignLibrary(): CampaignLibrary {
+  hydrateCampaignLibrary();
+  return library;
+}
+
+/**
+ * Replace the whole Stored data library (import). Re-applies the active
+ * store's settings for the chart on screen when possible.
+ */
+export function replaceCampaignLibrary(next: CampaignLibrary) {
+  hydrateCampaignLibrary();
+  const parsed = parseCampaignLibrary(next);
+  commitLibrary(parsed);
+  hydrateStoreIdStore();
+  const desk = getDeskState();
+  const storeId = getStoreId();
+  if (!desk.imported || !storeId) return;
+  const { issued, validUntil } = desk.pack.chart;
+  const saved = readStoreSettings(parsed, storeId, issued, validUntil);
+  if (saved) applySettings(saved, desk.pack.rules);
 }
 
 export function listCampaigns(): CampaignSummary[] {

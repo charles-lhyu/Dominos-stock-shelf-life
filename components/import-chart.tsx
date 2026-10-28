@@ -52,6 +52,7 @@ import {
   clearSavedHidden,
   forgetSavedDefault,
   forgetSavedHidden,
+  getCampaignLibrary,
   hydrateCampaignLibrary,
   listCampaigns,
   listCampaignsServer,
@@ -63,12 +64,18 @@ import {
   listStoreNamesServer,
   readSavedCampaignSettings,
   reloadCampaign,
+  replaceCampaignLibrary,
   setStoreName,
   subscribeCampaignLibrary,
   subscribeStoredStore,
   writeSavedDefault,
 } from "@/lib/campaign-library";
 import { canonicalProductName } from "@/lib/chart-name-migrate";
+import {
+  buildStoredLibraryPayload,
+  parseStoredLibraryPayload,
+  summarizeStoredLibrary,
+} from "@/lib/stored-library-io";
 import { CHANGELOG } from "@/lib/changelog";
 import { parseChartPack } from "@/lib/chart-pack";
 import { formatCompactDate, formatLongDate, formatShortDate } from "@/lib/dates";
@@ -325,7 +332,13 @@ export function ImportChartButton({
   const [storedEditing, setStoredEditing] = useState(false);
   const [storedDraft, setStoredDraft] = useState<StoredEditDraft | null>(null);
   const [storedConfirmOpen, setStoredConfirmOpen] = useState(false);
+  const [storedImportConfirm, setStoredImportConfirm] = useState<{
+    summary: { stores: number; campaigns: number; charts: number };
+    library: ReturnType<typeof getCampaignLibrary>;
+    storeId?: string;
+  } | null>(null);
   const [allStoredOpen, setAllStoredOpen] = useState(false);
+  const storedImportInputRef = useRef<HTMLInputElement>(null);
   const storePromptRef = useRef<string | null>(null);
   const [activeSettingsSection, setActiveSettingsSection] =
     useState<SettingsSectionId>("settings-app");
@@ -448,6 +461,7 @@ export function ImportChartButton({
     setStoredEditing(false);
     setStoredDraft(null);
     setStoredConfirmOpen(false);
+    setStoredImportConfirm(null);
     setActiveSettingsSection("settings-app");
     const raf = window.requestAnimationFrame(() => {
       settingsBodyRef.current?.scrollTo({ top: 0 });
@@ -499,6 +513,7 @@ export function ImportChartButton({
       setStoredEditing(false);
       setStoredDraft(null);
       setStoredConfirmOpen(false);
+      setStoredImportConfirm(null);
       setAllStoredOpen(false);
       setStoreMenuOpen(false);
       setStoreMenuAll(false);
@@ -809,7 +824,14 @@ export function ImportChartButton({
 
   function withLiveSettings<
     T extends { hidden: HiddenEntry[]; preset: ItemPreset; rules?: ShelfRule[] },
-  >(item: T): T & { rules: ShelfRule[] } {
+  >(
+    item: T,
+  ): T & {
+    rules: ShelfRule[];
+    compactDates: boolean;
+    showDayCounts: boolean;
+    compactList: boolean;
+  } {
     return {
       ...item,
       hidden: hiddenEntries,
@@ -859,6 +881,7 @@ export function ImportChartButton({
             issued: desk.pack.chart.issued,
             validUntil: desk.pack.chart.validUntil,
             title: desk.pack.chart.title || "Shelf life chart",
+            version: desk.pack.chart.version || "",
             hidden: hiddenEntries,
             preset: itemPreset,
             rules: desk.pack.rules,
@@ -977,6 +1000,54 @@ export function ImportChartButton({
 
   const storedEditChanges = storedDraft ? listStoredEditChanges(storedDraft) : [];
 
+  function exportStoredData() {
+    hydrateCampaignLibrary();
+    const library = getCampaignLibrary();
+    const activeStore = previewStoreId ?? storeId;
+    const payload = buildStoredLibraryPayload(library, {
+      storeId: activeStore || undefined,
+    });
+    const stamp = new Date().toISOString().slice(0, 10);
+    const nameBit = activeStore || "device";
+    const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `shelf-life-stored-${nameBit}-${stamp}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function onStoredImportFile(file: File | null) {
+    if (!file) return;
+    void file.text().then((text) => {
+      try {
+        const parsed = parseStoredLibraryPayload(JSON.parse(text));
+        if (!parsed) {
+          toast.error("That file is not a Stored data backup.");
+          return;
+        }
+        setStoredImportConfirm({
+          summary: summarizeStoredLibrary(parsed.library),
+          library: parsed.library,
+          storeId: parsed.storeId,
+        });
+      } catch {
+        toast.error("Could not read that Stored data file.");
+      }
+    });
+  }
+
+  function confirmStoredImport() {
+    if (!storedImportConfirm) return;
+    replaceCampaignLibrary(storedImportConfirm.library);
+    setStoredImportConfirm(null);
+    discardStoredEdit();
+    toast.success("Stored data replaced on this device.");
+  }
+
   function patchStoredCampaign(
     issued: string,
     validUntil: string,
@@ -1080,6 +1151,26 @@ export function ImportChartButton({
       preset: { ...item.preset, defaults: campaign.defaults },
     };
   });
+
+  const storeDisplayRow = storedDisplayRows[0];
+  const storeDatesLabel = storeDisplayRow
+    ? storeDisplayRow.showDayCounts
+      ? "Days and hours"
+      : storeDisplayRow.compactDates
+        ? "Short"
+        : "Full"
+    : debugDays
+      ? "Days and hours"
+      : compactDates
+        ? "Short"
+        : "Full";
+  const storeListLabel = storeDisplayRow
+    ? storeDisplayRow.compactList
+      ? "Compact"
+      : "With tags"
+    : compactList
+      ? "Compact"
+      : "With tags";
 
   function syncNavCard(id: SettingsSectionId) {
     const nav = settingsNavRef.current;
@@ -1482,7 +1573,7 @@ export function ImportChartButton({
                 />
               ) : null}
               <div className="flex items-center justify-between gap-2">
-                <div className="flex min-w-0 items-center gap-2">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
                   <p className="text-sm font-medium text-stone-300">Stored data</p>
                   {deviceStored.length > 0 ? (
                     <button
@@ -1494,35 +1585,82 @@ export function ImportChartButton({
                     </button>
                   ) : null}
                 </div>
-                {previewStoreId ?? storeId ? (
-                  <StoredEditButton editing={storedEditing} onToggle={toggleStoredEditing} />
-                ) : null}
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <button
+                    type="button"
+                    disabled={storedEditing}
+                    onClick={exportStoredData}
+                    className="rounded-lg px-2 py-1 text-xs font-semibold text-stone-200 ring-1 ring-white/15 disabled:opacity-40"
+                  >
+                    Export
+                  </button>
+                  <button
+                    type="button"
+                    disabled={storedEditing}
+                    onClick={() => storedImportInputRef.current?.click()}
+                    className="rounded-lg px-2 py-1 text-xs font-semibold text-stone-200 ring-1 ring-white/15 disabled:opacity-40"
+                  >
+                    Import
+                  </button>
+                  <input
+                    ref={storedImportInputRef}
+                    type="file"
+                    accept="application/json,.json"
+                    className="hidden"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0] ?? null;
+                      event.target.value = "";
+                      onStoredImportFile(file);
+                    }}
+                  />
+                  {previewStoreId ?? storeId ? (
+                    <StoredEditButton editing={storedEditing} onToggle={toggleStoredEditing} />
+                  ) : null}
+                </div>
               </div>
               {previewStoreId ?? storeId ? (
-                storedEditing ? (
-                  <StoreNameField
-                    value={nameFor(previewStoreId ?? storeId)}
-                    onChange={(value) => changeStoreName(previewStoreId ?? storeId, value)}
-                  />
-                ) : (
-                  <div className="space-y-0.5 px-0.5">
-                    <p className="text-xs text-stone-500">Store name</p>
-                    <p className="truncate text-sm text-stone-200">
-                      {nameFor(previewStoreId ?? storeId) || "Not set"}
-                    </p>
+                <div className="space-y-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2.5">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">
+                    Store settings
+                  </p>
+                  {storedEditing ? (
+                    <StoreNameField
+                      value={nameFor(previewStoreId ?? storeId)}
+                      onChange={(value) => changeStoreName(previewStoreId ?? storeId, value)}
+                    />
+                  ) : (
+                    <div className="space-y-0.5">
+                      <p className="text-xs text-stone-500">Name</p>
+                      <p className="truncate text-sm text-stone-200">
+                        {nameFor(previewStoreId ?? storeId) || "Not set"}
+                      </p>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-0.5">
+                      <p className="text-xs text-stone-500">Dates</p>
+                      <p className="text-sm text-stone-200">{storeDatesLabel}</p>
+                    </div>
+                    <div className="space-y-0.5">
+                      <p className="text-xs text-stone-500">List</p>
+                      <p className="text-sm text-stone-200">{storeListLabel}</p>
+                    </div>
                   </div>
-                )
+                </div>
               ) : null}
               {!(previewStoreId ?? storeId) ? (
                 <p className="text-xs text-stone-500">
-                  Set a store ID to see the hidden items and product defaults saved for it.
+                  Set a store ID to see store settings and campaign presets saved for it.
                 </p>
               ) : storedDisplayRows.length === 0 ? (
                 <p className="text-xs text-stone-500">
-                  Nothing saved for store {previewStoreId ?? storeId} yet.
+                  No campaign presets saved for store {previewStoreId ?? storeId} yet.
                 </p>
               ) : (
                 <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">
+                    Campaign presets
+                  </p>
                   {storedDisplayRows.map((item) => {
                     const onScreen = !previewStoreId && chartOnScreen(item.issued, item.validUntil);
                     return (
@@ -1543,10 +1681,12 @@ export function ImportChartButton({
                         <p className="mt-0.5 text-xs text-stone-400">
                           Issued {formatShortDate(item.issued)} · Valid until{" "}
                           {formatShortDate(item.validUntil)}
+                          {item.version ? ` · Version ${item.version}` : ""}
                         </p>
                         <StoredCampaignDetails
                           item={item}
                           editing={storedEditing}
+                          showStoreDisplay={false}
                           invalidDefaults={onScreen ? invalidDefaults : []}
                           onOpenHidden={(entry) =>
                             openStoredProduct(entry.name, item.issued, item.validUntil)
@@ -2138,6 +2278,51 @@ export function ImportChartButton({
         </div>
       </DialogContent>
       <Dialog
+        open={storedImportConfirm != null}
+        onOpenChange={(next) => {
+          if (!next) setStoredImportConfirm(null);
+        }}
+      >
+        <DialogContent
+          showCloseButton={false}
+          overlayClassName="z-[60] bg-black/50"
+          className="z-[60] max-h-[min(40rem,calc(100dvh-2rem))] max-w-sm gap-0 overflow-y-auto rounded-2xl p-0"
+        >
+          <DialogHeader className="space-y-2 px-4 pt-4 pr-14 pb-2">
+            <DialogTitle className="font-display text-xl text-white">
+              Replace stored data?
+            </DialogTitle>
+            <DialogDescription className="text-sm text-stone-400">
+              Import replaces every store and campaign preset saved on this device.
+              {storedImportConfirm
+                ? ` This file has ${storedImportConfirm.summary.stores} store${storedImportConfirm.summary.stores === 1 ? "" : "s"}, ${storedImportConfirm.summary.campaigns} campaign preset${storedImportConfirm.summary.campaigns === 1 ? "" : "s"}, and ${storedImportConfirm.summary.charts} chart${storedImportConfirm.summary.charts === 1 ? "" : "s"}.`
+                : ""}
+            </DialogDescription>
+            <button
+              type="button"
+              className="absolute top-3 right-3 inline-flex size-10 items-center justify-center rounded-full bg-white/10 text-white"
+              aria-label="Close stored import"
+              onClick={() => setStoredImportConfirm(null)}
+            >
+              <X className="size-5" />
+            </button>
+          </DialogHeader>
+          <div className="grid gap-2 border-t border-white/10 p-4">
+            <Button type="button" className="h-11 rounded-xl" onClick={confirmStoredImport}>
+              Replace stored data
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 rounded-xl border-white/15 text-white"
+              onClick={() => setStoredImportConfirm(null)}
+            >
+              Cancel
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog
         open={storedConfirmOpen}
         onOpenChange={(next) => {
           if (!next) setStoredConfirmOpen(false);
@@ -2404,6 +2589,7 @@ export function ImportChartButton({
                     <p className="mt-0.5 text-xs text-stone-500">
                       Issued {formatShortDate(item.issued)} · Valid until{" "}
                       {formatShortDate(item.validUntil)}
+                      {item.version ? ` · Version ${item.version}` : ""}
                     </p>
                   </button>
                 );
@@ -2673,6 +2859,7 @@ function sectionsForStoredDefault(name: string, rules: ShelfRule[]): SectionId[]
 function StoredCampaignDetails({
   item,
   editing,
+  showStoreDisplay = true,
   invalidDefaults = [],
   onOpenHidden,
   onRemoveHidden,
@@ -2691,6 +2878,8 @@ function StoredCampaignDetails({
     rules?: ShelfRule[];
   };
   editing: boolean;
+  /** When false, Dates/List are shown at store level instead. */
+  showStoreDisplay?: boolean;
   invalidDefaults?: InvalidProductDefault[];
   onOpenHidden: (entry: HiddenEntry) => void;
   onRemoveHidden: (entry: HiddenEntry) => void;
@@ -2706,14 +2895,20 @@ function StoredCampaignDetails({
   const dateLabel = item.showDayCounts ? "Days and hours" : item.compactDates ? "Short" : "Full";
   return (
     <>
-      <div className="mt-2 flex items-center justify-between gap-2">
-        <p className="text-xs text-stone-500">Dates</p>
-      </div>
-      <p className="px-2 text-sm text-stone-200">{dateLabel}</p>
-      <div className="mt-2 flex items-center justify-between gap-2">
-        <p className="text-xs text-stone-500">List</p>
-      </div>
-      <p className="px-2 text-sm text-stone-200">{item.compactList ? "Compact" : "With tags"}</p>
+      {showStoreDisplay ? (
+        <>
+          <div className="mt-2 flex items-center justify-between gap-2">
+            <p className="text-xs text-stone-500">Dates</p>
+          </div>
+          <p className="px-2 text-sm text-stone-200">{dateLabel}</p>
+          <div className="mt-2 flex items-center justify-between gap-2">
+            <p className="text-xs text-stone-500">List</p>
+          </div>
+          <p className="px-2 text-sm text-stone-200">
+            {item.compactList ? "Compact" : "With tags"}
+          </p>
+        </>
+      ) : null}
       <div className="mt-2 flex items-center justify-between gap-2">
         <p className="text-xs text-stone-500">Hidden</p>
         {editing && item.hidden.length > 0 ? (

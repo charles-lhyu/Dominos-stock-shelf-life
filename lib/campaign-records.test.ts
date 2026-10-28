@@ -521,4 +521,67 @@ describe("campaign library records", () => {
     assert.equal(readStoreName(parsed, "12345"), "Oxford Street");
     assert.equal(readStoreName(writeStoreName(parsed, "12345", " "), "12345"), "");
   });
+
+  it("migrates legacy flat store settings into store settings and campaign presets", () => {
+    const parsed = parseCampaignLibrary({
+      campaigns: [
+        {
+          issued: "2026-09-07",
+          validUntil: "2026-11-17",
+          title: "Campaign 5",
+          version: "5.1",
+          sourceUrl: "a.pdf",
+          savedAt: "t1",
+          pack: pack("2026-09-07", "2026-11-17"),
+        },
+      ],
+      storeNames: { "12345": "High Street" },
+      stores: {
+        "12345": {
+          "2026-09-07|2026-11-17": {
+            hidden: parseHiddenEntries(["Bacon"]),
+            preset,
+            compactDates: true,
+            showDayCounts: false,
+            compactList: true,
+          },
+        },
+      },
+    });
+    assert.equal(parsed.stores["12345"]?.settings.name, "High Street");
+    assert.equal(parsed.stores["12345"]?.settings.compactDates, true);
+    assert.equal(parsed.stores["12345"]?.settings.compactList, true);
+    const presetRow = parsed.stores["12345"]?.campaigns["2026-09-07|2026-11-17"];
+    assert.equal(presetRow?.title, "Campaign 5");
+    assert.equal(presetRow?.version, "5.1");
+    assert.deepEqual(presetRow?.hidden, parseHiddenEntries(["Bacon"]));
+    assert.equal((parsed as { storeNames?: unknown }).storeNames, undefined);
+  });
+
+  it("shares store date and list settings across campaign presets", () => {
+    let library = upsertCampaign(
+      emptyCampaignLibrary(),
+      pack("2026-09-07", "2026-11-17", "Campaign 5"),
+      "a.pdf",
+      "t1",
+    );
+    library = upsertCampaign(library, pack("2026-10-01", "2026-12-01", "Campaign 6"), "b.pdf", "t2");
+    library = writeStoreSettings(library, "12345", "2026-09-07", "2026-11-17", {
+      hidden: parseHiddenEntries(["Bacon"]),
+      preset,
+      compactDates: true,
+      compactList: true,
+    });
+    library = writeStoreSettings(library, "12345", "2026-10-01", "2026-12-01", {
+      hidden: [],
+      preset,
+      compactDates: false,
+      compactList: false,
+    });
+    const rows = listStoreCampaigns(library, "12345");
+    assert.equal(rows.length, 2);
+    assert.ok(rows.every((row) => row.compactDates === false && row.compactList === false));
+    assert.equal(rows[1]?.title, "Campaign 5");
+    assert.deepEqual(rows[1]?.hidden, parseHiddenEntries(["Bacon"]));
+  });
 });

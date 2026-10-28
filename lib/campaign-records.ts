@@ -19,15 +19,41 @@ function isSection(value: unknown): value is SectionId {
   return typeof value === "string" && SECTIONS.has(value as SectionId);
 }
 
-/** Hidden items, item-type preset, and date display for one store on one campaign. */
+/** Store-level display settings (shared across that store's campaign presets). */
+export type StoreSettings = {
+  name: string;
+  /** Short DD/MM/YY dates instead of the long form. */
+  compactDates: boolean;
+  /** Day and hour counts instead of use-by dates. */
+  showDayCounts: boolean;
+  /** Product list without storage and life tags. */
+  compactList: boolean;
+};
+
+/** One campaign preset saved under a store. */
+export type CampaignPreset = {
+  title: string;
+  issued: string;
+  validUntil: string;
+  version: string;
+  hidden: HiddenEntry[];
+  preset: ItemPreset;
+};
+
+export type StoreRecord = {
+  settings: StoreSettings;
+  campaigns: Record<string /* issued|validUntil */, CampaignPreset>;
+};
+
+/**
+ * Flat screen snapshot used by live sync / store-switch prompts.
+ * Dates and list come from the store; hidden and product defaults from the campaign preset.
+ */
 export type StoreCampaignSettings = {
   hidden: HiddenEntry[];
   preset: ItemPreset;
-  /** Short DD/MM/YY dates instead of the long form. */
   compactDates?: boolean;
-  /** Day and hour counts instead of use-by dates. */
   showDayCounts?: boolean;
-  /** Product list without storage and life tags. */
   compactList?: boolean;
 };
 
@@ -51,16 +77,22 @@ export type CampaignSummary = {
 };
 
 export type CampaignLibrary = {
+  /** Shared chart packs on this device (images stripped). */
   campaigns: CampaignRecord[];
-  stores: Record<string, Record<string, StoreCampaignSettings>>;
-  /** Display name for a store id on this device. */
-  storeNames: Record<string, string>;
+  stores: Record<string /* storeId */, StoreRecord>;
 };
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
+export const DEFAULT_STORE_SETTINGS: StoreSettings = {
+  name: "",
+  compactDates: false,
+  showDayCounts: false,
+  compactList: false,
+};
+
 export function emptyCampaignLibrary(): CampaignLibrary {
-  return { campaigns: [], stores: {}, storeNames: {} };
+  return { campaigns: [], stores: {} };
 }
 
 const STORE_NAME_LIMIT = 48;
@@ -70,9 +102,22 @@ export function normalizeStoreName(raw: string): string {
   return raw.replace(/\s+/g, " ").trim().slice(0, STORE_NAME_LIMIT);
 }
 
+function emptyStoreRecord(): StoreRecord {
+  return { settings: { ...DEFAULT_STORE_SETTINGS }, campaigns: {} };
+}
+
+function sameStoreSettings(a: StoreSettings, b: StoreSettings): boolean {
+  return (
+    a.name === b.name &&
+    a.compactDates === b.compactDates &&
+    a.showDayCounts === b.showDayCounts &&
+    a.compactList === b.compactList
+  );
+}
+
 export function readStoreName(library: CampaignLibrary, storeId: string): string {
   if (!/^\d{1,8}$/.test(storeId)) return "";
-  return library.storeNames[storeId] ?? "";
+  return library.stores[storeId]?.settings.name ?? "";
 }
 
 export function writeStoreName(
@@ -82,12 +127,51 @@ export function writeStoreName(
 ): CampaignLibrary {
   if (!/^\d{1,8}$/.test(storeId)) return library;
   const next = normalizeStoreName(name);
-  const current = library.storeNames[storeId] ?? "";
-  if (current === next) return library;
-  const storeNames = { ...library.storeNames };
-  if (next) storeNames[storeId] = next;
-  else delete storeNames[storeId];
-  return { ...library, storeNames };
+  const store = library.stores[storeId] ?? emptyStoreRecord();
+  if (store.settings.name === next) return library;
+  return {
+    ...library,
+    stores: {
+      ...library.stores,
+      [storeId]: {
+        ...store,
+        settings: { ...store.settings, name: next },
+      },
+    },
+  };
+}
+
+export function readStoreSettingsRecord(
+  library: CampaignLibrary,
+  storeId: string,
+): StoreSettings | null {
+  if (!/^\d{1,8}$/.test(storeId)) return null;
+  const store = library.stores[storeId];
+  if (!store) return null;
+  return { ...store.settings };
+}
+
+export function writeStoreSettingsRecord(
+  library: CampaignLibrary,
+  storeId: string,
+  settings: StoreSettings,
+): CampaignLibrary {
+  if (!/^\d{1,8}$/.test(storeId)) return library;
+  const store = library.stores[storeId] ?? emptyStoreRecord();
+  const next: StoreSettings = {
+    name: normalizeStoreName(settings.name),
+    compactDates: settings.compactDates === true,
+    showDayCounts: settings.showDayCounts === true,
+    compactList: settings.compactList === true,
+  };
+  if (sameStoreSettings(store.settings, next)) return library;
+  return {
+    ...library,
+    stores: {
+      ...library.stores,
+      [storeId]: { ...store, settings: next },
+    },
+  };
 }
 
 /** Campaign identity is the issued date plus the valid-until date. */
@@ -148,8 +232,10 @@ function dateDisplayFlags(value: {
   };
 }
 
-function parseSettings(value: unknown): StoreCampaignSettings | null {
+function parseLegacyFlatSettings(value: unknown): StoreCampaignSettings | null {
   if (!isRecord(value)) return null;
+  // New store record has settings + campaigns — not a flat settings blob.
+  if (isRecord(value.settings) || isRecord(value.campaigns)) return null;
   return {
     hidden: parseHiddenEntries(value.hidden),
     preset: normalizeItemPreset(value.preset),
@@ -157,50 +243,147 @@ function parseSettings(value: unknown): StoreCampaignSettings | null {
   };
 }
 
+function parseStoreSettings(value: unknown, fallbackName = ""): StoreSettings {
+  if (!isRecord(value)) {
+    return { ...DEFAULT_STORE_SETTINGS, name: normalizeStoreName(fallbackName) };
+  }
+  return {
+    name: normalizeStoreName(
+      typeof value.name === "string" ? value.name : fallbackName,
+    ),
+    ...dateDisplayFlags(value),
+  };
+}
+
+function parseCampaignPreset(
+  value: unknown,
+  key: string,
+  chart: CampaignRecord | undefined,
+): CampaignPreset | null {
+  if (!isRecord(value)) return null;
+  const [issued = "", validUntil = ""] = key.split("|");
+  if (campaignKey(issued, validUntil) !== key) return null;
+  return {
+    title:
+      typeof value.title === "string" && value.title.trim()
+        ? value.title.trim()
+        : chart?.title || "Shelf life chart",
+    issued,
+    validUntil,
+    version:
+      typeof value.version === "string" && value.version.trim()
+        ? value.version.trim()
+        : chart?.version || "",
+    hidden: parseHiddenEntries(value.hidden),
+    preset: normalizeItemPreset(value.preset),
+  };
+}
+
+function isNewStoreRecord(value: unknown): value is Record<string, unknown> {
+  return isRecord(value) && (isRecord(value.settings) || isRecord(value.campaigns));
+}
+
 export function parseCampaignLibrary(value: unknown): CampaignLibrary {
   if (!isRecord(value)) return emptyCampaignLibrary();
   const byKey = new Map<string, CampaignRecord>();
-  if (Array.isArray(value.campaigns)) {
-    for (const item of value.campaigns) {
-      if (!isRecord(item)) continue;
-      const pack = parsePack(item.pack);
-      if (!pack) continue;
-      const key = campaignKey(pack.chart.issued, pack.chart.validUntil);
-      if (!key) continue;
-      byKey.set(key, {
-        issued: pack.chart.issued,
-        validUntil: pack.chart.validUntil,
-        title: typeof item.title === "string" ? item.title : pack.chart.title,
-        version: typeof item.version === "string" ? item.version : pack.chart.version,
-        sourceUrl: typeof item.sourceUrl === "string" ? item.sourceUrl : "",
-        savedAt: typeof item.savedAt === "string" ? item.savedAt : "",
-        pack,
-      });
-    }
+  const chartSource = Array.isArray(value.campaigns)
+    ? value.campaigns
+    : Array.isArray(value.charts)
+      ? value.charts
+      : [];
+  for (const item of chartSource) {
+    if (!isRecord(item)) continue;
+    const pack = parsePack(item.pack);
+    if (!pack) continue;
+    const key = campaignKey(pack.chart.issued, pack.chart.validUntil);
+    if (!key) continue;
+    byKey.set(key, {
+      issued: pack.chart.issued,
+      validUntil: pack.chart.validUntil,
+      title: typeof item.title === "string" ? item.title : pack.chart.title,
+      version: typeof item.version === "string" ? item.version : pack.chart.version,
+      sourceUrl: typeof item.sourceUrl === "string" ? item.sourceUrl : "",
+      savedAt: typeof item.savedAt === "string" ? item.savedAt : "",
+      pack,
+    });
   }
-  const stores: CampaignLibrary["stores"] = {};
-  if (isRecord(value.stores)) {
-    for (const [storeId, byCampaign] of Object.entries(value.stores)) {
-      if (!/^\d{1,8}$/.test(storeId) || !isRecord(byCampaign)) continue;
-      const next: Record<string, StoreCampaignSettings> = {};
-      for (const [key, settings] of Object.entries(byCampaign)) {
-        const parsed = parseSettings(settings);
-        const [issued = "", validUntil = ""] = key.split("|");
-        if (!parsed || campaignKey(issued, validUntil) !== key) continue;
-        next[key] = parsed;
-      }
-      if (Object.keys(next).length > 0) stores[storeId] = next;
-    }
-  }
-  const storeNames: Record<string, string> = {};
+
+  const legacyNames: Record<string, string> = {};
   if (isRecord(value.storeNames)) {
     for (const [storeId, name] of Object.entries(value.storeNames)) {
       if (typeof name !== "string") continue;
       const next = normalizeStoreName(name);
-      if (/^\d{1,8}$/.test(storeId) && next) storeNames[storeId] = next;
+      if (/^\d{1,8}$/.test(storeId) && next) legacyNames[storeId] = next;
     }
   }
-  return { campaigns: [...byKey.values()], stores, storeNames };
+
+  const stores: CampaignLibrary["stores"] = {};
+  if (isRecord(value.stores)) {
+    for (const [storeId, rawStore] of Object.entries(value.stores)) {
+      if (!/^\d{1,8}$/.test(storeId) || !isRecord(rawStore)) continue;
+
+      if (isNewStoreRecord(rawStore)) {
+        const settings = parseStoreSettings(rawStore.settings, legacyNames[storeId] ?? "");
+        const campaigns: Record<string, CampaignPreset> = {};
+        if (isRecord(rawStore.campaigns)) {
+          for (const [key, rawPreset] of Object.entries(rawStore.campaigns)) {
+            const preset = parseCampaignPreset(rawPreset, key, byKey.get(key));
+            if (preset) campaigns[key] = preset;
+          }
+        }
+        if (settings.name || Object.keys(campaigns).length > 0) {
+          stores[storeId] = { settings, campaigns };
+        }
+        continue;
+      }
+
+      // Legacy: stores[id][issued|validUntil] = flat settings
+      const campaigns: Record<string, CampaignPreset> = {};
+      let lifted: StoreSettings | null = null;
+      for (const [key, rawSettings] of Object.entries(rawStore)) {
+        const flat = parseLegacyFlatSettings(rawSettings);
+        if (!flat) continue;
+        const preset = parseCampaignPreset(
+          {
+            hidden: flat.hidden,
+            preset: flat.preset,
+          },
+          key,
+          byKey.get(key),
+        );
+        if (!preset) continue;
+        campaigns[key] = preset;
+        if (!lifted) {
+          lifted = {
+            name: legacyNames[storeId] ?? "",
+            compactDates: flat.compactDates === true,
+            showDayCounts: flat.showDayCounts === true,
+            compactList: flat.compactList === true,
+          };
+        }
+      }
+      if (Object.keys(campaigns).length > 0 || legacyNames[storeId]) {
+        stores[storeId] = {
+          settings: lifted ?? {
+            ...DEFAULT_STORE_SETTINGS,
+            name: legacyNames[storeId] ?? "",
+          },
+          campaigns,
+        };
+      }
+    }
+  }
+
+  // Legacy storeNames with no campaigns yet still become store records.
+  for (const [storeId, name] of Object.entries(legacyNames)) {
+    if (stores[storeId]) continue;
+    stores[storeId] = {
+      settings: { ...DEFAULT_STORE_SETTINGS, name },
+      campaigns: {},
+    };
+  }
+
+  return { campaigns: [...byKey.values()], stores };
 }
 
 export function upsertCampaign(
@@ -241,6 +424,19 @@ export function upsertCampaign(
   };
 }
 
+function flattenStoreCampaign(
+  store: StoreRecord,
+  preset: CampaignPreset,
+): StoreCampaignSettings {
+  return {
+    hidden: preset.hidden,
+    preset: preset.preset,
+    compactDates: store.settings.compactDates,
+    showDayCounts: store.settings.showDayCounts,
+    compactList: store.settings.compactList,
+  };
+}
+
 export function readStoreSettings(
   library: CampaignLibrary,
   storeId: string,
@@ -249,7 +445,10 @@ export function readStoreSettings(
 ): StoreCampaignSettings | null {
   const key = campaignKey(issued, validUntil);
   if (!storeId || !key) return null;
-  return library.stores[storeId]?.[key] ?? null;
+  const store = library.stores[storeId];
+  const preset = store?.campaigns[key];
+  if (!store || !preset) return null;
+  return flattenStoreCampaign(store, preset);
 }
 
 export function writeStoreSettings(
@@ -261,30 +460,45 @@ export function writeStoreSettings(
 ): CampaignLibrary {
   const key = campaignKey(issued, validUntil);
   if (!storeId || !key) return library;
-  const nextSettings: StoreCampaignSettings = {
+  const chart = library.campaigns.find(
+    (item) => campaignKey(item.issued, item.validUntil) === key,
+  );
+  const store = library.stores[storeId] ?? emptyStoreRecord();
+  const prevPreset = store.campaigns[key];
+  const nextPreset: CampaignPreset = {
+    title: prevPreset?.title || chart?.title || "Shelf life chart",
+    issued,
+    validUntil,
+    version: prevPreset?.version || chart?.version || "",
     hidden: parseHiddenEntries(settings.hidden),
     preset: normalizeItemPreset(settings.preset),
-    ...dateDisplayFlags(settings),
   };
-  const prev = library.stores[storeId]?.[key];
+  const nextSettings: StoreSettings = {
+    name: store.settings.name,
+    compactDates: settings.compactDates === true,
+    showDayCounts: settings.showDayCounts === true,
+    compactList: settings.compactList === true,
+  };
   if (
-    prev &&
-    sameHidden(prev.hidden, nextSettings.hidden) &&
-    sameItemPreset(prev.preset, nextSettings.preset) &&
-    prev.compactDates === nextSettings.compactDates &&
-    prev.showDayCounts === nextSettings.showDayCounts &&
-    prev.compactList === nextSettings.compactList
+    prevPreset &&
+    sameHidden(prevPreset.hidden, nextPreset.hidden) &&
+    sameItemPreset(prevPreset.preset, nextPreset.preset) &&
+    prevPreset.title === nextPreset.title &&
+    prevPreset.version === nextPreset.version &&
+    sameStoreSettings(store.settings, nextSettings)
   ) {
     return library;
   }
   return {
     ...library,
-    campaigns: library.campaigns,
     stores: {
       ...library.stores,
       [storeId]: {
-        ...(library.stores[storeId] ?? {}),
-        [key]: nextSettings,
+        settings: nextSettings,
+        campaigns: {
+          ...store.campaigns,
+          [key]: nextPreset,
+        },
       },
     },
   };
@@ -550,6 +764,7 @@ export type StoreCampaignView = {
   issued: string;
   validUntil: string;
   title: string;
+  version: string;
   hidden: HiddenEntry[];
   preset: ItemPreset;
   compactDates: boolean;
@@ -559,32 +774,32 @@ export type StoreCampaignView = {
   rules: ShelfRule[];
 };
 
-/** Settings this store has saved, one row per campaign. */
+/** Campaign presets this store has saved, one row per campaign. */
 export function listStoreCampaigns(library: CampaignLibrary, storeId: string): StoreCampaignView[] {
   if (!storeId) return [];
-  const saved = library.stores[storeId];
-  if (!saved) return [];
-  const campaigns = new Map(
+  const store = library.stores[storeId];
+  if (!store) return [];
+  const charts = new Map(
     library.campaigns.map((item) => [campaignKey(item.issued, item.validUntil), item]),
   );
   const rows: StoreCampaignView[] = [];
-  for (const [key, settings] of Object.entries(saved)) {
-    const [issued = "", validUntil = ""] = key.split("|");
-    if (campaignKey(issued, validUntil) !== key) continue;
-    const campaign = campaigns.get(key);
-    const rules = campaign?.pack.rules ?? [];
+  for (const [key, preset] of Object.entries(store.campaigns)) {
+    if (campaignKey(preset.issued, preset.validUntil) !== key) continue;
+    const chart = charts.get(key);
+    const rules = chart?.pack.rules ?? [];
     rows.push({
-      issued,
-      validUntil,
-      title: campaign?.title || "Shelf life chart",
-      hidden: settings.hidden,
-      compactDates: settings.compactDates === true,
-      showDayCounts: settings.showDayCounts === true,
-      compactList: settings.compactList === true,
+      issued: preset.issued,
+      validUntil: preset.validUntil,
+      title: preset.title || chart?.title || "Shelf life chart",
+      version: preset.version || chart?.version || "",
+      hidden: preset.hidden,
+      compactDates: store.settings.compactDates,
+      showDayCounts: store.settings.showDayCounts,
+      compactList: store.settings.compactList,
       rules,
       preset: {
-        ...settings.preset,
-        defaults: retainProductDefaults(settings.preset.defaults, rules, settings.hidden),
+        ...preset.preset,
+        defaults: retainProductDefaults(preset.preset.defaults, rules, preset.hidden),
       },
     });
   }
