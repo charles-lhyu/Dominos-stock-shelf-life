@@ -1,6 +1,6 @@
 {
-  "version": "1.4.41",
+  "version": "1.4.42",
   "notes": [
-    "Show hidden sits above the date sort, and at the top right in compact mode"
+    "Compact list tags share one width and sit in front of item names"
   ]
 }

@@ -849,9 +849,6 @@ function ProductRow({
                 aria-hidden
               />
             ) : null}
-            <AutoScrollText className="w-0 min-w-0 flex-1 font-medium text-white">
-              {name}
-            </AutoScrollText>
             {compact ? (
               <CompactStorageTag
                 variants={variants}
@@ -859,6 +856,9 @@ function ProductRow({
                 onPreferredSection={(sectionId) => onProductDefault(name, sectionId, activeLife)}
               />
             ) : null}
+            <AutoScrollText className="w-0 min-w-0 flex-1 font-medium text-white">
+              {name}
+            </AutoScrollText>
           </div>
           <WhenDate
             when={preview.when}
@@ -935,6 +935,9 @@ function ProductRow({
   );
 }
 
+/** Fixed width so Frozen / Chilled / Ambient line up ahead of every name. */
+const COMPACT_TAG_WIDTH = "w-[4.75rem]";
+
 function CompactStorageTag({
   variants,
   active,
@@ -950,18 +953,19 @@ function CompactStorageTag({
     return (
       <span
         className={cn(
-          "inline-flex h-6 shrink-0 items-center rounded-md px-1.5 text-[0.6875rem] font-semibold uppercase tracking-wide ring-1",
+          "inline-flex h-6 shrink-0 items-center justify-center rounded-md px-1 text-[0.625rem] font-semibold uppercase tracking-wide ring-1",
+          COMPACT_TAG_WIDTH,
           tone,
         )}
       >
-        {active.tag}
+        <span className="truncate">{active.tag}</span>
       </span>
     );
   }
 
   return (
     <div
-      className="relative inline-flex h-6 shrink-0 items-center"
+      className={cn("relative inline-flex h-6 shrink-0 items-center", COMPACT_TAG_WIDTH)}
       onClick={(event) => event.stopPropagation()}
       onKeyDown={(event) => event.stopPropagation()}
     >
@@ -981,7 +985,7 @@ function CompactStorageTag({
           aria-label="Storage"
           size="sm"
           className={cn(
-            "h-6 max-w-[7.5rem] gap-0.5 rounded-md border-0 px-1.5 py-0 text-[0.6875rem] font-semibold uppercase tracking-wide shadow-none ring-1 focus-visible:ring-2 focus-visible:ring-white/30 data-[size=sm]:h-6 dark:border-0 [&_svg]:size-3 [&_svg]:text-current [&_svg]:opacity-80 [&_[data-slot=select-value]]:min-w-0 [&_[data-slot=select-value]]:truncate",
+            "h-6 w-full justify-center gap-0.5 rounded-md border-0 px-1 py-0 text-[0.625rem] font-semibold uppercase tracking-wide shadow-none ring-1 focus-visible:ring-2 focus-visible:ring-white/30 data-[size=sm]:h-6 dark:border-0 [&_svg]:size-3 [&_svg]:shrink-0 [&_svg]:text-current [&_svg]:opacity-80 [&_[data-slot=select-value]]:min-w-0 [&_[data-slot=select-value]]:flex-1 [&_[data-slot=select-value]]:truncate [&_[data-slot=select-value]]:text-center",
             tone,
           )}
         >
