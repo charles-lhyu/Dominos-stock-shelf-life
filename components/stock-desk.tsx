@@ -25,6 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { dismissTopDialog, hasOpenDialog, nextBackAction } from "@/lib/back-button";
 import { captureActiveCampaign } from "@/lib/campaign-library";
 import { formatAppVersion } from "@/lib/changelog";
 import {
@@ -83,6 +84,7 @@ import {
 import { rulesForName, searchNames, shouldExpand } from "@/lib/search";
 import type { SectionId, ShelfRule } from "@/lib/types";
 import { cn } from "cn";
+import { toast } from "sonner";
 
 /** Warn when delivery/prep is further than this many days from today. */
 const FAR_DATE_DAYS = 14;
@@ -180,6 +182,12 @@ export function StockDesk() {
   const setHeaderModeRef = useRef<(collapsed: boolean) => void>(() => {});
   /** List place to restore when clearing a product opened from the chart. */
   const savedListScrollRef = useRef(0);
+  const backRef = useRef({
+    settingsOpen: false,
+    itemOpen: false,
+    closeSettings: () => {},
+    leaveItem: () => {},
+  });
   const savedListCollapsedRef = useRef(false);
   /** Set inside choose() so the next layout scrolls that product to the top once. */
   const showItemFromTopRef = useRef(false);
@@ -522,6 +530,67 @@ export function StockDesk() {
       });
     });
   }
+
+  backRef.current = {
+    settingsOpen,
+    itemOpen: Boolean(query.trim()),
+    closeSettings: () => setSettingsOpenSafe(false),
+    leaveItem: clearSearch,
+  };
+
+  useEffect(() => {
+    const EXIT_MS = 2000;
+    let exitArmed = false;
+    let exitTimer = 0;
+    let exiting = false;
+
+    function stay() {
+      window.clearTimeout(exitTimer);
+      exitArmed = false;
+      history.pushState({ shelfBack: 1 }, "");
+    }
+
+    function onPopState() {
+      if (exiting) return;
+      const current = backRef.current;
+      const action = nextBackAction({
+        dialogOpen: current.settingsOpen || hasOpenDialog(),
+        itemOpen: current.itemOpen,
+        exitArmed,
+      });
+      if (action === "close-dialog") {
+        if (!dismissTopDialog()) current.closeSettings();
+        stay();
+        return;
+      }
+      if (action === "leave-item") {
+        current.leaveItem();
+        stay();
+        return;
+      }
+      if (action === "arm-exit") {
+        exitArmed = true;
+        toast("Press back again to close", { id: "back-exit", duration: EXIT_MS });
+        history.pushState({ shelfBack: 1 }, "");
+        window.clearTimeout(exitTimer);
+        exitTimer = window.setTimeout(() => {
+          exitArmed = false;
+        }, EXIT_MS);
+        return;
+      }
+      exiting = true;
+      window.setTimeout(() => history.back(), 0);
+    }
+
+    window.addEventListener("popstate", onPopState);
+    if (!history.state || (history.state as { shelfBack?: number }).shelfBack !== 1) {
+      history.pushState({ shelfBack: 1 }, "");
+    }
+    return () => {
+      window.removeEventListener("popstate", onPopState);
+      window.clearTimeout(exitTimer);
+    };
+  }, []);
 
   function goToTop() {
     const scroller = mainRef.current;
