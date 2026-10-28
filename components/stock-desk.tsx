@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, typ
 import {
   ArrowLeft,
   ArrowUp,
+  Clock3,
   List,
   RefreshCw,
   Search,
@@ -43,6 +44,11 @@ import {
   parseIsoDate,
   toIsoDate,
 } from "@/lib/dates";
+import {
+  readDebugDays,
+  subscribeDebug,
+  writeDebugDays,
+} from "@/lib/debug-store";
 import {
   getDeskState,
   hydrateDeskStore,
@@ -200,6 +206,10 @@ export function StockDesk() {
   /** Keep FABs unmounted until Settings finish closing so they don't jump. */
   const [overlayButtonsReady, setOverlayButtonsReady] = useState(true);
   const overlayButtonsTimerRef = useRef(0);
+  const debugDays = useSyncExternalStore(subscribeDebug, readDebugDays, () => false);
+  /** Stay visible for a short while after days/hours mode is turned off. */
+  const [debugDaysToggleVisible, setDebugDaysToggleVisible] = useState(false);
+  const debugDaysHideTimerRef = useRef(0);
   const [searchFocused, setSearchFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const shellRef = useRef<HTMLDivElement>(null);
@@ -269,6 +279,19 @@ export function StockDesk() {
     captureActiveCampaign();
     setToday(new Date());
   }, []);
+
+  useEffect(() => {
+    window.clearTimeout(debugDaysHideTimerRef.current);
+    if (debugDays) {
+      setDebugDaysToggleVisible(true);
+      return;
+    }
+    if (!debugDaysToggleVisible) return;
+    debugDaysHideTimerRef.current = window.setTimeout(() => {
+      setDebugDaysToggleVisible(false);
+    }, 15_000);
+    return () => window.clearTimeout(debugDaysHideTimerRef.current);
+  }, [debugDays, debugDaysToggleVisible]);
 
   useEffect(() => subscribeAppUpdateAvailable(setAppUpdate), []);
 
@@ -725,16 +748,41 @@ export function StockDesk() {
               <span className="shrink-0 font-mono text-xs text-stone-400">{storeId}</span>
             ) : null}
           </button>
-          <ImportChartButton
-            desk={desk}
-            open={settingsOpen}
-            onOpenChange={setSettingsOpenSafe}
-            onOpenProduct={(name) => {
-              setSettingsOpenSafe(false);
-              choose(name);
-            }}
-            compact
-          />
+          <div className="flex shrink-0 items-center gap-1.5">
+            {debugDaysToggleVisible ? (
+              <button
+                type="button"
+                role="switch"
+                aria-checked={debugDays}
+                aria-label="Show days and hours instead of dates"
+                title={
+                  debugDays
+                    ? "Days/hours on — tap to show dates"
+                    : "Days/hours off — tap to show days/hours"
+                }
+                onClick={() => writeDebugDays(!debugDays)}
+                className={cn(
+                  "inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-[0.65rem] font-semibold uppercase tracking-wide ring-1 transition-colors",
+                  debugDays
+                    ? "bg-sky-500/20 text-sky-100 ring-sky-300/50"
+                    : "bg-white/10 text-stone-300 ring-white/25",
+                )}
+              >
+                <Clock3 className="size-3.5 shrink-0" aria-hidden />
+                {debugDays ? "Days" : "Dates"}
+              </button>
+            ) : null}
+            <ImportChartButton
+              desk={desk}
+              open={settingsOpen}
+              onOpenChange={setSettingsOpenSafe}
+              onOpenProduct={(name) => {
+                setSettingsOpenSafe(false);
+                choose(name);
+              }}
+              compact
+            />
+          </div>
         </div>
         {appUpdateAvailable ? (
           <button
