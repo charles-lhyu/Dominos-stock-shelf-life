@@ -218,8 +218,6 @@ export function ImportChartButton({
   );
   const [changesOpen, setChangesOpen] = useState(false);
   const [changeChoices, setChangeChoices] = useState<string[]>([]);
-  const [otherStoredOpen, setOtherStoredOpen] = useState(false);
-  const [otherStoredKey, setOtherStoredKey] = useState<string | null>(null);
   const [storedEditing, setStoredEditing] = useState(false);
   const [storeNameDraft, setStoreNameDraft] = useState<{ storeId: string; value: string } | null>(
     null,
@@ -388,8 +386,7 @@ export function ImportChartButton({
       setChangeChoices([]);
       setStoreDraft(getStoreId());
       setStoredEditing(false);
-    setStoreNameDraft(null);
-      setOtherStoredOpen(false);
+      setStoreNameDraft(null);
       setStoreMenuOpen(false);
       setStoreMenuAll(false);
     }
@@ -663,13 +660,6 @@ export function ImportChartButton({
     ? deviceStored.filter((item) => item.storeId === previewStoreId)
     : [];
   const storeMenuVisible = storeMenuOpen && menuStoreIds.length > 0;
-  const otherStored = deviceStored.filter(
-    (item) => item.storeId !== (previewStoreId ?? storeId),
-  );
-  const selectedOther =
-    otherStored.find((item) => deviceStoredKey(item) === otherStoredKey) ??
-    otherStored[0] ??
-    null;
   const storeChanges =
     storePrompt && desk.imported
       ? listStoreSettingChanges(
@@ -1213,17 +1203,6 @@ export function ImportChartButton({
                 <StoreNameField
                   value={nameFor(previewStoreId ?? storeId)}
                   onChange={(value) => changeStoreName(previewStoreId ?? storeId, value)}
-                />
-              ) : null}
-              {otherStored.length > 0 ? (
-                <OtherStoredSelect
-                  records={otherStored}
-                  names={storeNames}
-                  value={otherStoredOpen ? otherStoredKey : null}
-                  onPick={(key) => {
-                    setOtherStoredKey(key);
-                    setOtherStoredOpen(true);
-                  }}
                 />
               ) : null}
               {!(previewStoreId ?? storeId) ? (
@@ -1965,107 +1944,6 @@ export function ImportChartButton({
           </div>
         </DialogContent>
       </Dialog>
-      <Dialog open={otherStoredOpen} onOpenChange={setOtherStoredOpen}>
-        <DialogContent
-          showCloseButton={false}
-          overlayClassName="z-[60] bg-black/50"
-          className="top-1/2! left-1/2! z-[60] flex h-[min(44rem,calc(100dvh-2.5rem))] max-h-[calc(100dvh-2.5rem)] w-[calc(100%-1.25rem)] max-w-lg -translate-x-1/2! -translate-y-1/2! flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-lg"
-        >
-          <DialogHeader className="shrink-0 space-y-2 border-b border-white/10 px-4 py-3 pr-14">
-            <DialogTitle className="font-display text-xl text-white">
-              Other stored data
-            </DialogTitle>
-            <DialogDescription className="text-sm text-stone-400">
-              Hidden items and product defaults saved for other stores on this device.
-            </DialogDescription>
-            <button
-              type="button"
-              className="absolute top-3 right-3 inline-flex size-10 items-center justify-center rounded-full bg-white/10 text-white"
-              aria-label="Close stored data"
-              onClick={() => setOtherStoredOpen(false)}
-            >
-              <X className="size-5" />
-            </button>
-          </DialogHeader>
-          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
-            <OtherStoredSelect
-              records={otherStored}
-              names={storeNames}
-              value={otherStoredKey}
-              onPick={setOtherStoredKey}
-            />
-            {selectedOther ? (
-              <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-3">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="truncate text-base font-medium text-white">
-                      {nameFor(selectedOther.storeId) || `Store ${selectedOther.storeId}`}
-                    </p>
-                    {nameFor(selectedOther.storeId) ? (
-                      <p className="text-xs text-stone-400">Store {selectedOther.storeId}</p>
-                    ) : null}
-                  </div>
-                  <StoredEditButton editing={storedEditing} onToggle={toggleStoredEditing} />
-                </div>
-                {storedEditing ? (
-                  <StoreNameField
-                    value={nameFor(selectedOther.storeId)}
-                    onChange={(value) => changeStoreName(selectedOther.storeId, value)}
-                  />
-                ) : null}
-                <p className="text-sm text-stone-200">{selectedOther.title}</p>
-                <p className="mt-0.5 text-xs text-stone-400">
-                  Issued {formatShortDate(selectedOther.issued)} · Valid until{" "}
-                  {formatShortDate(selectedOther.validUntil)}
-                </p>
-                <StoredCampaignDetails
-                  item={selectedOther}
-                  editing={storedEditing}
-                  onOpenHidden={(name) =>
-                    openStoredProduct(
-                      name,
-                      selectedOther.issued,
-                      selectedOther.validUntil,
-                    )
-                  }
-                  onRemoveHidden={(name) =>
-                    forgetSavedHidden(
-                      selectedOther.storeId,
-                      selectedOther.issued,
-                      selectedOther.validUntil,
-                      name,
-                    )
-                  }
-                  onRemoveDefault={(name) =>
-                    forgetSavedDefault(
-                      selectedOther.storeId,
-                      selectedOther.issued,
-                      selectedOther.validUntil,
-                      name,
-                    )
-                  }
-                  onRemoveAllHidden={() =>
-                    clearSavedHidden(
-                      selectedOther.storeId,
-                      selectedOther.issued,
-                      selectedOther.validUntil,
-                    )
-                  }
-                  onRemoveAllDefaults={() =>
-                    clearSavedDefaults(
-                      selectedOther.storeId,
-                      selectedOther.issued,
-                      selectedOther.validUntil,
-                    )
-                  }
-                />
-              </div>
-            ) : (
-              <p className="text-sm text-stone-500">Nothing else is saved on this device.</p>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
     </Dialog>
 
     <Dialog open={confirmReset} onOpenChange={setConfirmReset}>
@@ -2183,83 +2061,6 @@ function StoreNameField({
         className="h-11 rounded-xl border-white/10 bg-black/30 text-base text-white placeholder:text-stone-500"
       />
     </label>
-  );
-}
-
-function deviceStoredKey(item: { storeId: string; issued: string; validUntil: string }) {
-  return `${item.storeId}|${item.issued}|${item.validUntil}`;
-}
-
-function otherStoredOptionLabel(
-  item: {
-    storeId: string;
-    title: string;
-  },
-  name: string,
-) {
-  const who = name ? `${name} · ${item.storeId}` : `Store ${item.storeId}`;
-  return `${who} · ${item.title || "Shelf life chart"}`;
-}
-
-function OtherStoredSelect({
-  records,
-  names,
-  value,
-  onPick,
-}: {
-  records: {
-    storeId: string;
-    title: string;
-    issued: string;
-    validUntil: string;
-  }[];
-  names: Record<string, string>;
-  value: string | null;
-  onPick: (key: string) => void;
-}) {
-  const items = Object.fromEntries(
-    records.map((item) => [
-      deviceStoredKey(item),
-      otherStoredOptionLabel(item, names[item.storeId] ?? ""),
-    ]),
-  );
-  return (
-    <Select
-      value={value}
-      items={items}
-      onValueChange={(next) => {
-        if (typeof next === "string") onPick(next);
-      }}
-    >
-      <SelectTrigger
-        aria-label="Other stored data"
-        className="h-11 w-full justify-between rounded-xl border-white/10 bg-black/30 px-3 text-sm text-white hover:bg-white/[0.06] dark:bg-black/30 dark:hover:bg-white/[0.06]"
-      >
-        <SelectValue placeholder="Other stored data" />
-      </SelectTrigger>
-      <SelectContent
-        align="start"
-        className="max-h-72 min-w-(--anchor-width) max-w-[calc(100vw-2rem)]"
-      >
-        {records.map((item) => {
-          const key = deviceStoredKey(item);
-          return (
-            <SelectItem
-              key={key}
-              value={key}
-              className="items-start py-2"
-              onClick={() => onPick(key)}
-            >
-              <span className="block truncate font-medium">Store {item.storeId}</span>
-              <span className="block truncate text-xs text-stone-400">
-                {item.title || "Shelf life chart"} · Issued {formatShortDate(item.issued)} ·
-                Valid until {formatShortDate(item.validUntil)}
-              </span>
-            </SelectItem>
-          );
-        })}
-      </SelectContent>
-    </Select>
   );
 }
 

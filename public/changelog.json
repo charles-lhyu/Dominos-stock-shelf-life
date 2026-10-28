@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.4.36",
+    "notes": [
+      "Stored data for other stores is opened from the store ID field"
+    ]
+  },
+  {
     "version": "1.4.35",
     "notes": [
       "Tap a hidden item to open its details",
