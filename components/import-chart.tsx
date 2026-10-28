@@ -158,10 +158,13 @@ export function ImportChartButton({
   desk,
   open: openProp,
   onOpenChange,
+  compact = false,
 }: {
   desk: DeskState;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /** Smaller trigger for the always-visible store bar. */
+  compact?: boolean;
 }) {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const open = openProp ?? uncontrolledOpen;
@@ -608,12 +611,15 @@ export function ImportChartButton({
         render={
           <button
             type="button"
-            className="inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-white/10 text-white ring-1 ring-white/25"
+            className={cn(
+              "inline-flex shrink-0 items-center justify-center rounded-full bg-white/10 text-white ring-1 ring-white/25",
+              compact ? "size-8" : "size-11",
+            )}
             aria-label="Settings"
           />
         }
       >
-        <Settings className="size-5" />
+        <Settings className={compact ? "size-4" : "size-5"} />
       </DialogTrigger>
       <DialogContent
         className="relative flex h-[90dvh] max-h-[90dvh] w-[calc(100%-1.25rem)] max-w-md flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-md"

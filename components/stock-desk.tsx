@@ -57,7 +57,12 @@ import {
   setPresetSectionFilter,
   subscribeItemPreset,
 } from "@/lib/item-preset-store";
-import { hydrateStoreIdStore } from "@/lib/store-id-store";
+import {
+  getStoreId,
+  getStoreIdServer,
+  hydrateStoreIdStore,
+  subscribeStoreId,
+} from "@/lib/store-id-store";
 import {
   appVersionLabel,
   localAppVersion,
@@ -197,6 +202,14 @@ export function StockDesk() {
     subscribeHidden,
     getHiddenNames,
     getHiddenNamesServer,
+  );
+  const storeId = useSyncExternalStore(
+    subscribeStoreId,
+    () => {
+      hydrateStoreIdStore();
+      return getStoreId();
+    },
+    getStoreIdServer,
   );
   const hidden = new Set(hiddenNames);
   const visibleRules = rules.filter((rule) => !hidden.has(rule.name));
@@ -618,12 +631,38 @@ export function StockDesk() {
       className="relative mx-auto flex h-full min-h-0 w-full max-w-md min-w-0 flex-col overflow-hidden overscroll-none"
     >
       <header className="relative z-20 shrink-0 bg-[#0f1624] text-white after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-2 after:border-t after:border-red-500/30 after:bg-[#0f1624]">
+        <div className="flex min-w-0 items-center gap-2 border-b border-white/10 px-4 pt-[max(0.3rem,env(safe-area-inset-top))] pb-1">
+          <button
+            type="button"
+            onClick={() => setSettingsOpenSafe(true)}
+            className="flex min-w-0 flex-1 items-center gap-2 py-1 text-left"
+            aria-label={storeId ? `Store ${storeId}` : "Store ID not set"}
+          >
+            <span className="shrink-0 text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-stone-500">
+              Store
+            </span>
+            <span
+              className={cn(
+                "min-w-0 truncate font-mono text-sm font-medium",
+                storeId ? "text-white" : "text-stone-500",
+              )}
+            >
+              {storeId || "Not set"}
+            </span>
+          </button>
+          <ImportChartButton
+            desk={desk}
+            open={settingsOpen}
+            onOpenChange={setSettingsOpenSafe}
+            compact
+          />
+        </div>
         {appUpdateAvailable ? (
           <button
             type="button"
             disabled={updatingApp}
             onClick={openUpdateConfirm}
-            className="flex w-full items-center justify-center gap-2 bg-orange-500 px-4 pt-[max(0.55rem,env(safe-area-inset-top))] pb-2 text-sm font-semibold text-orange-950 transition-colors hover:bg-orange-400 active:bg-orange-600 disabled:opacity-70"
+            className="flex w-full items-center justify-center gap-2 bg-orange-500 px-4 py-2 text-sm font-semibold text-orange-950 transition-colors hover:bg-orange-400 active:bg-orange-600 disabled:opacity-70"
             aria-label={`${updateLabel} — tap to review and update`}
           >
             <RefreshCw
@@ -638,10 +677,7 @@ export function StockDesk() {
 
         <div
           className={cn(
-            "min-w-0 space-y-2 px-4 transition-[padding] duration-300",
-            appUpdateAvailable
-              ? "pt-2"
-              : "pt-[max(0.85rem,env(safe-area-inset-top))]",
+            "min-w-0 space-y-2 px-4 pt-2 transition-[padding] duration-300",
             headerCollapsed ? "pb-2" : "pb-3",
           )}
         >
@@ -707,26 +743,19 @@ export function StockDesk() {
                     </p>
                   ) : null}
                 </div>
-                <div className="flex shrink-0 flex-col items-center gap-1 pt-1">
-                  <div className="flex items-center gap-2">
-                    {chartExpired ? (
-                      <button
-                        type="button"
-                        onClick={() => setSettingsOpenSafe(true)}
-                        aria-label="Upload a new chart"
-                        title="Upload a new chart"
-                        tabIndex={headerCollapsed ? -1 : undefined}
-                        className="chart-update-pulse inline-flex size-11 shrink-0 items-center justify-center rounded-full"
-                      >
-                        <Upload className="size-5" aria-hidden />
-                      </button>
-                    ) : null}
-                    <ImportChartButton
-                      desk={desk}
-                      open={settingsOpen}
-                      onOpenChange={setSettingsOpenSafe}
-                    />
-                  </div>
+                <div className="flex shrink-0 flex-col items-end gap-1 pt-1">
+                  {chartExpired ? (
+                    <button
+                      type="button"
+                      onClick={() => setSettingsOpenSafe(true)}
+                      aria-label="Upload a new chart"
+                      title="Upload a new chart"
+                      tabIndex={headerCollapsed ? -1 : undefined}
+                      className="chart-update-pulse inline-flex size-11 shrink-0 items-center justify-center rounded-full"
+                    >
+                      <Upload className="size-5" aria-hidden />
+                    </button>
+                  ) : null}
                   <span className="font-mono text-sm tracking-wide text-stone-500">
                     {appVersionLabel()}
                   </span>
