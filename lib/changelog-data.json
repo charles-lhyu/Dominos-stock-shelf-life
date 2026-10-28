@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.4.20",
+    "notes": [
+      "Scrolling back to App in Settings returns the section chips to the start"
+    ]
+  },
+  {
     "version": "1.4.19",
     "notes": [
       "Category titles are bold",

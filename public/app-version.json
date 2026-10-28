@@ -1,11 +1,6 @@
 {
-  "version": "1.4.19",
+  "version": "1.4.20",
   "notes": [
-    "Category titles are bold",
-    "Sort buttons stay in place while the category title changes on scroll",
-    "A little more space between the divider and the category title",
-    "Collapsed search and date use the same gap as the space under the filters",
-    "A saved default is kept only for a product with more than one storage option",
-    "Hiding a product clears its default"
+    "Scrolling back to App in Settings returns the section chips to the start"
   ]
 }

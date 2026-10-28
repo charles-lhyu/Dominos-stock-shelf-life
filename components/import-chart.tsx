@@ -472,10 +472,18 @@ export function ImportChartButton({
 
   function syncNavCard(id: SettingsSectionId) {
     const nav = settingsNavRef.current;
-    const chip = nav?.querySelector<HTMLElement>(
+    if (!nav) return;
+    // App is the first chip. Centering it cannot scroll back to the start,
+    // and a smooth scroll still in flight from the section below leaves the row offset.
+    if (id === SETTINGS_SECTION_IDS[0]) {
+      if (nav.scrollLeft <= 1) return;
+      nav.scrollTo({ left: 0, behavior: "auto" });
+      return;
+    }
+    const chip = nav.querySelector<HTMLElement>(
       `button[data-settings-nav="${id}"]`,
     );
-    if (!nav || !chip) return;
+    if (!chip) return;
     const navRect = nav.getBoundingClientRect();
     const chipRect = chip.getBoundingClientRect();
     const delta =
