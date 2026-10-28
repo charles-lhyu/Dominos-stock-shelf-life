@@ -15,7 +15,12 @@ export function getCompactDateFormat() {
   return compact;
 }
 
-export function toggleCompactDateFormat() {
-  compact = !compact;
+export function setCompactDateFormat(next: boolean) {
+  if (compact === next) return;
+  compact = next;
   emit();
+}
+
+export function toggleCompactDateFormat() {
+  setCompactDateFormat(!compact);
 }

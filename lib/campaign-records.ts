@@ -7,10 +7,14 @@ import {
 } from "./item-preset-store";
 import type { ChartPack, ShelfRule } from "./types";
 
-/** Hidden items and item-type preset for one store on one campaign. */
+/** Hidden items, item-type preset, and date display for one store on one campaign. */
 export type StoreCampaignSettings = {
   hidden: string[];
   preset: ItemPreset;
+  /** Short DD/MM/YY dates instead of the long form. */
+  compactDates?: boolean;
+  /** Day and hour counts instead of use-by dates. */
+  showDayCounts?: boolean;
 };
 
 export type CampaignRecord = {
@@ -98,11 +102,19 @@ function parsePack(value: unknown): ChartPack | null {
   });
 }
 
+function dateDisplayFlags(value: { compactDates?: unknown; showDayCounts?: unknown }) {
+  return {
+    compactDates: value.compactDates === true,
+    showDayCounts: value.showDayCounts === true,
+  };
+}
+
 function parseSettings(value: unknown): StoreCampaignSettings | null {
   if (!isRecord(value)) return null;
   return {
     hidden: hiddenNames(value.hidden),
     preset: normalizeItemPreset(value.preset),
+    ...dateDisplayFlags(value),
   };
 }
 
@@ -204,12 +216,15 @@ export function writeStoreSettings(
   const nextSettings: StoreCampaignSettings = {
     hidden: hiddenNames(settings.hidden),
     preset: normalizeItemPreset(settings.preset),
+    ...dateDisplayFlags(settings),
   };
   const prev = library.stores[storeId]?.[key];
   if (
     prev &&
     sameHidden(prev.hidden, nextSettings.hidden) &&
-    sameItemPreset(prev.preset, nextSettings.preset)
+    sameItemPreset(prev.preset, nextSettings.preset) &&
+    prev.compactDates === nextSettings.compactDates &&
+    prev.showDayCounts === nextSettings.showDayCounts
   ) {
     return library;
   }
@@ -258,6 +273,8 @@ export function dropAllStoredDefaults(settings: StoreCampaignSettings): StoreCam
 const EMPTY_SETTINGS: StoreCampaignSettings = {
   hidden: [],
   preset: DEFAULT_ITEM_PRESET,
+  compactDates: false,
+  showDayCounts: false,
 };
 
 /**
@@ -323,6 +340,8 @@ export type StoreCampaignView = {
   title: string;
   hidden: string[];
   preset: ItemPreset;
+  compactDates: boolean;
+  showDayCounts: boolean;
 };
 
 /** Settings this store has saved, one row per campaign. */
@@ -343,6 +362,8 @@ export function listStoreCampaigns(library: CampaignLibrary, storeId: string): S
       validUntil,
       title: campaign?.title || "Shelf life chart",
       hidden: settings.hidden,
+      compactDates: settings.compactDates === true,
+      showDayCounts: settings.showDayCounts === true,
       preset: {
         ...settings.preset,
         defaults: retainProductDefaults(

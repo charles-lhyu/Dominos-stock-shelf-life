@@ -66,6 +66,7 @@ import {
 import { CHANGELOG } from "@/lib/changelog";
 import { parseChartPack } from "@/lib/chart-pack";
 import { formatCompactDate, formatLongDate, formatShortDate } from "@/lib/dates";
+import { getCompactDateFormat } from "@/lib/date-format-store";
 import {
   readDebug,
   readDebugDays,
@@ -202,8 +203,6 @@ export function ImportChartButton({
   const [otherStoredKey, setOtherStoredKey] = useState<string | null>(null);
   const [storedEditing, setStoredEditing] = useState(false);
   const storePromptRef = useRef<string | null>(null);
-  const settingsOpenRef = useRef(false);
-  const storeCommitTimer = useRef<number | null>(null);
   const [activeSettingsSection, setActiveSettingsSection] =
     useState<SettingsSectionId>("settings-app");
   const [settingsEndPad, setSettingsEndPad] = useState(0);
@@ -293,8 +292,6 @@ export function ImportChartButton({
     listStoredOnDeviceServer,
   );
 
-  settingsOpenRef.current = open;
-
   useEffect(() => () => stopScan(), []);
 
   useEffect(() => {
@@ -311,14 +308,7 @@ export function ImportChartButton({
   }, [open]);
 
   function handleOpenChange(next: boolean) {
-    // The store-id confirm opens from the field blur during the same tap.
-    // That tap would otherwise dismiss Settings before the confirm can show.
     if (!next && storePromptRef.current) return;
-    settingsOpenRef.current = next;
-    if (!next && storeCommitTimer.current != null) {
-      window.clearTimeout(storeCommitTimer.current);
-      storeCommitTimer.current = null;
-    }
     if (next) {
       hydrateStoreIdStore();
       setStoreDraft(getStoreId());
@@ -394,25 +384,21 @@ export function ImportChartButton({
       desk.pack.chart.validUntil,
     );
     const screenHas =
-      getHiddenNames().length > 0 || Object.keys(getItemPreset().defaults).length > 0;
-    if (!screenHas && !saved) {
+      getHiddenNames().length > 0 ||
+      Object.keys(getItemPreset().defaults).length > 0 ||
+      getCompactDateFormat() ||
+      readDebugDays();
+    if (saved) {
+      applyStoreChange(previous, next, false);
+      return;
+    }
+    if (!screenHas) {
       applyStoreChange(previous, next);
       return;
     }
     storePromptRef.current = next;
     setStoreDraft(next);
-    setStorePrompt({ next, hasSaved: saved != null });
-  }
-
-  function scheduleStoreCommit() {
-    if (storeCommitTimer.current != null) {
-      window.clearTimeout(storeCommitTimer.current);
-    }
-    storeCommitTimer.current = window.setTimeout(() => {
-      storeCommitTimer.current = null;
-      if (!settingsOpenRef.current) return;
-      commitStoreDraft();
-    }, 0);
+    setStorePrompt({ next, hasSaved: false });
   }
 
   function resetChart() {
@@ -575,6 +561,10 @@ export function ImportChartButton({
     settingsNav.map((item) => [item.id, item.label]),
   );
   const otherStored = deviceStored.filter((item) => item.storeId !== storeId);
+  const storedStoreIds = [...new Set(deviceStored.map((item) => item.storeId))];
+  const draftStoreId = normalizeStoreId(storeDraft);
+  const loadedStoreId =
+    draftStoreId && storedStoreIds.includes(draftStoreId) ? draftStoreId : null;
   const selectedOther =
     otherStored.find((item) => deviceStoredKey(item) === otherStoredKey) ??
     otherStored[0] ??
@@ -938,7 +928,6 @@ export function ImportChartButton({
                     setStoreDraft(event.target.value);
                     if (storeIdError) setStoreIdError(null);
                   }}
-                  onBlur={scheduleStoreCommit}
                   onKeyDown={(event) => {
                     if (event.key === "Enter") {
                       event.preventDefault();
@@ -953,15 +942,40 @@ export function ImportChartButton({
                   disabled={normalizeStoreId(storeDraft) === storeId || storePrompt != null}
                   onClick={commitStoreDraft}
                 >
-                  Save
+                  Confirm
                 </Button>
               </div>
+              {storedStoreIds.length > 0 ? (
+                <Select
+                  value={loadedStoreId}
+                  items={Object.fromEntries(storedStoreIds.map((id) => [id, `Store ${id}`]))}
+                  onValueChange={(value) => {
+                    if (typeof value !== "string") return;
+                    setStoreDraft(value);
+                    setStoreIdError(null);
+                  }}
+                >
+                  <SelectTrigger
+                    aria-label="Load stored store"
+                    className="h-11 w-full justify-between rounded-xl border-white/10 bg-black/30 px-3 text-sm text-white hover:bg-white/[0.06] dark:bg-black/30 dark:hover:bg-white/[0.06]"
+                  >
+                    <SelectValue placeholder="Load stored store" />
+                  </SelectTrigger>
+                  <SelectContent align="start" className="min-w-(--anchor-width)">
+                    {storedStoreIds.map((id) => (
+                      <SelectItem key={id} value={id}>
+                        Store {id}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : null}
               <p className={cn("text-xs", storeIdError ? "text-red-300" : "text-stone-500")}>
                 {storeIdError
                   ? storeIdError
                   : storeId
-                    ? `Store ${storeId}. A new store ID asks whether to keep hidden items and product defaults.`
-                    : "Number for this store. A new ID asks whether to keep hidden items and product defaults."}
+                    ? `Store ${storeId}. Confirm loads the date display, hidden items, and product defaults saved for a store on this device.`
+                    : "Number for this store. Load a stored store, then confirm."}
               </p>
             </div>
             <div className="space-y-2 border-t border-white/10 pt-3">
@@ -1917,7 +1931,12 @@ function StoredCampaignDetails({
   onRemoveAllHidden,
   onRemoveAllDefaults,
 }: {
-  item: { hidden: string[]; preset: ItemPreset };
+  item: {
+    hidden: string[];
+    preset: ItemPreset;
+    compactDates?: boolean;
+    showDayCounts?: boolean;
+  };
   editing: boolean;
   onRemoveHidden: (name: string) => void;
   onRemoveDefault: (name: string) => void;
@@ -1925,8 +1944,13 @@ function StoredCampaignDetails({
   onRemoveAllDefaults: () => void;
 }) {
   const defaults = productDefaultLines(item.preset);
+  const dateLabel = item.showDayCounts ? "Days and hours" : item.compactDates ? "Short" : "Full";
   return (
     <>
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <p className="text-xs text-stone-500">Dates</p>
+      </div>
+      <p className="px-2 text-sm text-stone-200">{dateLabel}</p>
       <div className="mt-2 flex items-center justify-between gap-2">
         <p className="text-xs text-stone-500">Hidden</p>
         {editing && item.hidden.length > 0 ? (

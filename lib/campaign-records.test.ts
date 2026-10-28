@@ -401,4 +401,41 @@ describe("campaign library records", () => {
     assert.equal(saved?.preset.defaults.Pepperoni?.section, "chilled");
     assert.equal(saved?.preset.defaults.Pepperoni?.life, "stock");
   });
+
+  it("stores short dates and day counts with the store and loads them back", () => {
+    let library = upsertCampaign(
+      emptyCampaignLibrary(),
+      pack("2026-09-07", "2026-11-17"),
+      "a.pdf",
+      "t1",
+    );
+    library = writeStoreSettings(library, "12345", "2026-09-07", "2026-11-17", {
+      hidden: ["Bacon"],
+      preset,
+      compactDates: true,
+      showDayCounts: true,
+    });
+    const saved = readStoreSettings(library, "12345", "2026-09-07", "2026-11-17");
+    assert.equal(saved?.compactDates, true);
+    assert.equal(saved?.showDayCounts, true);
+    const loaded = planStoreChange({
+      library,
+      previousStoreId: "99",
+      nextStoreId: "12345",
+      issued: "2026-09-07",
+      validUntil: "2026-11-17",
+      current: { hidden: [], preset },
+      keepCurrent: false,
+    });
+    assert.equal(loaded.restore?.compactDates, true);
+    assert.equal(loaded.restore?.showDayCounts, true);
+    const plain = readStoreSettings(
+      writeStoreSettings(library, "99", "2026-09-07", "2026-11-17", { hidden: [], preset }),
+      "99",
+      "2026-09-07",
+      "2026-11-17",
+    );
+    assert.equal(plain?.compactDates, false);
+    assert.equal(plain?.showDayCounts, false);
+  });
 });

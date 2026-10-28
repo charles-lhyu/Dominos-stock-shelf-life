@@ -39,6 +39,12 @@ import {
   subscribeItemPreset,
   type ItemPreset,
 } from "./item-preset-store";
+import {
+  getCompactDateFormat,
+  setCompactDateFormat,
+  subscribeDateFormat,
+} from "./date-format-store";
+import { readDebugDays, subscribeDebug, writeDebugDays } from "./debug-store";
 import { getStoreId, hydrateStoreIdStore, subscribeStoreId } from "./store-id-store";
 import type { ChartPack, ShelfRule } from "./types";
 
@@ -196,6 +202,8 @@ function keptSettings(
       ...settings.preset,
       defaults: retainProductDefaults(settings.preset.defaults, rules, settings.hidden),
     },
+    compactDates: settings.compactDates === true,
+    showDayCounts: settings.showDayCounts === true,
   };
 }
 
@@ -205,6 +213,8 @@ function currentSettings(): StoreCampaignSettings {
     {
       hidden: [...getHiddenNames()],
       preset: getItemPreset(),
+      compactDates: getCompactDateFormat(),
+      showDayCounts: readDebugDays(),
     },
     desk.pack.rules,
   );
@@ -251,6 +261,8 @@ function applySettings(settings: StoreCampaignSettings, rules: ShelfRule[]) {
   try {
     replaceHiddenNames(next.hidden);
     replaceItemPreset(next.preset);
+    setCompactDateFormat(next.compactDates === true);
+    writeDebugDays(next.showDayCounts === true);
   } finally {
     applying = false;
   }
@@ -266,12 +278,12 @@ function handleImportedPack(pack: ChartPack, sourceUrl: string) {
   applying = true;
   try {
     if (saved) {
-      const next = keptSettings(saved, pack.rules);
-      replaceHiddenNames(next.hidden);
-      replaceItemPreset(next.preset);
+      applySettings(saved, pack.rules);
     } else if (storeId && campaignKey(issued, validUntil)) {
       clearHiddenNames();
       resetItemPreset();
+      setCompactDateFormat(false);
+      writeDebugDays(false);
     } else {
       clearHiddenNames();
     }
@@ -303,7 +315,18 @@ export function captureActiveCampaign() {
   commitLibrary(upsertCampaign(library, desk.pack, desk.sourceUrl, new Date().toISOString()));
   const storeId = getStoreId();
   if (!storeId) return;
-  if (!readStoreSettings(library, storeId, issued, validUntil)) saveCurrent(storeId);
+  const saved = readStoreSettings(library, storeId, issued, validUntil);
+  if (!saved) {
+    saveCurrent(storeId);
+    return;
+  }
+  applying = true;
+  try {
+    setCompactDateFormat(saved.compactDates === true);
+    writeDebugDays(saved.showDayCounts === true);
+  } finally {
+    applying = false;
+  }
 }
 
 /**
@@ -353,3 +376,5 @@ subscribeHidden(() => {
   autosave();
 });
 subscribeItemPreset(autosave);
+subscribeDateFormat(autosave);
+subscribeDebug(autosave);
