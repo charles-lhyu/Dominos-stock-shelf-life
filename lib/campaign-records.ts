@@ -1,5 +1,6 @@
 import {
   normalizeItemPreset,
+  retainProductDefaults,
   sameItemPreset,
   type ItemPreset,
 } from "./item-preset-store";
@@ -288,12 +289,20 @@ export function listStoreCampaigns(library: CampaignLibrary, storeId: string): S
   for (const [key, settings] of Object.entries(saved)) {
     const [issued = "", validUntil = ""] = key.split("|");
     if (campaignKey(issued, validUntil) !== key) continue;
+    const campaign = campaigns.get(key);
     rows.push({
       issued,
       validUntil,
-      title: campaigns.get(key)?.title || "Shelf life chart",
+      title: campaign?.title || "Shelf life chart",
       hidden: settings.hidden,
-      preset: settings.preset,
+      preset: {
+        ...settings.preset,
+        defaults: retainProductDefaults(
+          settings.preset.defaults,
+          campaign?.pack.rules ?? [],
+          settings.hidden,
+        ),
+      },
     });
   }
   rows.sort((a, b) => {
