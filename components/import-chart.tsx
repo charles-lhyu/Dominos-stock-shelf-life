@@ -2727,21 +2727,63 @@ export function ImportChartButton({
                 return (
                   <>
                     <div className="relative shrink-0 space-y-2 border-b border-white/10 px-4 py-3 pr-14">
-                      <h2
-                        id="all-stored-title"
-                        className="font-display text-xl font-medium text-white"
-                      >
-                        {previewStore
-                          ? nameFor(previewStore.storeId) ||
-                            previewStore.name ||
-                            `Store ${previewStore.storeId}`
-                          : "All stored data"}
-                      </h2>
-                      <p className="text-sm text-stone-400">
-                        {previewStore
-                          ? "Preview this store's settings and campaign presets."
-                          : "Store settings saved on this device. Tap a card to preview."}
-                      </p>
+                      {previewStore ? (
+                        <div className="flex items-center gap-2 pr-1">
+                          <Select
+                            value={previewStore.storeId}
+                            items={storeSelectItems}
+                            onValueChange={(value) => {
+                              if (typeof value === "string" && value) {
+                                setAllStoredPreviewId(value);
+                                setStoreDraft(value);
+                              }
+                            }}
+                          >
+                            <SelectTrigger
+                              id="all-stored-title"
+                              aria-label="Preview store"
+                              className="h-auto min-w-0 flex-1 gap-1.5 rounded-lg border-0 bg-transparent px-0 py-0.5 text-left text-white shadow-none hover:bg-transparent focus-visible:border-transparent focus-visible:ring-0 dark:bg-transparent [&_svg]:size-4 [&_svg]:text-stone-400 [&_[data-slot=select-value]]:font-display [&_[data-slot=select-value]]:text-xl [&_[data-slot=select-value]]:font-medium [&_[data-slot=select-value]]:leading-tight"
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent
+                              align="start"
+                              alignItemWithTrigger={false}
+                              className="z-[120] max-w-[min(24rem,calc(100vw-2.5rem))] rounded-xl border-white/10 bg-popover p-1"
+                            >
+                              {deviceStoreSettings.map((store) => (
+                                <SelectItem
+                                  key={store.storeId}
+                                  value={store.storeId}
+                                >
+                                  {storeSelectItems[store.storeId]}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <button
+                            type="button"
+                            aria-label="Back to store list"
+                            onClick={() => setAllStoredPreviewId(null)}
+                            className="inline-flex h-9 shrink-0 items-center gap-1 rounded-lg px-2.5 text-xs font-semibold text-stone-200 ring-1 ring-white/15"
+                          >
+                            <X className="size-3.5" aria-hidden />
+                            Clear
+                          </button>
+                        </div>
+                      ) : (
+                        <h2
+                          id="all-stored-title"
+                          className="font-display text-xl font-medium text-white"
+                        >
+                          All stored data
+                        </h2>
+                      )}
+                      {!previewStore ? (
+                        <p className="text-sm text-stone-400">
+                          Store settings saved on this device. Tap a card to preview.
+                        </p>
+                      ) : null}
                       <div className="flex flex-wrap gap-2 pt-1">
                         <button
                           type="button"
@@ -2769,50 +2811,6 @@ export function ImportChartButton({
                           }}
                         />
                       </div>
-                      {previewStore ? (
-                        <div className="flex items-center gap-2 pt-1">
-                          <Select
-                            value={previewStore.storeId}
-                            items={storeSelectItems}
-                            onValueChange={(value) => {
-                              if (typeof value === "string" && value) {
-                                setAllStoredPreviewId(value);
-                                setStoreDraft(value);
-                              }
-                            }}
-                          >
-                            <SelectTrigger
-                              aria-label="Preview store"
-                              className="h-11 min-w-0 flex-1 rounded-xl border-white/10 bg-black/30 px-3 text-white hover:bg-black/40 focus-visible:border-white/20 focus-visible:ring-white/15 dark:bg-black/30 [&_svg]:text-stone-400"
-                            >
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent
-                              align="start"
-                              alignItemWithTrigger={false}
-                              className="z-[120] rounded-xl border-white/10 bg-popover p-1"
-                            >
-                              {deviceStoreSettings.map((store) => (
-                                <SelectItem
-                                  key={store.storeId}
-                                  value={store.storeId}
-                                >
-                                  {storeSelectItems[store.storeId]}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <button
-                            type="button"
-                            aria-label="Back to store list"
-                            onClick={() => setAllStoredPreviewId(null)}
-                            className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-xl px-3 text-xs font-semibold text-stone-200 ring-1 ring-white/15"
-                          >
-                            <X className="size-3.5" aria-hidden />
-                            Clear
-                          </button>
-                        </div>
-                      ) : null}
                       <button
                         type="button"
                         className="absolute top-3 right-3 inline-flex size-10 items-center justify-center rounded-full bg-white/10 text-white"
