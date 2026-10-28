@@ -678,7 +678,7 @@ export function StockDesk() {
         <div
           className={cn(
             "min-w-0 space-y-2 px-4 transition-[padding] duration-300",
-            headerCollapsed ? "pt-0 pb-2" : "pt-2 pb-3",
+            headerCollapsed ? "pt-2 pb-2" : "pt-2 pb-3",
           )}
         >
           <div
