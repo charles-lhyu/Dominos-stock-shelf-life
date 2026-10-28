@@ -1,5 +1,16 @@
 [
   {
+    "version": "1.4.18",
+    "notes": [
+      "A store ID keeps hidden items and product defaults with that store",
+      "Saved store data is listed under Settings → App",
+      "A slim bar shows the current store and Settings, including when the header is collapsed",
+      "Back closes Settings or the open item; press back again to leave the app",
+      "Hiding an item returns to the same place in the list",
+      "Opening an item starts at the top"
+    ]
+  },
+  {
     "version": "1.4.17",
     "notes": [
       "Delivery, prep, and ambient day lives count the date you enter as day 1",
