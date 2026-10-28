@@ -406,17 +406,13 @@ export function ImportChartButton({
       Object.keys(getItemPreset().defaults).length > 0 ||
       getCompactDateFormat() ||
       readDebugDays();
-    if (saved) {
-      applyStoreChange(previous, next, false);
-      return;
-    }
-    if (!screenHas) {
+    if (!screenHas && !saved) {
       applyStoreChange(previous, next);
       return;
     }
     storePromptRef.current = next;
     setStoreDraft(next);
-    setStorePrompt({ next, hasSaved: false });
+    setStorePrompt({ next, hasSaved: saved != null });
   }
 
   function resetChart() {

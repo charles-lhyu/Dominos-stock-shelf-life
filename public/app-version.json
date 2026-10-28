@@ -1,6 +1,6 @@
 {
-  "version": "1.4.29",
+  "version": "1.4.30",
   "notes": [
-    "Typing a store ID shows that store in the stored data area before you confirm"
+    "Confirm asks whether to keep the current settings or load the saved store"
   ]
 }
