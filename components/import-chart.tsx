@@ -1049,6 +1049,29 @@ export function ImportChartButton({
     setStoredConfirmOpen(false);
   }
 
+  function resetStoredEdit() {
+    setStoredDraft((draft) => {
+      if (!draft) return draft;
+      const campaigns: StoredEditDraft["campaigns"] = {};
+      for (const [key, campaign] of Object.entries(draft.campaigns)) {
+        campaigns[key] = {
+          ...campaign,
+          hidden: campaign.baselineHidden.map((entry) => ({ ...entry })),
+          defaults: copyDefaults(campaign.baselineDefaults),
+        };
+      }
+      return {
+        ...draft,
+        storeName: draft.baselineStoreName,
+        compactDates: draft.baselineCompactDates,
+        showDayCounts: draft.baselineShowDayCounts,
+        compactList: draft.baselineCompactList,
+        campaigns,
+      };
+    });
+    setStoredConfirmOpen(false);
+  }
+
   function commitStoredEdit() {
     const draft = storedDraft;
     if (!draft) {
@@ -1767,7 +1790,19 @@ export function ImportChartButton({
                   </button>
                 </div>
                 {previewStoreId ?? storeId ? (
-                  <StoredEditButton editing={storedEditing} onToggle={toggleStoredEditing} />
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    {storedEditing ? (
+                      <button
+                        type="button"
+                        disabled={storedEditChanges.length === 0}
+                        onClick={resetStoredEdit}
+                        className="rounded-lg px-2.5 py-1 text-xs font-semibold text-stone-200 ring-1 ring-white/15 disabled:opacity-40"
+                      >
+                        Reset
+                      </button>
+                    ) : null}
+                    <StoredEditButton editing={storedEditing} onToggle={toggleStoredEditing} />
+                  </div>
                 ) : null}
               </div>
               {previewStoreId ?? storeId ? (
