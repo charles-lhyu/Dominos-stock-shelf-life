@@ -33,6 +33,7 @@ import {
   listStoreNamesServer,
   subscribeCampaignLibrary,
 } from "@/lib/campaign-library";
+import { getCompactList, setCompactList, subscribeCompactList } from "@/lib/compact-list-store";
 import { formatAppVersion } from "@/lib/changelog";
 import {
   daysBetween,
@@ -174,7 +175,7 @@ export function StockDesk() {
   /** List only scrolls when collapsed and the header transition has settled. */
   const [listScrollable, setListScrollable] = useState(false);
   const [showGoTop, setShowGoTop] = useState(false);
-  const [compactList, setCompactList] = useState(false);
+  const compactList = useSyncExternalStore(subscribeCompactList, getCompactList, () => false);
   const lifeFilter =
     compactList && preset.lifeFilter === "all" ? "stock" : preset.lifeFilter;
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -501,10 +502,12 @@ export function StockDesk() {
     if (scroller) scroller.scrollTop = 0;
   });
 
-  const hits = searchNames(query, visibleRules);
+  const hits = searchNames(query, rules).filter(
+    (hit) => !hidden.has(hit.name) || hit.name === picked,
+  );
   const pickedName = picked && hits.some((hit) => hit.name === picked) ? picked : null;
   const expanded = pickedName ?? (shouldExpand(hits) ? hits[0]?.name ?? null : null);
-  const expandedVariants = expanded ? variantsForName(expanded, visibleRules, pack) : [];
+  const expandedVariants = expanded ? variantsForName(expanded, rules, pack) : [];
   const expandedDefault = expanded ? productDefaults[expanded] : undefined;
   const activeVariant = pickVariant(
     expandedVariants,
@@ -527,6 +530,10 @@ export function StockDesk() {
       savedListCollapsedRef.current = headerCollapsedRef.current;
     }
     showItemFromTopRef.current = true;
+    headerCollapsedRef.current = true;
+    listScrollableRef.current = true;
+    setHeaderCollapsed(true);
+    setListScrollable(true);
     setQuery(name);
     setPicked(name);
     inputRef.current?.blur();
@@ -679,6 +686,10 @@ export function StockDesk() {
             desk={desk}
             open={settingsOpen}
             onOpenChange={setSettingsOpenSafe}
+            onOpenProduct={(name) => {
+              setSettingsOpenSafe(false);
+              choose(name);
+            }}
             compact
           />
         </div>
@@ -1268,7 +1279,7 @@ export function StockDesk() {
           data-go-top=""
           aria-label={compactList ? "Show tags" : "Compact list without tags"}
           aria-pressed={compactList}
-          onClick={() => setCompactList((on) => !on)}
+          onClick={() => setCompactList(!compactList)}
           className={cn(
             "absolute right-4 z-20 flex size-11 items-center justify-center rounded-full text-stone-950 shadow-[0_8px_24px_rgba(0,0,0,0.25)] ring-1 backdrop-blur-sm transition-[background-color,opacity,box-shadow] duration-200",
             "bottom-[calc(max(1rem,env(safe-area-inset-bottom))+3.25rem)]",

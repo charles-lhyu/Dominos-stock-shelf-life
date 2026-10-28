@@ -15,6 +15,8 @@ export type StoreCampaignSettings = {
   compactDates?: boolean;
   /** Day and hour counts instead of use-by dates. */
   showDayCounts?: boolean;
+  /** Product list without storage and life tags. */
+  compactList?: boolean;
 };
 
 export type CampaignRecord = {
@@ -131,10 +133,15 @@ function parsePack(value: unknown): ChartPack | null {
   });
 }
 
-function dateDisplayFlags(value: { compactDates?: unknown; showDayCounts?: unknown }) {
+function dateDisplayFlags(value: {
+  compactDates?: unknown;
+  showDayCounts?: unknown;
+  compactList?: unknown;
+}) {
   return {
     compactDates: value.compactDates === true,
     showDayCounts: value.showDayCounts === true,
+    compactList: value.compactList === true,
   };
 }
 
@@ -262,7 +269,8 @@ export function writeStoreSettings(
     sameHidden(prev.hidden, nextSettings.hidden) &&
     sameItemPreset(prev.preset, nextSettings.preset) &&
     prev.compactDates === nextSettings.compactDates &&
-    prev.showDayCounts === nextSettings.showDayCounts
+    prev.showDayCounts === nextSettings.showDayCounts &&
+    prev.compactList === nextSettings.compactList
   ) {
     return library;
   }
@@ -314,6 +322,7 @@ const EMPTY_SETTINGS: StoreCampaignSettings = {
   preset: DEFAULT_ITEM_PRESET,
   compactDates: false,
   showDayCounts: false,
+  compactList: false,
 };
 
 /**
@@ -388,7 +397,7 @@ export function planStoreChange(input: {
 
 export type StoreSettingChange = {
   id: string;
-  group: "Dates" | "Hidden" | "Defaults";
+  group: "Dates" | "List" | "Hidden" | "Defaults";
   label: string;
   from: string;
   to: string;
@@ -447,6 +456,15 @@ export function listStoreSettingChanges(
       label: "Date display",
       from: current.compactDates ? "Short" : "Full",
       to: target.compactDates ? "Short" : "Full",
+    });
+  }
+  if ((current.compactList === true) !== (target.compactList === true)) {
+    changes.push({
+      id: "list:compact",
+      group: "List",
+      label: "Compact list",
+      from: current.compactList ? "On" : "Off",
+      to: target.compactList ? "On" : "Off",
     });
   }
   const hidden = new Set([...current.hidden, ...target.hidden]);
@@ -514,6 +532,9 @@ export function applyAcceptedStoreChanges(
     showDayCounts: accepted.has("dates:days")
       ? target.showDayCounts === true
       : current.showDayCounts === true,
+    compactList: accepted.has("list:compact")
+      ? target.compactList === true
+      : current.compactList === true,
   };
 }
 
@@ -525,6 +546,7 @@ export type StoreCampaignView = {
   preset: ItemPreset;
   compactDates: boolean;
   showDayCounts: boolean;
+  compactList: boolean;
 };
 
 /** Settings this store has saved, one row per campaign. */
@@ -547,6 +569,7 @@ export function listStoreCampaigns(library: CampaignLibrary, storeId: string): S
       hidden: settings.hidden,
       compactDates: settings.compactDates === true,
       showDayCounts: settings.showDayCounts === true,
+      compactList: settings.compactList === true,
       preset: {
         ...settings.preset,
         defaults: retainProductDefaults(

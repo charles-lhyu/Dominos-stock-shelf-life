@@ -45,6 +45,7 @@ import {
   setCompactDateFormat,
   subscribeDateFormat,
 } from "./date-format-store";
+import { getCompactList, setCompactList, subscribeCompactList } from "./compact-list-store";
 import { readDebugDays, subscribeDebug, writeDebugDays } from "./debug-store";
 import { getStoreId, hydrateStoreIdStore, subscribeStoreId } from "./store-id-store";
 import type { ChartPack, ShelfRule } from "./types";
@@ -223,6 +224,7 @@ function keptSettings(
     },
     compactDates: settings.compactDates === true,
     showDayCounts: settings.showDayCounts === true,
+    compactList: settings.compactList === true,
   };
 }
 
@@ -234,6 +236,7 @@ function currentSettings(): StoreCampaignSettings {
       preset: getItemPreset(),
       compactDates: getCompactDateFormat(),
       showDayCounts: readDebugDays(),
+      compactList: getCompactList(),
     },
     desk.pack.rules,
   );
@@ -282,6 +285,7 @@ function applySettings(settings: StoreCampaignSettings, rules: ShelfRule[]) {
     replaceItemPreset(next.preset);
     setCompactDateFormat(next.compactDates === true);
     writeDebugDays(next.showDayCounts === true);
+    setCompactList(next.compactList === true);
   } finally {
     applying = false;
   }
@@ -303,6 +307,7 @@ function handleImportedPack(pack: ChartPack, sourceUrl: string) {
       resetItemPreset();
       setCompactDateFormat(false);
       writeDebugDays(false);
+      setCompactList(false);
     } else {
       clearHiddenNames();
     }
@@ -343,6 +348,7 @@ export function captureActiveCampaign() {
   try {
     setCompactDateFormat(saved.compactDates === true);
     writeDebugDays(saved.showDayCounts === true);
+    setCompactList(saved.compactList === true);
   } finally {
     applying = false;
   }
@@ -399,3 +405,4 @@ subscribeHidden(() => {
 subscribeItemPreset(autosave);
 subscribeDateFormat(autosave);
 subscribeDebug(autosave);
+subscribeCompactList(autosave);

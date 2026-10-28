@@ -422,6 +422,7 @@ describe("campaign library records", () => {
     const saved = readStoreSettings(library, "12345", "2026-09-07", "2026-11-17");
     assert.equal(saved?.compactDates, true);
     assert.equal(saved?.showDayCounts, true);
+    assert.equal(saved?.compactList, false);
     const loaded = planStoreChange({
       library,
       previousStoreId: "99",

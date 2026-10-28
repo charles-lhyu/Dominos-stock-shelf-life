@@ -74,6 +74,7 @@ import {
   getCompactDateFormat,
   subscribeDateFormat,
 } from "@/lib/date-format-store";
+import { getCompactList, subscribeCompactList } from "@/lib/compact-list-store";
 import {
   applyAcceptedStoreChanges,
   listStoreSettingChanges,
@@ -183,11 +184,14 @@ export function ImportChartButton({
   desk,
   open: openProp,
   onOpenChange,
+  onOpenProduct,
   compact = false,
 }: {
   desk: DeskState;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /** Close settings and show this product, including when it is hidden. */
+  onOpenProduct?: (name: string) => void;
   /** Smaller trigger for the always-visible store bar. */
   compact?: boolean;
 }) {
@@ -245,6 +249,7 @@ export function ImportChartButton({
     getCompactDateFormat,
     () => false,
   );
+  const compactList = useSyncExternalStore(subscribeCompactList, getCompactList, () => false);
   const hiddenNames = useSyncExternalStore(
     subscribeHidden,
     getHiddenNames,
@@ -433,6 +438,7 @@ export function ImportChartButton({
         preset: getItemPreset(),
         compactDates: getCompactDateFormat(),
         showDayCounts: readDebugDays(),
+        compactList: getCompactList(),
       },
       saved,
       changeChoices,
@@ -473,7 +479,8 @@ export function ImportChartButton({
       getHiddenNames().length > 0 ||
       Object.keys(getItemPreset().defaults).length > 0 ||
       getCompactDateFormat() ||
-      readDebugDays();
+      readDebugDays() ||
+      getCompactList();
     if (!screenHas && !saved) {
       applyStoreChange(previous, next);
       return;
@@ -671,6 +678,7 @@ export function ImportChartButton({
             preset: itemPreset,
             compactDates,
             showDayCounts: debugDays,
+            compactList,
           },
           readSavedCampaignSettings(
             storePrompt.next,
@@ -695,6 +703,9 @@ export function ImportChartButton({
     return {
       ...item,
       hidden: hiddenNames,
+      compactDates,
+      showDayCounts: debugDays,
+      compactList,
       preset: {
         ...itemPreset,
         defaults: retainProductDefaults(itemPreset.defaults, desk.pack.rules, hiddenNames),
@@ -737,6 +748,12 @@ export function ImportChartButton({
       if (on) setStoreNameDraft(null);
       return !on;
     });
+  }
+
+  function openStoredProduct(name: string, issued: string, validUntil: string) {
+    if (!onOpenProduct) return;
+    if (!chartOnScreen(issued, validUntil)) reloadCampaign(issued, validUntil);
+    onOpenProduct(name);
   }
 
   function removeHidden(
@@ -1243,6 +1260,9 @@ export function ImportChartButton({
                         <StoredCampaignDetails
                           item={item}
                           editing={storedEditing}
+                          onOpenHidden={(name) =>
+                            openStoredProduct(name, item.issued, item.validUntil)
+                          }
                           onRemoveHidden={(name) =>
                             removeHidden(
                               previewStoreId ?? storeId,
@@ -2001,6 +2021,13 @@ export function ImportChartButton({
                 <StoredCampaignDetails
                   item={selectedOther}
                   editing={storedEditing}
+                  onOpenHidden={(name) =>
+                    openStoredProduct(
+                      name,
+                      selectedOther.issued,
+                      selectedOther.validUntil,
+                    )
+                  }
                   onRemoveHidden={(name) =>
                     forgetSavedHidden(
                       selectedOther.storeId,
@@ -2281,6 +2308,7 @@ function storedRowClass(index: number) {
 function StoredCampaignDetails({
   item,
   editing,
+  onOpenHidden,
   onRemoveHidden,
   onRemoveDefault,
   onRemoveAllHidden,
@@ -2291,8 +2319,10 @@ function StoredCampaignDetails({
     preset: ItemPreset;
     compactDates?: boolean;
     showDayCounts?: boolean;
+    compactList?: boolean;
   };
   editing: boolean;
+  onOpenHidden: (name: string) => void;
   onRemoveHidden: (name: string) => void;
   onRemoveDefault: (name: string) => void;
   onRemoveAllHidden: () => void;
@@ -2306,6 +2336,10 @@ function StoredCampaignDetails({
         <p className="text-xs text-stone-500">Dates</p>
       </div>
       <p className="px-2 text-sm text-stone-200">{dateLabel}</p>
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <p className="text-xs text-stone-500">List</p>
+      </div>
+      <p className="px-2 text-sm text-stone-200">{item.compactList ? "Compact" : "With tags"}</p>
       <div className="mt-2 flex items-center justify-between gap-2">
         <p className="text-xs text-stone-500">Hidden</p>
         {editing && item.hidden.length > 0 ? (
@@ -2325,7 +2359,13 @@ function StoredCampaignDetails({
         <ul className="text-sm text-stone-200">
           {item.hidden.map((name, index) => (
             <li key={name} className={storedRowClass(index)}>
-              <span className="min-w-0 truncate">{name}</span>
+              <button
+                type="button"
+                className="min-w-0 flex-1 truncate text-left"
+                onClick={() => onOpenHidden(name)}
+              >
+                {name}
+              </button>
               {editing ? (
                 <RemoveMark label={`Remove ${name}`} onClick={() => onRemoveHidden(name)} />
               ) : null}

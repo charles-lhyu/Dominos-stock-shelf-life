@@ -1,5 +1,13 @@
 [
   {
+    "version": "1.4.35",
+    "notes": [
+      "Tap a hidden item to open its details",
+      "Compact list is saved with the store",
+      "Item details open collapsed, with a short heading you can expand"
+    ]
+  },
+  {
     "version": "1.4.34",
     "notes": [
       "A store preview can be edited before you confirm, including its name, hidden items, and product defaults"
