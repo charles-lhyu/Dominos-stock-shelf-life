@@ -2378,7 +2378,7 @@ export function ImportChartButton({
                   <X className="size-5" />
                 </button>
               </div>
-              <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-3">
+              <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-4 py-3">
                 {deviceStoreSettings.length === 0 ? (
                   <p className="text-sm text-stone-500">
                     Nothing is saved on this device yet. Import a backup to load stores
@@ -2405,42 +2405,30 @@ export function ImportChartButton({
                           setAllStoredOpen(false);
                         }}
                         className={cn(
-                          "w-full space-y-2 rounded-xl border px-3 py-2.5 text-left transition-colors",
+                          "w-full rounded-lg border px-2.5 py-2 text-left transition-colors",
                           active
                             ? "border-sky-400/40 bg-sky-500/10"
                             : "border-white/10 bg-black/20 hover:bg-white/[0.06]",
                         )}
                       >
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="text-[0.65rem] font-semibold uppercase tracking-wider text-stone-500">
-                            Store settings
-                          </p>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="min-w-0 truncate text-sm font-medium text-white">
+                            {label || "Unnamed store"}
+                          </span>
                           <span className="shrink-0 font-mono text-xs text-stone-300">
                             {store.storeId}
                           </span>
                         </div>
-                        <div className="space-y-0.5">
-                          <p className="text-xs text-stone-500">Name</p>
-                          <p className="truncate text-sm text-stone-200">
-                            {label || "Not set"}
-                          </p>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-0.5">
-                            <p className="text-xs text-stone-500">Dates</p>
-                            <p className="text-sm text-stone-200">{datesLabel}</p>
-                          </div>
-                          <div className="space-y-0.5">
-                            <p className="text-xs text-stone-500">List</p>
-                            <p className="text-sm text-stone-200">{listLabel}</p>
-                          </div>
-                        </div>
-                        <p className="text-[0.7rem] text-stone-500">
+                        <p className="mt-0.5 truncate text-[0.7rem] text-stone-400">
+                          Dates {datesLabel}
+                          <span className="text-stone-600"> · </span>
+                          List {listLabel}
+                          <span className="text-stone-600"> · </span>
                           {store.campaignCount === 0
-                            ? "No campaign presets"
+                            ? "No presets"
                             : store.campaignCount === 1
-                              ? "1 campaign preset"
-                              : `${store.campaignCount} campaign presets`}
+                              ? "1 preset"
+                              : `${store.campaignCount} presets`}
                         </p>
                       </button>
                     );
