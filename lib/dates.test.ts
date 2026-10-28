@@ -4,6 +4,8 @@ import {
   addHoursToLocal,
   daysBetween,
   excelSerialToIso,
+  formatCompactDateTime,
+  formatDateTime,
   formatLongDate,
   parseExpiry,
   readExpiry,
@@ -63,6 +65,12 @@ describe("readExpiry", () => {
 
   it("formats a date for the ticket", () => {
     assert.equal(formatLongDate("2026-10-23"), "Fri 23 Oct 2026");
+  });
+
+  it("puts the clock time in front of the date", () => {
+    const at = new Date(2026, 9, 23, 14, 30);
+    assert.equal(formatDateTime(at), "14:30 | Fri 23 Oct 2026");
+    assert.equal(formatCompactDateTime(at), "14:30 | 23/10/26");
   });
 });
 

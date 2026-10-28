@@ -69,7 +69,7 @@ describe("shelf life dates", () => {
       today,
     );
     assert.ok(pack && prepped);
-    assert.equal(prepped.when, "Mon 12 Oct 2026 | 23:59");
+    assert.equal(prepped.when, "23:59 | Mon 12 Oct 2026");
     assert.match(capAdvice([pack, prepped]) ?? "", /12 Oct 2026/);
   });
 
@@ -83,7 +83,7 @@ describe("shelf life dates", () => {
       assert.equal(prepped.value, "10 days (Chilled)");
       assert.equal(prepped.addDays, 10);
       const result = projectClock(prepped, "2026-10-01", today);
-      assert.equal(result?.when, "Sat 10 Oct 2026 | 23:59");
+      assert.equal(result?.when, "23:59 | Sat 10 Oct 2026");
     }
   });
 
@@ -100,9 +100,9 @@ describe("shelf life dates", () => {
     assert.equal(ambient?.value, "15 hours");
     assert.equal(ambient?.addHours, 15);
     const prepResult = projectClock(prepped!, "2026-10-24", today);
-    assert.equal(prepResult?.when, "Mon 2 Nov 2026 | 23:59");
+    assert.equal(prepResult?.when, "23:59 | Mon 2 Nov 2026");
     const ambientResult = projectClock(ambient!, "2026-10-24T14:30", today);
-    assert.equal(ambientResult?.when, "Sun 25 Oct 2026 | 05:30");
+    assert.equal(ambientResult?.when, "05:30 | Sun 25 Oct 2026");
   });
 
   it("keeps true ambient-section prepped life without a chilled state", () => {
@@ -113,7 +113,7 @@ describe("shelf life dates", () => {
     assert.equal(prepped?.value, "14 days");
     assert.equal(prepped?.inclusive, true);
     const result = projectClock(prepped!, "2026-10-01", today);
-    assert.equal(result?.when, "Wed 14 Oct 2026 | 23:59");
+    assert.equal(result?.when, "23:59 | Wed 14 Oct 2026");
   });
 
   it("counts the prep date as day 1 of an in-use life", () => {
@@ -124,7 +124,7 @@ describe("shelf life dates", () => {
     assert.equal(inUse.addDays, 7);
     assert.equal(inUse.inclusive, true);
     const result = projectClock(inUse, "2026-10-01", today);
-    assert.equal(result?.when, "Wed 7 Oct 2026 | 23:59");
+    assert.equal(result?.when, "23:59 | Wed 7 Oct 2026");
   });
 
   it("adds prep and ambient hours to the time on the start date", () => {
@@ -134,7 +134,7 @@ describe("shelf life dates", () => {
     assert.equal(prepHours?.addHours, 48);
     assert.equal(prepHours?.inclusive, undefined);
     const macResult = projectClock(prepHours!, "2026-10-01T10:00", today);
-    assert.equal(macResult?.when, "Sat 3 Oct 2026 | 10:00");
+    assert.equal(macResult?.when, "10:00 | Sat 3 Oct 2026");
 
     const bases = RULES.find((rule) => rule.name === "Prepared Double Decadence bases");
     assert.ok(bases);
@@ -143,8 +143,8 @@ describe("shelf life dates", () => {
     const ambient = clocks.find((clock) => clock.id === "ambient");
     assert.equal(chilled?.addHours, 12);
     assert.equal(ambient?.addHours, 4);
-    assert.equal(projectClock(chilled!, "2026-10-24T09:00", today)?.when, "Sat 24 Oct 2026 | 21:00");
-    assert.equal(projectClock(ambient!, "2026-10-24T09:00", today)?.when, "Sat 24 Oct 2026 | 13:00");
+    assert.equal(projectClock(chilled!, "2026-10-24T09:00", today)?.when, "21:00 | Sat 24 Oct 2026");
+    assert.equal(projectClock(ambient!, "2026-10-24T09:00", today)?.when, "13:00 | Sat 24 Oct 2026");
   });
 
   it("counts an ambient day life through 23:59 on the last day", () => {
@@ -163,7 +163,7 @@ describe("shelf life dates", () => {
     assert.equal(ambient.inclusive, true);
     assert.equal(ambient.addDays, 2);
     const result = projectClock(ambient, "2026-10-01", today);
-    assert.equal(result?.when, "Fri 2 Oct 2026 | 23:59");
+    assert.equal(result?.when, "23:59 | Fri 2 Oct 2026");
   });
 
   it("adds sliced gherkins' 16-day life to the prep date", () => {
@@ -181,7 +181,7 @@ describe("shelf life dates", () => {
     assert.equal(prepped.value, "16 days (Chilled)");
     assert.equal(prepped.addDays, 16);
     const result = projectClock(prepped, "2026-10-24", today);
-    assert.equal(result?.when, "Sun 8 Nov 2026 | 23:59");
+    assert.equal(result?.when, "23:59 | Sun 8 Nov 2026");
   });
 
   it("adds pepperdew's 25-day life to the prep date", () => {
@@ -193,6 +193,6 @@ describe("shelf life dates", () => {
     assert.equal(prepped.value, "25 days (Chilled)");
     assert.equal(prepped.addDays, 25);
     const result = projectClock(prepped, "2026-10-24", today);
-    assert.equal(result?.when, "Tue 17 Nov 2026 | 23:59");
+    assert.equal(result?.when, "23:59 | Tue 17 Nov 2026");
   });
 });

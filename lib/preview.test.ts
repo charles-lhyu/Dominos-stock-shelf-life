@@ -18,7 +18,7 @@ describe("list use-by dates", () => {
     const kind = pickLifeKind(lifeKindsForRule(item), calculatedLifeKind(item));
     const preview = datePreview(item, "2026-10-24", kind, today);
     assert.equal(kind, "prepped");
-    assert.equal(preview.when, "Sun 8 Nov 2026 | 23:59");
+    assert.equal(preview.when, "23:59 | Sun 8 Nov 2026");
   });
 
   it("keeps a delivery life when that date can be calculated", () => {
@@ -47,14 +47,14 @@ describe("list use-by dates", () => {
     const at = new Date(2026, 9, 24, 14, 30);
     const prepped = datePreview(sauce, "2026-10-24", "prepped", at, "14:30");
     const ambient = datePreview(sauce, "2026-10-24", "ambient", at, "14:30");
-    assert.equal(prepped.when, "Mon 2 Nov 2026 | 23:59");
-    assert.equal(ambient.when, "Sun 25 Oct 2026 | 05:30");
+    assert.equal(prepped.when, "23:59 | Mon 2 Nov 2026");
+    assert.equal(ambient.when, "05:30 | Sun 25 Oct 2026");
     assert.equal(ambient.asHours, true);
 
     const burger = RULES.find((item) => item.name === "Burger Sauce" && item.sectionId === "ambient");
     assert.ok(burger);
     const ambientPrep = datePreview(burger, "2026-10-01", "prepped", today);
-    assert.equal(ambientPrep.when, "Wed 14 Oct 2026 | 23:59");
+    assert.equal(ambientPrep.when, "23:59 | Wed 14 Oct 2026");
   });
 
   it("starts an hour life at the locked prep time", () => {

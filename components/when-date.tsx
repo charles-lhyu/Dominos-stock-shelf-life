@@ -15,7 +15,11 @@ import {
 import { cn } from "cn";
 
 function hasTimeInWhen(when: string) {
-  return /\|\s*\d{1,2}:\d{2}/.test(when) || /\bat\s+\d{1,2}:\d{2}\b/i.test(when);
+  return (
+    /^\d{1,2}:\d{2}\s*\|/.test(when) ||
+    /\|\s*\d{1,2}:\d{2}/.test(when) ||
+    /\bat\s+\d{1,2}:\d{2}\b/i.test(when)
+  );
 }
 
 function formatDaysFromToday(at: Date, today = new Date()) {

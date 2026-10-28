@@ -19,10 +19,10 @@ function findRow(name: string, text: string) {
 
 describe("text conversion table", () => {
   it("converts the confirmed prep lives from 24 Oct 2026", () => {
-    assert.equal(findRow("Sliced Gherkins", "16 days").useBy, "Sun 8 Nov 2026 | 23:59");
-    assert.equal(findRow("Pepperdew Piquante Peppers", "25 days").useBy, "Tue 17 Nov 2026 | 23:59");
-    assert.equal(findRow("Pineapple", "10 days").useBy, "Mon 2 Nov 2026 | 23:59");
-    assert.equal(findRow("Olives", "10 days").useBy, "Mon 2 Nov 2026 | 23:59");
+    assert.equal(findRow("Sliced Gherkins", "16 days").useBy, "23:59 | Sun 8 Nov 2026");
+    assert.equal(findRow("Pepperdew Piquante Peppers", "25 days").useBy, "23:59 | Tue 17 Nov 2026");
+    assert.equal(findRow("Pineapple", "10 days").useBy, "23:59 | Mon 2 Nov 2026");
+    assert.equal(findRow("Olives", "10 days").useBy, "23:59 | Mon 2 Nov 2026");
   });
 
   it("leaves printed pack dates off the prep calendar", () => {
@@ -39,7 +39,7 @@ describe("text conversion table", () => {
       if (!match) continue;
       const expected = formatLongDate(addDaysToIso(delivery, Number(match[1]) - 1));
       assert.ok(
-        row.useBy.startsWith(expected),
+        row.useBy === expected || row.useBy.endsWith(` | ${expected}`),
         `${row.name} ${row.text} → ${row.useBy}, expected ${expected}`,
       );
     }
@@ -67,6 +67,6 @@ describe("text conversion table", () => {
       (item) => item.name === "Pineapple" && item.field === "Prepped",
     );
     assert.equal(row?.text, "25 days");
-    assert.equal(row?.useBy, "Tue 17 Nov 2026 | 23:59");
+    assert.equal(row?.useBy, "23:59 | Tue 17 Nov 2026");
   });
 });

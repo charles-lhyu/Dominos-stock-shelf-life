@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.4.43",
+    "notes": [
+      "Use-by times show before the date"
+    ]
+  },
+  {
     "version": "1.4.42",
     "notes": [
       "Compact list tags share one width and sit in front of item names"

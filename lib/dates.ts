@@ -205,7 +205,7 @@ export function formatShortDate(iso: string): string {
 export function formatDateTime(date: Date): string {
   const hours = String(date.getHours()).padStart(2, "0");
   const minutes = String(date.getMinutes()).padStart(2, "0");
-  return `${formatLongDate(toIsoDate(date))} | ${hours}:${minutes}`;
+  return `${hours}:${minutes} | ${formatLongDate(toIsoDate(date))}`;
 }
 
 /** Compact date: DD/MM/YY */
@@ -223,11 +223,11 @@ export function formatCompactWeekdayDate(date: Date | string): string {
   return `${WEEKDAY[value.getDay()]} ${formatCompactDate(value)}`;
 }
 
-/** Compact toggle format: DD/MM/YY | HH:MM */
+/** Compact toggle format: HH:MM | DD/MM/YY */
 export function formatCompactDateTime(date: Date): string {
   const hours = String(date.getHours()).padStart(2, "0");
   const minutes = String(date.getMinutes()).padStart(2, "0");
-  return `${formatCompactDate(date)} | ${hours}:${minutes}`;
+  return `${hours}:${minutes} | ${formatCompactDate(date)}`;
 }
 
 export function addDaysToIso(iso: string, days: number): string {
