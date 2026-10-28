@@ -276,12 +276,28 @@ export function ChartList({
 
   const activeLife: LifeKind = lifeFilter === "all" ? "stock" : lifeFilter;
   const showHiddenControl = hiddenCount > 0 || showHidden;
+  /** Narrow list: park Show hidden beside date sort instead of above / in the life chips. */
+  const [tightSortRow, setTightSortRow] = useState(false);
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const apply = (width: number) => setTightSortRow(width < 420);
+    apply(el.getBoundingClientRect().width);
+    const ro = new ResizeObserver((entries) => {
+      apply(entries[0]?.contentRect.width ?? 0);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const showHiddenBeside = showHiddenControl && tightSortRow;
+  const showHiddenAbove = showHiddenControl && !compact && !tightSortRow;
+  const showHiddenInChips = showHiddenControl && compact && !tightSortRow;
 
   const actions: ListActions = {
     onOpen,
     onProductDefault,
     compact,
-    showHiddenChip: compact && showHiddenControl,
+    showHiddenChip: showHiddenInChips,
     nameSort,
     dateSort,
     onToggleNameSort: () => {
@@ -300,7 +316,8 @@ export function ChartList({
         nameSort={nameSort}
         dateSort={dateSort}
         showHidden={showHidden}
-        showHiddenControl={!compact && showHiddenControl}
+        showHiddenAbove={showHiddenAbove}
+        showHiddenBeside={showHiddenBeside}
         hiddenCount={hiddenCount}
         onToggleShowHidden={() => setShowHidden((on) => !on)}
         onToggleNameSort={() => {
@@ -319,7 +336,7 @@ export function ChartList({
             role="group"
             aria-label="Life date filter"
           >
-            {showHiddenControl ? (
+            {showHiddenInChips ? (
               <ShowHiddenButton
                 showHidden={showHidden}
                 hiddenCount={hiddenCount}
@@ -382,7 +399,8 @@ function SortButtonOverlay({
   nameSort,
   dateSort,
   showHidden,
-  showHiddenControl,
+  showHiddenAbove,
+  showHiddenBeside,
   hiddenCount,
   onToggleShowHidden,
   onToggleNameSort,
@@ -391,7 +409,8 @@ function SortButtonOverlay({
   nameSort: DirSort;
   dateSort: DirSort;
   showHidden: boolean;
-  showHiddenControl: boolean;
+  showHiddenAbove: boolean;
+  showHiddenBeside: boolean;
   hiddenCount: number;
   onToggleShowHidden: () => void;
   onToggleNameSort: () => void;
@@ -410,8 +429,8 @@ function SortButtonOverlay({
       >
         <NameSortButton sort={nameSort} onToggle={onToggleNameSort} />
         <div className="min-w-0 flex-1" />
-        <div className="relative flex w-[46%] shrink-0 justify-end">
-          {showHiddenControl ? (
+        <div className="relative flex w-[46%] shrink-0 items-center justify-end gap-1">
+          {showHiddenAbove ? (
             <div className="absolute right-0 bottom-full mb-1">
               <ShowHiddenButton
                 showHidden={showHidden}
@@ -419,6 +438,14 @@ function SortButtonOverlay({
                 onToggle={onToggleShowHidden}
               />
             </div>
+          ) : null}
+          {showHiddenBeside ? (
+            <ShowHiddenButton
+              showHidden={showHidden}
+              hiddenCount={hiddenCount}
+              onToggle={onToggleShowHidden}
+              compact
+            />
           ) : null}
           <DateSortButton sort={dateSort} onToggle={onToggleDateSort} />
         </div>

@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.4.47",
+    "notes": [
+      "Show hidden moves beside the date sort when the list is narrow"
+    ]
+  },
+  {
     "version": "1.4.46",
     "notes": [
       "Opening or leaving an item keeps the header collapsed with the Campaign title hidden"
