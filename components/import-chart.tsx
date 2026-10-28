@@ -1332,7 +1332,10 @@ export function ImportChartButton({
         <Settings className={compact ? "size-4" : "size-5"} />
       </DialogTrigger>
       <DialogContent
-        className="top-[max(0.5rem,env(safe-area-inset-top))]! flex h-[calc(100dvh-max(0.5rem,env(safe-area-inset-top))-0.5rem)] max-h-[calc(100dvh-max(0.5rem,env(safe-area-inset-top))-0.5rem)] w-[calc(100%-1.25rem)] max-w-md translate-y-0! flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-md"
+        className={cn(
+          "top-[max(0.5rem,env(safe-area-inset-top))]! flex h-[calc(100dvh-max(0.5rem,env(safe-area-inset-top))-0.5rem)] max-h-[calc(100dvh-max(0.5rem,env(safe-area-inset-top))-0.5rem)] w-[calc(100%-1.25rem)] max-w-md translate-y-0! flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-md",
+          allStoredOpen && "pointer-events-none",
+        )}
         showCloseButton={false}
       >
         <DialogHeader className="shrink-0 border-b border-white/10 px-4 py-3 pr-14">
@@ -2524,94 +2527,95 @@ export function ImportChartButton({
           </div>
         </DialogContent>
       </Dialog>
-      <Dialog open={allStoredOpen} onOpenChange={setAllStoredOpen}>
-        <DialogContent
-          showCloseButton={false}
-          overlayClassName="z-[60] bg-black/40 backdrop-blur-sm supports-backdrop-filter:backdrop-blur-md"
-          className="top-[calc(max(0.5rem,env(safe-area-inset-top))+3.75rem)]! left-1/2! z-[60] flex h-[calc(100dvh-max(0.5rem,env(safe-area-inset-top))-3.75rem-0.5rem)] max-h-[calc(100dvh-max(0.5rem,env(safe-area-inset-top))-3.75rem-0.5rem)] w-[calc(100%-1.25rem)] max-w-md -translate-x-1/2! translate-y-0! flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-md"
-        >
-          <DialogHeader className="shrink-0 space-y-2 border-b border-white/10 px-4 py-3 pr-14">
-            <DialogTitle className="font-display text-xl text-white">
-              All stored data
-            </DialogTitle>
-            <DialogDescription className="text-sm text-stone-400">
-              Stores saved on this device. Tap one to preview it. Export or import
-              a JSON backup of the whole library.
-            </DialogDescription>
-            <div className="flex flex-wrap gap-2 pt-1">
-              <button
-                type="button"
-                onClick={exportStoredData}
-                className="rounded-lg px-2.5 py-1 text-xs font-semibold text-stone-200 ring-1 ring-white/15"
-              >
-                Export
-              </button>
-              <button
-                type="button"
-                onClick={() => storedImportInputRef.current?.click()}
-                className="rounded-lg px-2.5 py-1 text-xs font-semibold text-stone-200 ring-1 ring-white/15"
-              >
-                Import
-              </button>
-              <input
-                ref={storedImportInputRef}
-                type="file"
-                accept="application/json,.json"
-                className="hidden"
-                onChange={(event) => {
-                  const file = event.target.files?.[0] ?? null;
-                  event.target.value = "";
-                  onStoredImportFile(file);
-                }}
-              />
-            </div>
+    </Dialog>
+
+    <Dialog open={allStoredOpen} onOpenChange={setAllStoredOpen}>
+      <DialogContent
+        showCloseButton={false}
+        overlayClassName="z-[70] bg-black/50 backdrop-blur-md supports-backdrop-filter:backdrop-blur-md"
+        className="top-[calc(max(0.5rem,env(safe-area-inset-top))+3.75rem)]! left-1/2! z-[71] flex h-[calc(100dvh-max(0.5rem,env(safe-area-inset-top))-3.75rem-0.5rem)] max-h-[calc(100dvh-max(0.5rem,env(safe-area-inset-top))-3.75rem-0.5rem)] w-[calc(100%-1.25rem)] max-w-md -translate-x-1/2! translate-y-0! flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-md"
+      >
+        <DialogHeader className="shrink-0 space-y-2 border-b border-white/10 px-4 py-3 pr-14">
+          <DialogTitle className="font-display text-xl text-white">
+            All stored data
+          </DialogTitle>
+          <DialogDescription className="text-sm text-stone-400">
+            Stores saved on this device. Tap one to preview it. Export or import
+            a JSON backup of the whole library.
+          </DialogDescription>
+          <div className="flex flex-wrap gap-2 pt-1">
             <button
               type="button"
-              className="absolute top-3 right-3 inline-flex size-10 items-center justify-center rounded-full bg-white/10 text-white"
-              aria-label="Close all stored data"
-              onClick={() => setAllStoredOpen(false)}
+              onClick={exportStoredData}
+              className="rounded-lg px-2.5 py-1 text-xs font-semibold text-stone-200 ring-1 ring-white/15"
             >
-              <X className="size-5" />
+              Export
             </button>
-          </DialogHeader>
-          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-3">
-            {storedStoreIds.length === 0 ? (
-              <p className="text-sm text-stone-500">
-                Nothing is saved on this device yet. Import a backup to load stores
-                and campaign presets.
-              </p>
-            ) : (
-              storedStoreIds.map((id) => {
-                const label = nameFor(id);
-                const active = (previewStoreId ?? storeId) === id;
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => {
-                      setStoreDraft(id);
-                      setStoreMenuOpen(false);
-                      setStoreMenuAll(false);
-                      setAllStoredOpen(false);
-                    }}
-                    className={cn(
-                      "flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors",
-                      active
-                        ? "border-sky-400/40 bg-sky-500/10"
-                        : "border-white/10 bg-black/20 hover:bg-white/[0.06]",
-                    )}
-                  >
-                    <span className="min-w-0 truncate text-sm font-medium text-white">
-                      {label || "Unnamed store"}
-                    </span>
-                    <span className="shrink-0 font-mono text-sm text-stone-300">{id}</span>
-                  </button>
-                );
-              })
-            )}
+            <button
+              type="button"
+              onClick={() => storedImportInputRef.current?.click()}
+              className="rounded-lg px-2.5 py-1 text-xs font-semibold text-stone-200 ring-1 ring-white/15"
+            >
+              Import
+            </button>
+            <input
+              ref={storedImportInputRef}
+              type="file"
+              accept="application/json,.json"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0] ?? null;
+                event.target.value = "";
+                onStoredImportFile(file);
+              }}
+            />
           </div>
-        </DialogContent>
-      </Dialog>
+          <button
+            type="button"
+            className="absolute top-3 right-3 inline-flex size-10 items-center justify-center rounded-full bg-white/10 text-white"
+            aria-label="Close all stored data"
+            onClick={() => setAllStoredOpen(false)}
+          >
+            <X className="size-5" />
+          </button>
+        </DialogHeader>
+        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-3">
+          {storedStoreIds.length === 0 ? (
+            <p className="text-sm text-stone-500">
+              Nothing is saved on this device yet. Import a backup to load stores
+              and campaign presets.
+            </p>
+          ) : (
+            storedStoreIds.map((id) => {
+              const label = nameFor(id);
+              const active = (previewStoreId ?? storeId) === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => {
+                    setStoreDraft(id);
+                    setStoreMenuOpen(false);
+                    setStoreMenuAll(false);
+                    setAllStoredOpen(false);
+                  }}
+                  className={cn(
+                    "flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors",
+                    active
+                      ? "border-sky-400/40 bg-sky-500/10"
+                      : "border-white/10 bg-black/20 hover:bg-white/[0.06]",
+                  )}
+                >
+                  <span className="min-w-0 truncate text-sm font-medium text-white">
+                    {label || "Unnamed store"}
+                  </span>
+                  <span className="shrink-0 font-mono text-sm text-stone-300">{id}</span>
+                </button>
+              );
+            })
+          )}
+        </div>
+      </DialogContent>
     </Dialog>
 
     <Dialog open={confirmReset} onOpenChange={setConfirmReset}>
