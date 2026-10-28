@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.4.41",
+    "notes": [
+      "Show hidden sits above the date sort, and at the top right in compact mode"
+    ]
+  },
+  {
     "version": "1.4.40",
     "notes": [
       "Storage and life tags on item details can be changed again"

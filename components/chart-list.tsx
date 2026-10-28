@@ -13,6 +13,8 @@ import {
   ArrowUpAZ,
   ArrowUpWideNarrow,
   ChevronDown,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { AutoScrollText } from "@/components/auto-scroll-text";
 import { WhenDate } from "@/components/when-date";
@@ -63,6 +65,7 @@ type ListRow = {
   kinds: LifeKind[];
   activeLife: LifeKind | null;
   preview: DatePreview;
+  hidden: boolean;
 };
 
 type StickyBlock = {
@@ -201,6 +204,7 @@ export function ChartList({
 }) {
   const [nameSort, setNameSort] = useState<DirSort>("off");
   const [dateSort, setDateSort] = useState<DirSort>("off");
+  const [showHidden, setShowHidden] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const hiddenNames = useSyncExternalStore(
     subscribeHidden,
@@ -208,11 +212,14 @@ export function ChartList({
     getHiddenNamesServer,
   );
   const hidden = new Set(hiddenNames);
+  const hiddenCount = hiddenNames.length;
   const categories = category === "all" ? categoriesInPack(pack) : [category];
   const blocks: StickyBlock[] = [];
 
   for (const cat of categories) {
-    const names = uniqueNamesInCategory(pack.rules, cat).filter((name) => !hidden.has(name));
+    const names = uniqueNamesInCategory(pack.rules, cat).filter(
+      (name) => showHidden || !hidden.has(name),
+    );
     const rows: ListRow[] = names.flatMap((name) => {
       let variants = variantsForName(name, pack.rules, pack).filter(
         (item) => item.rule.category === cat,
@@ -241,7 +248,7 @@ export function ChartList({
       );
       const preview = datePreview(active.rule, deliveryDate, activeLife, today, prepTime);
 
-      return [{ name, variants, active, kinds, activeLife, preview }];
+      return [{ name, variants, active, kinds, activeLife, preview, hidden: hidden.has(name) }];
     });
 
     if (rows.length === 0) continue;
@@ -268,11 +275,13 @@ export function ChartList({
   }
 
   const activeLife: LifeKind = lifeFilter === "all" ? "stock" : lifeFilter;
+  const showHiddenControl = hiddenCount > 0 || showHidden;
 
   const actions: ListActions = {
     onOpen,
     onProductDefault,
     compact,
+    showHiddenChip: compact && showHiddenControl,
     nameSort,
     dateSort,
     onToggleNameSort: () => {
@@ -290,6 +299,10 @@ export function ChartList({
       <SortButtonOverlay
         nameSort={nameSort}
         dateSort={dateSort}
+        showHidden={showHidden}
+        showHiddenControl={!compact && showHiddenControl}
+        hiddenCount={hiddenCount}
+        onToggleShowHidden={() => setShowHidden((on) => !on)}
         onToggleNameSort={() => {
           setNameSort((prev) => nextDirSort(prev));
           setDateSort("off");
@@ -306,6 +319,14 @@ export function ChartList({
             role="group"
             aria-label="Life date filter"
           >
+            {showHiddenControl ? (
+              <ShowHiddenButton
+                showHidden={showHidden}
+                hiddenCount={hiddenCount}
+                onToggle={() => setShowHidden((on) => !on)}
+                compact
+              />
+            ) : null}
             {LIFE_KINDS.map((kind) => {
               const selected = activeLife === kind;
               return (
@@ -343,6 +364,7 @@ type ListActions = {
   onOpen: (name: string, sectionId: SectionId) => void;
   onProductDefault: (name: string, section: SectionId, life: LifeKind | null) => void;
   compact: boolean;
+  showHiddenChip: boolean;
   nameSort: DirSort;
   dateSort: DirSort;
   onToggleNameSort: () => void;
@@ -359,11 +381,19 @@ const SORT_ROW_TOP = "top-[calc(0.75rem+1.125rem*1.25+0.25rem)]";
 function SortButtonOverlay({
   nameSort,
   dateSort,
+  showHidden,
+  showHiddenControl,
+  hiddenCount,
+  onToggleShowHidden,
   onToggleNameSort,
   onToggleDateSort,
 }: {
   nameSort: DirSort;
   dateSort: DirSort;
+  showHidden: boolean;
+  showHiddenControl: boolean;
+  hiddenCount: number;
+  onToggleShowHidden: () => void;
   onToggleNameSort: () => void;
   onToggleDateSort: () => void;
 }) {
@@ -380,11 +410,68 @@ function SortButtonOverlay({
       >
         <NameSortButton sort={nameSort} onToggle={onToggleNameSort} />
         <div className="min-w-0 flex-1" />
-        <div className="flex w-[46%] shrink-0 justify-end">
+        <div className="relative flex w-[46%] shrink-0 justify-end">
+          {showHiddenControl ? (
+            <div className="absolute right-0 bottom-full mb-1">
+              <ShowHiddenButton
+                showHidden={showHidden}
+                hiddenCount={hiddenCount}
+                onToggle={onToggleShowHidden}
+              />
+            </div>
+          ) : null}
           <DateSortButton sort={dateSort} onToggle={onToggleDateSort} />
         </div>
       </div>
     </div>
+  );
+}
+
+function ShowHiddenButton({
+  showHidden,
+  hiddenCount,
+  onToggle,
+  compact = false,
+}: {
+  showHidden: boolean;
+  hiddenCount: number;
+  onToggle: () => void;
+  compact?: boolean;
+}) {
+  const countLabel = hiddenCount > 0 ? ` (${hiddenCount})` : "";
+  const label = showHidden
+    ? `Showing hidden${countLabel}`
+    : `Show hidden${countLabel}`;
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      aria-pressed={showHidden}
+      title={label}
+      onClick={(event) => {
+        event.stopPropagation();
+        onToggle();
+      }}
+      className={cn(
+        "relative isolate inline-flex shrink-0 items-center gap-1 font-semibold tracking-wide ring-1 transition-colors before:absolute before:inset-0 before:-z-10 before:rounded-md before:bg-[#0f1624]",
+        compact
+          ? "h-6 rounded-md px-1.5 text-[0.625rem]"
+          : "h-6 rounded-md px-1.5 text-[0.6875rem]",
+        showHidden
+          ? "bg-amber-400/20 text-amber-100 ring-amber-400/40 hover:bg-amber-400/30"
+          : "text-stone-300 ring-white/15 hover:bg-white/10 hover:text-white",
+      )}
+    >
+      {showHidden ? (
+        <Eye className="size-3" strokeWidth={2.25} aria-hidden />
+      ) : (
+        <EyeOff className="size-3" strokeWidth={2.25} aria-hidden />
+      )}
+      <span className="max-w-[6.5rem] truncate">
+        {showHidden ? "Hidden" : "Show hidden"}
+        {hiddenCount > 0 ? ` (${hiddenCount})` : ""}
+      </span>
+    </button>
   );
 }
 
@@ -562,7 +649,8 @@ function renderCoverStack(
           className={cn(
             "w-full min-w-0 text-left",
             // Leave room for the compact life-chip overlay on the title only.
-            actions.compact && "pr-[11.5rem]",
+            actions.compact &&
+              (actions.showHiddenChip ? "pr-[18rem]" : "pr-[11.5rem]"),
           )}
         >
           <h2 className="font-display truncate text-lg leading-tight font-bold text-white">
@@ -665,7 +753,8 @@ function ToppingsSection({
           className={cn(
             "w-full min-w-0 text-left",
             // Leave room for the compact life-chip overlay on the title only.
-            actions.compact && "pr-[11.5rem]",
+            actions.compact &&
+              (actions.showHiddenChip ? "pr-[18rem]" : "pr-[11.5rem]"),
           )}
         >
           <h2 className="font-display truncate text-lg leading-tight font-bold text-white">
@@ -730,17 +819,18 @@ function ProductRow({
   onOpen: (name: string, sectionId: SectionId) => void;
   onProductDefault: (name: string, section: SectionId, life: LifeKind | null) => void;
 }) {
-  const { name, variants, active, kinds, activeLife, preview } = row;
+  const { name, variants, active, kinds, activeLife, preview, hidden } = row;
 
   return (
     <li>
       <div
         role="button"
         tabIndex={0}
-        aria-label={`Open ${name}`}
+        aria-label={hidden ? `Open ${name} (hidden)` : `Open ${name}`}
         className={cn(
           "touch-pan-y rounded-xl transition-colors hover:bg-white/[0.03] active:bg-white/[0.06]",
           compact ? "min-h-11 py-2" : "min-h-14 py-2.5",
+          hidden && "opacity-70",
         )}
         onClick={() => onOpen(name, active.sectionId)}
         onKeyDown={(event) => {
@@ -752,6 +842,13 @@ function ProductRow({
       >
         <div className="flex w-full min-w-0 items-center gap-2 overflow-hidden">
           <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
+            {hidden ? (
+              <EyeOff
+                className="size-3.5 shrink-0 text-stone-500"
+                strokeWidth={2.25}
+                aria-hidden
+              />
+            ) : null}
             <AutoScrollText className="w-0 min-w-0 flex-1 font-medium text-white">
               {name}
             </AutoScrollText>
