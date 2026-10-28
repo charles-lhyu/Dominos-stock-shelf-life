@@ -568,7 +568,7 @@ function renderCoverStack(
             actions.compact && "pr-[11.5rem]",
           )}
         >
-          <h2 className="font-display truncate text-lg leading-tight text-white">
+          <h2 className="font-display truncate text-lg leading-tight font-bold text-white">
             {block.category}
           </h2>
         </button>
@@ -678,7 +678,7 @@ function ToppingsSection({
             actions.compact && "pr-[11.5rem]",
           )}
         >
-          <h2 className="font-display truncate text-lg leading-tight text-white">
+          <h2 className="font-display truncate text-lg leading-tight font-bold text-white">
             Toppings
           </h2>
         </button>
