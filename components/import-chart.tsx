@@ -400,6 +400,9 @@ export function ImportChartButton({
   const [allStoredPreviewId, setAllStoredPreviewId] = useState<string | null>(
     null,
   );
+  /** Campaign key (`issued|validUntil`) in Show all detail; null = campaign list. */
+  const [allStoredPreviewCampaignKey, setAllStoredPreviewCampaignKey] =
+    useState<string | null>(null);
   const [storeSettingsOpen, setStoreSettingsOpen] = useState(true);
   const [campaignPresetsOpen, setCampaignPresetsOpen] = useState(true);
   const storedImportInputRef = useRef<HTMLInputElement>(null);
@@ -548,11 +551,15 @@ export function ImportChartButton({
   }, [open]);
 
   useEffect(() => {
-    if (!allStoredPreviewId) return;
+    if (!allStoredPreviewId) {
+      setAllStoredPreviewCampaignKey(null);
+      return;
+    }
     if (
       !deviceStoreSettings.some((store) => store.storeId === allStoredPreviewId)
     ) {
       setAllStoredPreviewId(null);
+      setAllStoredPreviewCampaignKey(null);
     }
   }, [allStoredPreviewId, deviceStoreSettings]);
 
@@ -1052,9 +1059,21 @@ export function ImportChartButton({
   }
 
   function beginStoredEdit() {
-    const targetStoreId = previewStoreId ?? storeId;
+    const targetStoreId =
+      allStoredOpen && allStoredPreviewId
+        ? allStoredPreviewId
+        : previewStoreId ?? storeId;
     if (!targetStoreId) return;
-    const rows = previewStoreId ? previewRows : storedRows;
+    const rows =
+      allStoredOpen && allStoredPreviewId
+        ? deviceStored.filter((item) => item.storeId === allStoredPreviewId)
+        : previewStoreId
+          ? previewRows
+          : storedRows;
+    const viewingOther =
+      targetStoreId !== storeId ||
+      !!(allStoredOpen && allStoredPreviewId && allStoredPreviewId !== storeId) ||
+      !!previewStoreId;
     const campaigns: StoredEditDraft["campaigns"] = {};
     for (const item of rows) {
       const key = campaignKey(item.issued, item.validUntil);
@@ -1065,7 +1084,7 @@ export function ImportChartButton({
         issued: item.issued,
         validUntil: item.validUntil,
         title: item.title,
-        onScreen: !previewStoreId && chartOnScreen(item.issued, item.validUntil),
+        onScreen: !viewingOther && chartOnScreen(item.issued, item.validUntil),
         hidden,
         baselineHidden: hidden.map((entry) => ({ ...entry })),
         defaults,
@@ -1073,7 +1092,7 @@ export function ImportChartButton({
       };
     }
     const saved = deviceStoreSettings.find((item) => item.storeId === targetStoreId);
-    const useLive = !previewStoreId;
+    const useLive = !viewingOther;
     const nextCompactDates = useLive ? compactDates : saved?.compactDates === true;
     const nextShowDayCounts = useLive ? debugDays : saved?.showDayCounts === true;
     const nextCompactList = useLive ? compactList : saved?.compactList === true;
@@ -1875,6 +1894,7 @@ export function ImportChartButton({
                     disabled={storedEditing}
                     onClick={() => {
                       setAllStoredPreviewId(null);
+                      setAllStoredPreviewCampaignKey(null);
                       setAllStoredOpen(true);
                     }}
                     className="shrink-0 text-xs font-semibold text-sky-300 underline-offset-2 hover:underline disabled:opacity-40"
@@ -2680,6 +2700,7 @@ export function ImportChartButton({
               onClick={() => {
                 setAllStoredOpen(false);
                 setAllStoredPreviewId(null);
+                setAllStoredPreviewCampaignKey(null);
               }}
             />
             <div
@@ -2696,36 +2717,99 @@ export function ImportChartButton({
                       (store) => store.storeId === allStoredPreviewId,
                     )
                   : null;
-                const previewCampaigns = allStoredPreviewId
+                const previewCampaignsRaw = allStoredPreviewId
                   ? deviceStored.filter(
                       (item) => item.storeId === allStoredPreviewId,
                     )
                   : [];
+                const previewCampaigns = previewCampaignsRaw.map((item) => {
+                  if (
+                    !storedDraft ||
+                    storedDraft.storeId !== allStoredPreviewId
+                  ) {
+                    return item;
+                  }
+                  const key = campaignKey(item.issued, item.validUntil);
+                  const campaign = key ? storedDraft.campaigns[key] : undefined;
+                  if (!campaign) return item;
+                  return {
+                    ...item,
+                    hidden: campaign.hidden,
+                    preset: { ...item.preset, defaults: campaign.defaults },
+                  };
+                });
                 const storeSelectItems = Object.fromEntries(
                   deviceStoreSettings.map((store) => [
                     store.storeId,
                     store.storeId,
                   ]),
                 );
-                const storeSelectMenuLabel = (storeId: string) => {
+                const storeSelectMenuLabel = (id: string) => {
                   const store = deviceStoreSettings.find(
-                    (entry) => entry.storeId === storeId,
+                    (entry) => entry.storeId === id,
                   );
-                  const label = nameFor(storeId) || store?.name || "";
-                  return label ? `${storeId} · ${label}` : storeId;
+                  const label = nameFor(id) || store?.name || "";
+                  return label ? `${id} · ${label}` : id;
                 };
-                const previewDatesLabel = previewStore
-                  ? previewStore.showDayCounts
-                    ? "Days and hours"
-                    : previewStore.compactDates
-                      ? "Short"
-                      : "Full"
-                  : "";
-                const previewListLabel = previewStore
-                  ? previewStore.compactList
-                    ? "Compact"
-                    : "Normal"
-                  : "";
+                const editingPreview =
+                  !!previewStore &&
+                  storedEditing &&
+                  storedDraft?.storeId === previewStore.storeId;
+                const previewDatesLabel = editingPreview
+                  ? STORE_DATES_LABELS[
+                      storeDatesMode(
+                        storedDraft.compactDates,
+                        storedDraft.showDayCounts,
+                      )
+                    ]
+                  : previewStore
+                    ? previewStore.showDayCounts
+                      ? "Days and hours"
+                      : previewStore.compactDates
+                        ? "Short"
+                        : "Full"
+                    : "";
+                const previewListLabel = editingPreview
+                  ? STORE_LIST_LABELS[storeListMode(storedDraft.compactList)]
+                  : previewStore
+                    ? previewStore.compactList
+                      ? "Compact"
+                      : "Normal"
+                    : "";
+                const previewDatesValue = editingPreview
+                  ? storeDatesMode(
+                      storedDraft.compactDates,
+                      storedDraft.showDayCounts,
+                    )
+                  : storeDatesMode(
+                      previewStore?.compactDates === true,
+                      previewStore?.showDayCounts === true,
+                    );
+                const previewListValue = editingPreview
+                  ? storeListMode(storedDraft.compactList)
+                  : storeListMode(previewStore?.compactList === true);
+                const campaignSelectItems = Object.fromEntries(
+                  previewCampaigns.flatMap((item) => {
+                    const key = campaignKey(item.issued, item.validUntil);
+                    return key ? [[key, item.title] as const] : [];
+                  }),
+                );
+                const selectedCampaign =
+                  allStoredPreviewCampaignKey &&
+                  campaignSelectItems[allStoredPreviewCampaignKey]
+                    ? previewCampaigns.find(
+                        (item) =>
+                          campaignKey(item.issued, item.validUntil) ===
+                          allStoredPreviewCampaignKey,
+                      )
+                    : null;
+                const selectedCampaignOnScreen =
+                  !!selectedCampaign &&
+                  previewStore?.storeId === storeId &&
+                  chartOnScreen(
+                    selectedCampaign.issued,
+                    selectedCampaign.validUntil,
+                  );
 
                 return (
                   <>
@@ -2738,6 +2822,7 @@ export function ImportChartButton({
                             onValueChange={(value) => {
                               if (typeof value === "string" && value) {
                                 setAllStoredPreviewId(value);
+                                setAllStoredPreviewCampaignKey(null);
                                 setStoreDraft(value);
                               }
                             }}
@@ -2767,7 +2852,10 @@ export function ImportChartButton({
                           <button
                             type="button"
                             aria-label="Back to store list"
-                            onClick={() => setAllStoredPreviewId(null)}
+                            onClick={() => {
+                              setAllStoredPreviewId(null);
+                              setAllStoredPreviewCampaignKey(null);
+                            }}
                             className="inline-flex h-9 shrink-0 items-center gap-1 rounded-lg px-2.5 text-xs font-semibold text-stone-200 ring-1 ring-white/15"
                           >
                             <X className="size-3.5" aria-hidden />
@@ -2787,7 +2875,7 @@ export function ImportChartButton({
                           ? "Preview this store's settings and campaign presets."
                           : "Store settings saved on this device. Tap a card to preview."}
                       </p>
-                      <div className="flex flex-wrap gap-2 pt-1">
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
                         <button
                           type="button"
                           onClick={exportStoredData}
@@ -2813,6 +2901,28 @@ export function ImportChartButton({
                             onStoredImportFile(file);
                           }}
                         />
+                        {previewStore ? (
+                          <div className="ml-auto flex shrink-0 items-center gap-1.5">
+                            {storedEditing &&
+                            storedDraft?.storeId === previewStore.storeId ? (
+                              <button
+                                type="button"
+                                disabled={storedEditChanges.length === 0}
+                                onClick={resetStoredEdit}
+                                className="rounded-lg px-2.5 py-1 text-xs font-semibold text-stone-200 ring-1 ring-white/15 disabled:opacity-40"
+                              >
+                                Reset
+                              </button>
+                            ) : null}
+                            <StoredEditButton
+                              editing={
+                                storedEditing &&
+                                storedDraft?.storeId === previewStore.storeId
+                              }
+                              onToggle={toggleStoredEditing}
+                            />
+                          </div>
+                        ) : null}
                       </div>
                       <button
                         type="button"
@@ -2821,43 +2931,149 @@ export function ImportChartButton({
                         onClick={() => {
                           setAllStoredOpen(false);
                           setAllStoredPreviewId(null);
+                          setAllStoredPreviewCampaignKey(null);
                         }}
                       >
                         <X className="size-5" />
                       </button>
                     </div>
-                    <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-3">
+                    <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
                       {previewStore ? (
                         <>
-                          <div className="space-y-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2.5">
+                          <div className="space-y-2">
                             <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">
                               Store settings
                             </p>
-                            <div className="space-y-0.5">
-                              <p className="text-xs text-stone-500">Name</p>
-                              <p className="truncate text-sm text-stone-200">
-                                {nameFor(previewStore.storeId) ||
-                                  previewStore.name ||
-                                  "Not set"}
-                              </p>
-                            </div>
+                            {editingPreview ? (
+                              <StoreNameField
+                                value={nameFor(previewStore.storeId)}
+                                onChange={(value) =>
+                                  changeStoreName(previewStore.storeId, value)
+                                }
+                              />
+                            ) : (
+                              <div className="space-y-0.5">
+                                <p className="text-xs text-stone-500">Name</p>
+                                <p className="truncate text-sm text-stone-200">
+                                  {nameFor(previewStore.storeId) ||
+                                    previewStore.name ||
+                                    "Not set"}
+                                </p>
+                              </div>
+                            )}
                             <div className="grid grid-cols-2 gap-3">
-                              <div className="space-y-0.5">
-                                <p className="text-xs text-stone-500">Dates</p>
-                                <p className="text-sm text-stone-200">
-                                  {previewDatesLabel}
-                                </p>
-                              </div>
-                              <div className="space-y-0.5">
-                                <p className="text-xs text-stone-500">List</p>
-                                <p className="text-sm text-stone-200">
-                                  {previewListLabel}
-                                </p>
-                              </div>
+                              {editingPreview ? (
+                                <>
+                                  <label className="block min-w-0 space-y-1">
+                                    <span className="text-xs text-stone-500">
+                                      Dates
+                                    </span>
+                                    <Select
+                                      value={previewDatesValue}
+                                      items={STORE_DATES_LABELS}
+                                      onValueChange={(value) => {
+                                        if (
+                                          value === "full" ||
+                                          value === "short"
+                                        ) {
+                                          changeStoreDates(
+                                            previewStore.storeId,
+                                            value,
+                                          );
+                                        } else if (
+                                          value === "days" &&
+                                          debugDays
+                                        ) {
+                                          changeStoreDates(
+                                            previewStore.storeId,
+                                            value,
+                                          );
+                                        }
+                                      }}
+                                    >
+                                      <SelectTrigger
+                                        aria-label="Dates display"
+                                        className="h-11 w-full min-w-0 rounded-xl border-white/10 bg-black/30 px-3 text-white hover:bg-black/40 focus-visible:border-white/20 focus-visible:ring-white/15 dark:bg-black/30 [&_svg]:text-stone-400"
+                                      >
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent
+                                        align="start"
+                                        alignItemWithTrigger={false}
+                                        className="z-[120] rounded-xl border-white/10 bg-popover p-1"
+                                      >
+                                        {storeDatesModes.map((mode) => (
+                                          <SelectItem key={mode} value={mode}>
+                                            {STORE_DATES_LABELS[mode]}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </label>
+                                  <label className="block min-w-0 space-y-1">
+                                    <span className="text-xs text-stone-500">
+                                      List
+                                    </span>
+                                    <Select
+                                      value={previewListValue}
+                                      items={STORE_LIST_LABELS}
+                                      onValueChange={(value) => {
+                                        if (
+                                          value === "tags" ||
+                                          value === "compact"
+                                        ) {
+                                          changeStoreList(
+                                            previewStore.storeId,
+                                            value,
+                                          );
+                                        }
+                                      }}
+                                    >
+                                      <SelectTrigger
+                                        aria-label="List display"
+                                        className="h-11 w-full min-w-0 rounded-xl border-white/10 bg-black/30 px-3 text-white hover:bg-black/40 focus-visible:border-white/20 focus-visible:ring-white/15 dark:bg-black/30 [&_svg]:text-stone-400"
+                                      >
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent
+                                        align="start"
+                                        alignItemWithTrigger={false}
+                                        className="z-[120] rounded-xl border-white/10 bg-popover p-1"
+                                      >
+                                        {(
+                                          Object.keys(
+                                            STORE_LIST_LABELS,
+                                          ) as StoreListMode[]
+                                        ).map((mode) => (
+                                          <SelectItem key={mode} value={mode}>
+                                            {STORE_LIST_LABELS[mode]}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </label>
+                                </>
+                              ) : (
+                                <>
+                                  <div className="space-y-0.5">
+                                    <p className="text-xs text-stone-500">
+                                      Dates
+                                    </p>
+                                    <p className="text-sm text-stone-200">
+                                      {previewDatesLabel}
+                                    </p>
+                                  </div>
+                                  <div className="space-y-0.5">
+                                    <p className="text-xs text-stone-500">
+                                      List
+                                    </p>
+                                    <p className="text-sm text-stone-200">
+                                      {previewListLabel}
+                                    </p>
+                                  </div>
+                                </>
+                              )}
                             </div>
-                            <p className="font-mono text-xs text-stone-400">
-                              ID {previewStore.storeId}
-                            </p>
                           </div>
                           <div className="space-y-2">
                             <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">
@@ -2870,32 +3086,188 @@ export function ImportChartButton({
                               <p className="text-sm text-stone-500">
                                 No campaign presets saved for this store yet.
                               </p>
-                            ) : (
-                              previewCampaigns.map((item) => (
-                                <article
-                                  key={`${item.issued}|${item.validUntil}`}
-                                  className="rounded-xl border border-white/10 bg-black/20 px-3 py-2.5"
-                                >
-                                  <p className="min-w-0 truncate text-sm font-medium text-white">
-                                    {item.title}
-                                  </p>
+                            ) : selectedCampaign ? (
+                              <>
+                                <div className="flex items-center gap-2">
+                                  <Select
+                                    value={allStoredPreviewCampaignKey ?? undefined}
+                                    items={campaignSelectItems}
+                                    onValueChange={(value) => {
+                                      if (typeof value === "string" && value) {
+                                        setAllStoredPreviewCampaignKey(value);
+                                      }
+                                    }}
+                                  >
+                                    <SelectTrigger
+                                      aria-label="Preview campaign"
+                                      className="h-11 min-w-0 flex-1 rounded-xl border-white/10 bg-black/30 px-3 text-white hover:bg-black/40 focus-visible:border-white/20 focus-visible:ring-white/15 dark:bg-black/30 [&_svg]:text-stone-400"
+                                    >
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent
+                                      align="start"
+                                      alignItemWithTrigger={false}
+                                      className="z-[120] max-w-[min(24rem,calc(100vw-2.5rem))] rounded-xl border-white/10 bg-popover p-1"
+                                    >
+                                      {previewCampaigns.flatMap((item) => {
+                                        const key = campaignKey(
+                                          item.issued,
+                                          item.validUntil,
+                                        );
+                                        if (!key) return [];
+                                        return [
+                                          <SelectItem key={key} value={key}>
+                                            {item.title}
+                                          </SelectItem>,
+                                        ];
+                                      })}
+                                    </SelectContent>
+                                  </Select>
+                                  <button
+                                    type="button"
+                                    aria-label="Clear campaign selection"
+                                    onClick={() =>
+                                      setAllStoredPreviewCampaignKey(null)
+                                    }
+                                    className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-xl px-3 text-xs font-semibold text-stone-200 ring-1 ring-white/15"
+                                  >
+                                    <X className="size-3.5" aria-hidden />
+                                    Clear
+                                  </button>
+                                </div>
+                                <article className="rounded-xl border border-white/10 bg-black/20 px-3 py-2.5">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <p className="min-w-0 truncate text-sm font-medium text-white">
+                                      {selectedCampaign.title}
+                                    </p>
+                                    {selectedCampaignOnScreen ? (
+                                      <span className="shrink-0 text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-sky-300">
+                                        On screen
+                                      </span>
+                                    ) : null}
+                                  </div>
                                   <p className="mt-0.5 text-xs text-stone-400">
-                                    Issued {formatShortDate(item.issued)} · Valid
-                                    until {formatShortDate(item.validUntil)}
-                                    {item.version
-                                      ? ` · Version ${item.version}`
+                                    Issued{" "}
+                                    {formatShortDate(selectedCampaign.issued)} ·
+                                    Valid until{" "}
+                                    {formatShortDate(
+                                      selectedCampaign.validUntil,
+                                    )}
+                                    {selectedCampaign.version
+                                      ? ` · Version ${selectedCampaign.version}`
                                       : ""}
                                   </p>
-                                  <p className="mt-1 text-[0.7rem] text-stone-500">
-                                    Hidden {item.hidden.length}
-                                    <span className="text-stone-600"> · </span>
-                                    Defaults{" "}
-                                    {
-                                      Object.keys(item.preset.defaults).length
+                                  <StoredCampaignDetails
+                                    item={selectedCampaign}
+                                    editing={editingPreview}
+                                    showStoreDisplay={false}
+                                    invalidDefaults={
+                                      selectedCampaignOnScreen
+                                        ? invalidDefaults
+                                        : []
                                     }
-                                  </p>
+                                    onOpenHidden={(entry) =>
+                                      openStoredProduct(
+                                        entry.name,
+                                        selectedCampaign.issued,
+                                        selectedCampaign.validUntil,
+                                      )
+                                    }
+                                    onRemoveHidden={(entry) =>
+                                      removeHidden(
+                                        previewStore.storeId,
+                                        selectedCampaign.issued,
+                                        selectedCampaign.validUntil,
+                                        hiddenEntryKey(entry),
+                                        selectedCampaignOnScreen,
+                                      )
+                                    }
+                                    onRemoveDefault={(name) =>
+                                      removeDefault(
+                                        previewStore.storeId,
+                                        selectedCampaign.issued,
+                                        selectedCampaign.validUntil,
+                                        name,
+                                        selectedCampaignOnScreen,
+                                      )
+                                    }
+                                    onChangeDefault={(name, section) =>
+                                      changeDefault(
+                                        previewStore.storeId,
+                                        selectedCampaign.issued,
+                                        selectedCampaign.validUntil,
+                                        name,
+                                        section,
+                                        selectedCampaignOnScreen,
+                                      )
+                                    }
+                                    onUpdateInvalidDefault={(name) => {
+                                      const hit = invalidDefaults.find(
+                                        (row) => row.name === name,
+                                      );
+                                      if (hit) updateInvalidDefault(hit);
+                                    }}
+                                    onRemoveAllHidden={() =>
+                                      removeAllHidden(
+                                        previewStore.storeId,
+                                        selectedCampaign.issued,
+                                        selectedCampaign.validUntil,
+                                        selectedCampaignOnScreen,
+                                      )
+                                    }
+                                    onRemoveAllDefaults={() =>
+                                      removeAllDefaults(
+                                        previewStore.storeId,
+                                        selectedCampaign.issued,
+                                        selectedCampaign.validUntil,
+                                        selectedCampaignOnScreen,
+                                      )
+                                    }
+                                  />
                                 </article>
-                              ))
+                              </>
+                            ) : (
+                              previewCampaigns.flatMap((item) => {
+                                const key = campaignKey(
+                                  item.issued,
+                                  item.validUntil,
+                                );
+                                if (!key) return [];
+                                return [
+                                  <button
+                                    key={key}
+                                    type="button"
+                                    onClick={() =>
+                                      setAllStoredPreviewCampaignKey(key)
+                                    }
+                                    className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-left hover:bg-white/[0.06]"
+                                  >
+                                    <p className="min-w-0 truncate text-sm font-medium text-white">
+                                      {item.title}
+                                    </p>
+                                    <p className="mt-0.5 text-xs text-stone-400">
+                                      Issued {formatShortDate(item.issued)} ·
+                                      Valid until{" "}
+                                      {formatShortDate(item.validUntil)}
+                                      {item.version
+                                        ? ` · Version ${item.version}`
+                                        : ""}
+                                    </p>
+                                    <p className="mt-1 text-[0.7rem] text-stone-500">
+                                      Hidden {item.hidden.length}
+                                      <span className="text-stone-600">
+                                        {" "}
+                                        ·{" "}
+                                      </span>
+                                      Defaults{" "}
+                                      {
+                                        Object.keys(item.preset.defaults)
+                                          .length
+                                      }
+                                    </p>
+                                  </button>,
+                                ];
+                              })
                             )}
                           </div>
                         </>
