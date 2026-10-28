@@ -185,9 +185,10 @@ const SETTINGS_SECTION_IDS: SettingsSectionId[] = [
 type StoredCampaignDraft = {
   issued: string;
   validUntil: string;
+  title: string;
   onScreen: boolean;
   hidden: HiddenEntry[];
-  baselineHiddenKeys: string[];
+  baselineHidden: HiddenEntry[];
   defaults: Record<string, ProductDefault>;
   baselineDefaults: Record<string, ProductDefault>;
 };
@@ -199,6 +200,14 @@ type StoredEditDraft = {
   campaigns: Record<string, StoredCampaignDraft>;
 };
 
+type StoredEditChange = {
+  id: string;
+  group: "Store" | "Hidden" | "Defaults";
+  label: string;
+  from: string;
+  to: string;
+};
+
 function copyDefaults(
   defaults: Record<string, ProductDefault>,
 ): Record<string, ProductDefault> {
@@ -208,6 +217,59 @@ function copyDefaults(
     next[name] = { section: value.section, life: null };
   }
   return next;
+}
+
+function storageChoiceLabel(value: ProductDefault | undefined): string {
+  return value?.section ? SECTION_TAG[value.section] : "None";
+}
+
+function listStoredEditChanges(draft: StoredEditDraft): StoredEditChange[] {
+  const changes: StoredEditChange[] = [];
+  if (draft.storeName !== draft.baselineStoreName) {
+    changes.push({
+      id: "store:name",
+      group: "Store",
+      label: "Store name",
+      from: draft.baselineStoreName.trim() || "Not set",
+      to: draft.storeName.trim() || "Not set",
+    });
+  }
+  const campaignCount = Object.keys(draft.campaigns).length;
+  for (const [campKey, campaign] of Object.entries(draft.campaigns)) {
+    const suffix =
+      campaignCount > 1
+        ? ` · ${campaign.title || formatShortDate(campaign.validUntil)}`
+        : "";
+    const remaining = new Set(campaign.hidden.map((entry) => hiddenEntryKey(entry)));
+    for (const entry of campaign.baselineHidden) {
+      const key = hiddenEntryKey(entry);
+      if (remaining.has(key)) continue;
+      changes.push({
+        id: `hidden:${campKey}:${key}`,
+        group: "Hidden",
+        label: `${formatHiddenLabel(entry)}${suffix}`,
+        from: "Hidden",
+        to: "Shown",
+      });
+    }
+    const names = new Set([
+      ...Object.keys(campaign.baselineDefaults),
+      ...Object.keys(campaign.defaults),
+    ]);
+    for (const name of [...names].sort((a, b) => a.localeCompare(b))) {
+      const from = campaign.baselineDefaults[name];
+      const to = campaign.defaults[name];
+      if ((from?.section ?? null) === (to?.section ?? null)) continue;
+      changes.push({
+        id: `default:${campKey}:${name}`,
+        group: "Defaults",
+        label: `${name}${suffix}`,
+        from: storageChoiceLabel(from),
+        to: storageChoiceLabel(to),
+      });
+    }
+  }
+  return changes;
 }
 
 type BarcodeDetectorLike = {
@@ -262,6 +324,7 @@ export function ImportChartButton({
   const [changeChoices, setChangeChoices] = useState<string[]>([]);
   const [storedEditing, setStoredEditing] = useState(false);
   const [storedDraft, setStoredDraft] = useState<StoredEditDraft | null>(null);
+  const [storedConfirmOpen, setStoredConfirmOpen] = useState(false);
   const [allStoredOpen, setAllStoredOpen] = useState(false);
   const storePromptRef = useRef<string | null>(null);
   const [activeSettingsSection, setActiveSettingsSection] =
@@ -384,6 +447,7 @@ export function ImportChartButton({
     setStoreMenuAll(false);
     setStoredEditing(false);
     setStoredDraft(null);
+    setStoredConfirmOpen(false);
     setActiveSettingsSection("settings-app");
     const raf = window.requestAnimationFrame(() => {
       settingsBodyRef.current?.scrollTo({ top: 0 });
@@ -434,6 +498,7 @@ export function ImportChartButton({
       // Quit Settings while editing — drop the draft, do not apply.
       setStoredEditing(false);
       setStoredDraft(null);
+      setStoredConfirmOpen(false);
       setAllStoredOpen(false);
       setStoreMenuOpen(false);
       setStoreMenuAll(false);
@@ -823,12 +888,14 @@ export function ImportChartButton({
       const key = campaignKey(item.issued, item.validUntil);
       if (!key) continue;
       const defaults = copyDefaults(item.preset.defaults);
+      const hidden = item.hidden.map((entry) => ({ ...entry }));
       campaigns[key] = {
         issued: item.issued,
         validUntil: item.validUntil,
+        title: item.title,
         onScreen: !previewStoreId && chartOnScreen(item.issued, item.validUntil),
-        hidden: item.hidden.map((entry) => ({ ...entry })),
-        baselineHiddenKeys: item.hidden.map((entry) => hiddenEntryKey(entry)),
+        hidden,
+        baselineHidden: hidden.map((entry) => ({ ...entry })),
         defaults,
         baselineDefaults: copyDefaults(defaults),
       };
@@ -839,28 +906,30 @@ export function ImportChartButton({
       baselineStoreName: storeNames[targetStoreId] ?? "",
       campaigns,
     });
+    setStoredConfirmOpen(false);
     setStoredEditing(true);
   }
 
   function discardStoredEdit() {
     setStoredEditing(false);
     setStoredDraft(null);
+    setStoredConfirmOpen(false);
   }
 
   function commitStoredEdit() {
     const draft = storedDraft;
     if (!draft) {
-      setStoredEditing(false);
+      discardStoredEdit();
       return;
     }
     if (draft.storeName !== draft.baselineStoreName) {
       setStoreName(draft.storeId, draft.storeName);
     }
     for (const campaign of Object.values(draft.campaigns)) {
-      const removedHidden = campaign.baselineHiddenKeys.filter(
-        (key) => !campaign.hidden.some((entry) => hiddenEntryKey(entry) === key),
-      );
-      for (const key of removedHidden) {
+      const remaining = new Set(campaign.hidden.map((entry) => hiddenEntryKey(entry)));
+      for (const entry of campaign.baselineHidden) {
+        const key = hiddenEntryKey(entry);
+        if (remaining.has(key)) continue;
         if (campaign.onScreen) unhideByKey(key);
         else forgetSavedHidden(draft.storeId, campaign.issued, campaign.validUntil, key);
       }
@@ -885,14 +954,28 @@ export function ImportChartButton({
         }
       }
     }
-    setStoredEditing(false);
-    setStoredDraft(null);
+    discardStoredEdit();
+  }
+
+  function requestStoredEditConfirm() {
+    if (!storedDraft) {
+      discardStoredEdit();
+      return;
+    }
+    const changes = listStoredEditChanges(storedDraft);
+    if (changes.length === 0) {
+      discardStoredEdit();
+      return;
+    }
+    setStoredConfirmOpen(true);
   }
 
   function toggleStoredEditing() {
-    if (storedEditing) commitStoredEdit();
+    if (storedEditing) requestStoredEditConfirm();
     else beginStoredEdit();
   }
+
+  const storedEditChanges = storedDraft ? listStoredEditChanges(storedDraft) : [];
 
   function patchStoredCampaign(
     issued: string,
@@ -2054,6 +2137,85 @@ export function ImportChartButton({
           />
         </div>
       </DialogContent>
+      <Dialog
+        open={storedConfirmOpen}
+        onOpenChange={(next) => {
+          if (!next) setStoredConfirmOpen(false);
+        }}
+      >
+        <DialogContent
+          showCloseButton={false}
+          overlayClassName="z-[60] bg-black/50"
+          className="z-[60] max-h-[min(40rem,calc(100dvh-2rem))] max-w-sm gap-0 overflow-y-auto rounded-2xl p-0"
+        >
+          <DialogHeader className="space-y-2 px-4 pt-4 pr-14 pb-2">
+            <DialogTitle className="font-display text-xl text-white">
+              Apply stored changes?
+            </DialogTitle>
+            <DialogDescription className="text-sm text-stone-400">
+              {storedEditChanges.length === 1
+                ? "1 change is ready to save for this store."
+                : `${storedEditChanges.length} changes are ready to save for this store.`}
+            </DialogDescription>
+            <button
+              type="button"
+              className="absolute top-3 right-3 inline-flex size-10 items-center justify-center rounded-full bg-white/10 text-white"
+              aria-label="Close stored changes"
+              onClick={() => setStoredConfirmOpen(false)}
+            >
+              <X className="size-5" />
+            </button>
+          </DialogHeader>
+          <div className="space-y-3 border-t border-white/10 p-4">
+            <ul className="max-h-64 space-y-2 overflow-y-auto rounded-xl border border-white/10 bg-black/20 p-2">
+              {storedEditChanges.map((change, index) => {
+                const showGroup =
+                  index === 0 || storedEditChanges[index - 1]?.group !== change.group;
+                return (
+                  <li key={change.id}>
+                    {showGroup ? (
+                      <p className="px-1 pt-1 text-xs font-medium tracking-wide text-stone-500 uppercase">
+                        {change.group}
+                      </p>
+                    ) : null}
+                    <div className="rounded-lg px-1 py-1.5">
+                      <p className="truncate text-sm text-white">{change.label}</p>
+                      <p className="text-xs text-stone-400">
+                        {change.from} → {change.to}
+                      </p>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+            <div className="grid gap-2">
+              <Button
+                type="button"
+                className="h-11 rounded-xl"
+                onClick={commitStoredEdit}
+              >
+                Confirm
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11 rounded-xl border-white/15 text-white"
+                onClick={() => setStoredConfirmOpen(false)}
+              >
+                Keep editing
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11 rounded-xl border-white/15 text-red-300"
+                onClick={discardStoredEdit}
+              >
+                Discard changes
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
       <Dialog
         open={storePrompt != null}
         onOpenChange={(next) => {
