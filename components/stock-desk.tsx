@@ -53,8 +53,6 @@ import {
 import {
   getHiddenEntries,
   getHiddenEntriesServer,
-  getHiddenNames,
-  getHiddenNamesServer,
   isHiddenProduct,
   isHiddenSection,
   subscribeHidden,
@@ -224,11 +222,6 @@ export function StockDesk() {
   const showItemFromTopRef = useRef(false);
   const { pack, deliveryDate, prepTime, imported } = desk;
   const { chart, footnotes, rules } = pack;
-  const hiddenNames = useSyncExternalStore(
-    subscribeHidden,
-    getHiddenNames,
-    getHiddenNamesServer,
-  );
   const hiddenEntries = useSyncExternalStore(
     subscribeHidden,
     getHiddenEntries,

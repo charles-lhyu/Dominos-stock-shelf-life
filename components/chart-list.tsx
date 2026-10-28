@@ -39,8 +39,6 @@ import {
 } from "@/lib/preview";
 import type { ProductDefault } from "@/lib/item-preset-store";
 import {
-  getHiddenEntries,
-  getHiddenEntriesServer,
   getHiddenNames,
   getHiddenNamesServer,
   isHiddenSection,
@@ -216,8 +214,6 @@ export function ChartList({
     getHiddenNamesServer,
   );
   const hiddenCount = hiddenNames.length;
-  // Subscribe so section-level hides refresh the list.
-  useSyncExternalStore(subscribeHidden, getHiddenEntries, getHiddenEntriesServer);
   // "New" is a filter chip only — list sections stay the real chart categories.
   const newOnly = isNewCategoryFilter(category);
   const categories =

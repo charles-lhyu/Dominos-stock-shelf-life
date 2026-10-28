@@ -36,11 +36,13 @@ function readEntries(): HiddenEntry[] {
   }
 }
 
-function writeEntries(entries: HiddenEntry[]) {
+function writeEntries(next: HiddenEntry[]) {
+  cached = next;
+  cachedNames = hiddenNamesFromEntries(next);
   try {
     window.localStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify(serializeHiddenEntries(entries)),
+      JSON.stringify(serializeHiddenEntries(next)),
     );
   } catch {
     // Ignore quota / private mode.
@@ -49,10 +51,22 @@ function writeEntries(entries: HiddenEntry[]) {
 }
 
 let cached: HiddenEntry[] | null = null;
+/** Stable snapshot for useSyncExternalStore — never allocate in getSnapshot. */
+let cachedNames: string[] | null = null;
 
 function entries(): HiddenEntry[] {
-  if (cached == null) cached = readEntries();
+  if (cached == null) {
+    cached = readEntries();
+    cachedNames = hiddenNamesFromEntries(cached);
+  }
   return cached;
+}
+
+function names(): string[] {
+  if (cachedNames == null) {
+    cachedNames = hiddenNamesFromEntries(entries());
+  }
+  return cachedNames;
 }
 
 export function subscribeHidden(listener: () => void) {
@@ -70,7 +84,7 @@ export function getHiddenEntriesServer(): HiddenEntry[] {
 
 /** Product names that have at least one hidden storage (for counts / legacy callers). */
 export function getHiddenNames(): string[] {
-  return hiddenNamesFromEntries(entries());
+  return names();
 }
 
 export function getHiddenNamesServer(): string[] {
@@ -91,36 +105,28 @@ export function isHiddenProduct(name: string, sections: Iterable<SectionId>): bo
 
 /** Hide every storage for this product. */
 export function hideProductName(name: string) {
-  const next = addHiddenEntry(entries(), name, null);
-  cached = next;
-  writeEntries(cached);
+  writeEntries(addHiddenEntry(entries(), name, null));
 }
 
 /** Hide one storage for a multi-storage product. */
 export function hideProductSection(name: string, section: SectionId) {
-  const next = addHiddenEntry(entries(), name, section);
-  cached = next;
-  writeEntries(cached);
+  writeEntries(addHiddenEntry(entries(), name, section));
 }
 
 export function unhideProductName(name: string) {
-  cached = removeHiddenEntry(entries(), name);
-  writeEntries(cached);
+  writeEntries(removeHiddenEntry(entries(), name));
 }
 
 export function unhideProductSection(name: string, section: SectionId | null) {
-  cached = removeHiddenEntry(entries(), name, section);
-  writeEntries(cached);
+  writeEntries(removeHiddenEntry(entries(), name, section));
 }
 
 export function unhideByKey(key: string) {
-  cached = removeHiddenByKey(entries(), key);
-  writeEntries(cached);
+  writeEntries(removeHiddenByKey(entries(), key));
 }
 
 export function clearHiddenNames() {
-  cached = [];
-  writeEntries(cached);
+  writeEntries([]);
 }
 
 export function replaceHiddenNames(next: unknown) {
@@ -132,8 +138,7 @@ export function replaceHiddenNames(next: unknown) {
   ) {
     return;
   }
-  cached = cleaned;
-  writeEntries(cached);
+  writeEntries(cleaned);
 }
 
 export { formatHiddenLabel, hiddenEntryKey };
