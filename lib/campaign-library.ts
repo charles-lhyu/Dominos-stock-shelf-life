@@ -8,6 +8,7 @@ import {
   dropAllStoredHidden,
   dropStoredDefault,
   dropStoredHidden,
+  setStoredDefault,
   parseCampaignLibrary,
   planStoreChange,
   readStoreSettings,
@@ -49,7 +50,7 @@ import {
 import { getCompactList, setCompactList, subscribeCompactList } from "./compact-list-store";
 import { readDebugDays, subscribeDebug, writeDebugDays } from "./debug-store";
 import { getStoreId, hydrateStoreIdStore, subscribeStoreId } from "./store-id-store";
-import type { ChartPack, ShelfRule } from "./types";
+import type { ChartPack, SectionId, ShelfRule } from "./types";
 
 const STORAGE_KEY = "campaign-library-v1";
 const EMPTY_CAMPAIGNS: CampaignSummary[] = [];
@@ -194,6 +195,18 @@ export function forgetSavedDefault(
   name: string,
 ) {
   updateSavedCampaign(storeId, issued, validUntil, (saved) => dropStoredDefault(saved, name));
+}
+
+export function writeSavedDefault(
+  storeId: string,
+  issued: string,
+  validUntil: string,
+  name: string,
+  section: SectionId,
+) {
+  updateSavedCampaign(storeId, issued, validUntil, (saved) =>
+    setStoredDefault(saved, name, section),
+  );
 }
 
 export function clearSavedHidden(storeId: string, issued: string, validUntil: string) {

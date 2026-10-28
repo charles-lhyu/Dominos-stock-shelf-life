@@ -11,7 +11,13 @@ import {
   sameItemPreset,
   type ItemPreset,
 } from "./item-preset-store";
-import type { ChartPack, ShelfRule } from "./types";
+import type { ChartPack, SectionId, ShelfRule } from "./types";
+
+const SECTIONS = new Set<SectionId>(["frozen", "chilled", "ready", "ambient", "pack"]);
+
+function isSection(value: unknown): value is SectionId {
+  return typeof value === "string" && SECTIONS.has(value as SectionId);
+}
 
 /** Hidden items, item-type preset, and date display for one store on one campaign. */
 export type StoreCampaignSettings = {
@@ -308,6 +314,21 @@ export function dropStoredDefault(
   return { ...settings, preset: { ...settings.preset, defaults } };
 }
 
+/** Set or replace one product's storage default in saved campaign settings. */
+export function setStoredDefault(
+  settings: StoreCampaignSettings,
+  name: string,
+  section: SectionId,
+): StoreCampaignSettings {
+  const trimmed = name.trim();
+  if (!trimmed || !isSection(section)) return settings;
+  const current = settings.preset.defaults[trimmed];
+  if (current?.section === section && current.life == null) return settings;
+  const defaults = { ...settings.preset.defaults };
+  defaults[trimmed] = { section, life: null };
+  return { ...settings, preset: { ...settings.preset, defaults } };
+}
+
 export function dropAllStoredHidden(settings: StoreCampaignSettings): StoreCampaignSettings {
   if (settings.hidden.length === 0) return settings;
   return { ...settings, hidden: [] };
@@ -534,6 +555,8 @@ export type StoreCampaignView = {
   compactDates: boolean;
   showDayCounts: boolean;
   compactList: boolean;
+  /** Chart storage rows for this campaign — used to edit defaults in Settings. */
+  rules: ShelfRule[];
 };
 
 /** Settings this store has saved, one row per campaign. */
@@ -549,6 +572,7 @@ export function listStoreCampaigns(library: CampaignLibrary, storeId: string): S
     const [issued = "", validUntil = ""] = key.split("|");
     if (campaignKey(issued, validUntil) !== key) continue;
     const campaign = campaigns.get(key);
+    const rules = campaign?.pack.rules ?? [];
     rows.push({
       issued,
       validUntil,
@@ -557,13 +581,10 @@ export function listStoreCampaigns(library: CampaignLibrary, storeId: string): S
       compactDates: settings.compactDates === true,
       showDayCounts: settings.showDayCounts === true,
       compactList: settings.compactList === true,
+      rules,
       preset: {
         ...settings.preset,
-        defaults: retainProductDefaults(
-          settings.preset.defaults,
-          campaign?.pack.rules ?? [],
-          settings.hidden,
-        ),
+        defaults: retainProductDefaults(settings.preset.defaults, rules, settings.hidden),
       },
     });
   }

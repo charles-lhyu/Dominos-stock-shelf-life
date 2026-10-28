@@ -8,6 +8,7 @@ import {
   dropAllStoredHidden,
   dropStoredDefault,
   dropStoredHidden,
+  setStoredDefault,
   listCampaignSummaries,
   listDeviceStored,
   listStoreCampaigns,
@@ -383,6 +384,21 @@ describe("campaign library records", () => {
     const clearedDefaults = dropAllStoredDefaults(settings);
     assert.deepEqual(clearedDefaults.preset.defaults, {});
     assert.equal(dropAllStoredDefaults(clearedDefaults), clearedDefaults);
+  });
+
+  it("changes a saved product default to another storage", () => {
+    const settings = {
+      hidden: [] as ReturnType<typeof parseHiddenEntries>,
+      preset: {
+        ...preset,
+        defaults: {
+          Pepperoni: { section: "chilled" as const, life: null },
+        },
+      },
+    };
+    const next = setStoredDefault(settings, "Pepperoni", "frozen");
+    assert.deepEqual(next.preset.defaults.Pepperoni, { section: "frozen", life: null });
+    assert.equal(setStoredDefault(next, "Pepperoni", "frozen"), next);
   });
 
   it("keeps a product storage default such as pepperoni chilled", () => {

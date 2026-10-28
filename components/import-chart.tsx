@@ -66,7 +66,9 @@ import {
   setStoreName,
   subscribeCampaignLibrary,
   subscribeStoredStore,
+  writeSavedDefault,
 } from "@/lib/campaign-library";
+import { canonicalProductName } from "@/lib/chart-name-migrate";
 import { CHANGELOG } from "@/lib/changelog";
 import { parseChartPack } from "@/lib/chart-pack";
 import { formatCompactDate, formatLongDate, formatShortDate } from "@/lib/dates";
@@ -120,7 +122,7 @@ import {
   subscribeItemPreset,
   type ItemPreset,
 } from "@/lib/item-preset-store";
-import { prepClockTime, SECTION_TAG } from "@/lib/preview";
+import { prepClockTime, SECTION_ORDER, SECTION_TAG } from "@/lib/preview";
 import {
   appVersionLabel,
   getAppUpdateInfo,
@@ -128,7 +130,7 @@ import {
 } from "@/lib/reload-app";
 import { textConversionTable } from "@/lib/text-conversion";
 import { fetchRemoteChart } from "@/lib/remote-chart";
-import type { ChartPack } from "@/lib/types";
+import type { ChartPack, SectionId, ShelfRule } from "@/lib/types";
 import {
   getKeepAwake,
   getKeepAwakeServer,
@@ -711,13 +713,16 @@ export function ImportChartButton({
     );
   }
 
-  function withLiveSettings<T extends { hidden: HiddenEntry[]; preset: ItemPreset }>(item: T): T {
+  function withLiveSettings<
+    T extends { hidden: HiddenEntry[]; preset: ItemPreset; rules?: ShelfRule[] },
+  >(item: T): T & { rules: ShelfRule[] } {
     return {
       ...item,
       hidden: hiddenEntries,
       compactDates,
       showDayCounts: debugDays,
       compactList,
+      rules: desk.pack.rules,
       // Keep raw defaults so invalid old labels still show in Stored data.
       preset: itemPreset,
     };
@@ -762,6 +767,7 @@ export function ImportChartButton({
             title: desk.pack.chart.title || "Shelf life chart",
             hidden: hiddenEntries,
             preset: itemPreset,
+            rules: desk.pack.rules,
           }),
           ...savedRows,
         ]
@@ -815,6 +821,21 @@ export function ImportChartButton({
       return;
     }
     forgetSavedDefault(targetStoreId, issued, validUntil, name);
+  }
+
+  function changeDefault(
+    targetStoreId: string,
+    issued: string,
+    validUntil: string,
+    name: string,
+    section: SectionId,
+    onScreen: boolean,
+  ) {
+    if (onScreen) {
+      setProductDefault(name, { section }, desk.pack.rules);
+      return;
+    }
+    writeSavedDefault(targetStoreId, issued, validUntil, name, section);
   }
 
   function removeAllHidden(
@@ -1328,6 +1349,16 @@ export function ImportChartButton({
                               item.issued,
                               item.validUntil,
                               name,
+                              onScreen,
+                            )
+                          }
+                          onChangeDefault={(name, section) =>
+                            changeDefault(
+                              previewStoreId ?? storeId,
+                              item.issued,
+                              item.validUntil,
+                              name,
+                              section,
                               onScreen,
                             )
                           }
@@ -2325,6 +2356,24 @@ function InvalidDefaultsWarning({
   );
 }
 
+const STORED_SECTION_ACTIVE: Record<SectionId, string> = {
+  frozen: "bg-sky-400 text-sky-950 ring-sky-300",
+  chilled: "bg-teal-400 text-teal-950 ring-teal-300",
+  ready: "bg-amber-400 text-amber-950 ring-amber-300",
+  ambient: "bg-orange-400 text-orange-950 ring-orange-300",
+  pack: "bg-stone-300 text-stone-950 ring-stone-200",
+};
+
+function sectionsForStoredDefault(name: string, rules: ShelfRule[]): SectionId[] {
+  const trimmed = canonicalProductName(name) || name.trim();
+  if (!trimmed) return [];
+  const found = new Set<SectionId>();
+  for (const rule of rules) {
+    if (rule.name.trim() === trimmed) found.add(rule.sectionId);
+  }
+  return SECTION_ORDER.filter((id) => found.has(id));
+}
+
 function StoredCampaignDetails({
   item,
   editing,
@@ -2332,6 +2381,7 @@ function StoredCampaignDetails({
   onOpenHidden,
   onRemoveHidden,
   onRemoveDefault,
+  onChangeDefault,
   onUpdateInvalidDefault,
   onRemoveAllHidden,
   onRemoveAllDefaults,
@@ -2342,18 +2392,21 @@ function StoredCampaignDetails({
     compactDates?: boolean;
     showDayCounts?: boolean;
     compactList?: boolean;
+    rules?: ShelfRule[];
   };
   editing: boolean;
   invalidDefaults?: InvalidProductDefault[];
   onOpenHidden: (entry: HiddenEntry) => void;
   onRemoveHidden: (entry: HiddenEntry) => void;
   onRemoveDefault: (name: string) => void;
+  onChangeDefault?: (name: string, section: SectionId) => void;
   onUpdateInvalidDefault?: (name: string) => void;
   onRemoveAllHidden: () => void;
   onRemoveAllDefaults: () => void;
 }) {
-  const defaults = productDefaultLines(item.preset);
+  const defaults = productDefaultRows(item.preset);
   const invalidByName = new Map(invalidDefaults.map((row) => [row.name, row]));
+  const rules = item.rules ?? [];
   const dateLabel = item.showDayCounts ? "Days and hours" : item.compactDates ? "Short" : "Full";
   return (
     <>
@@ -2420,26 +2473,74 @@ function StoredCampaignDetails({
         <ul className="text-sm text-stone-200">
           {defaults.map((entry, index) => {
             const invalid = invalidByName.get(entry.name);
+            const options = sectionsForStoredDefault(entry.name, rules);
+            const canPick =
+              editing && !invalid && options.length > 1 && onChangeDefault != null;
             return (
               <li
                 key={entry.name}
                 className={cn(
                   storedRowClass(index),
                   invalid && "ring-1 ring-inset ring-amber-400/35",
+                  canPick && "items-start py-1.5",
                 )}
               >
                 <div className="min-w-0 flex-1">
-                  <span className={cn("block truncate", invalid && "text-amber-100")}>
-                    {entry.line}
-                  </span>
+                  <div className="flex min-w-0 items-center justify-between gap-2">
+                    <span
+                      className={cn(
+                        "min-w-0 truncate font-medium",
+                        invalid && "text-amber-100",
+                      )}
+                    >
+                      {entry.name}
+                    </span>
+                    {canPick ? null : (
+                      <span
+                        className={cn(
+                          "shrink-0 text-xs tabular-nums",
+                          invalid ? "text-amber-100/80" : "text-stone-400",
+                        )}
+                      >
+                        {entry.storage}
+                      </span>
+                    )}
+                  </div>
                   {invalid ? (
-                    <span className="block truncate text-[0.7rem] text-amber-100/70">
+                    <span className="mt-0.5 block truncate text-[0.7rem] text-amber-100/70">
                       {invalid.detail}
                     </span>
                   ) : null}
+                  {canPick ? (
+                    <div
+                      role="group"
+                      aria-label={`${entry.name} storage default`}
+                      className="mt-1.5 flex flex-wrap gap-1"
+                    >
+                      {options.map((section) => {
+                        const selected = entry.section === section;
+                        return (
+                          <button
+                            key={section}
+                            type="button"
+                            aria-pressed={selected}
+                            onClick={() => onChangeDefault(entry.name, section)}
+                            className={cn(
+                              "rounded-md px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide ring-1",
+                              selected
+                                ? STORED_SECTION_ACTIVE[section]
+                                : "bg-transparent text-stone-400 ring-white/15",
+                            )}
+                          >
+                            {SECTION_TAG[section]}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : null}
                 </div>
                 {invalid ? (
-                  <div className="flex shrink-0 items-center gap-1">
+                  <div className="flex shrink-0 items-center gap-1 self-center">
                     {invalid.update && onUpdateInvalidDefault ? (
                       <button
                         type="button"
@@ -2469,15 +2570,22 @@ function StoredCampaignDetails({
   );
 }
 
-function productDefaultLines(preset: ItemPreset): { name: string; line: string }[] {
+function productDefaultRows(
+  preset: ItemPreset,
+): { name: string; section: SectionId; storage: string }[] {
   return Object.entries(preset.defaults)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([name, item]) => {
-      const storage = item.section ? SECTION_TAG[item.section] : null;
-      if (!storage) return null;
-      return { name, line: `${name} default is ${storage}` };
+      if (!item.section) return null;
+      return {
+        name,
+        section: item.section,
+        storage: SECTION_TAG[item.section],
+      };
     })
-    .filter((row): row is { name: string; line: string } => row != null);
+    .filter(
+      (row): row is { name: string; section: SectionId; storage: string } => row != null,
+    );
 }
 
 function SettingsSectionTitle({ children }: { children: ReactNode }) {
