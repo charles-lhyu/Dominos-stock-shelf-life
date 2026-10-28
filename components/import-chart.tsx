@@ -1545,6 +1545,29 @@ export function ImportChartButton({
                     </ul>
                   ) : null}
                 </div>
+                {(storeMenuVisible ||
+                  previewStoreId != null ||
+                  storeDraft.trim() !== storeId) && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-12 shrink-0 rounded-xl border-white/15 px-3 text-white"
+                    disabled={storePrompt != null}
+                    onClick={() => {
+                      setStoreDraft(storeId);
+                      setStoreIdError(null);
+                      if (storedStoreIds.length > 0) {
+                        setStoreMenuAll(true);
+                        setStoreMenuOpen(true);
+                      } else {
+                        setStoreMenuOpen(false);
+                        setStoreMenuAll(false);
+                      }
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                )}
                 <Button
                   type="button"
                   className="h-12 shrink-0 rounded-xl px-3"
@@ -1575,48 +1598,18 @@ export function ImportChartButton({
               <div className="flex items-center justify-between gap-2">
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
                   <p className="text-sm font-medium text-stone-300">Stored data</p>
-                  {deviceStored.length > 0 ? (
-                    <button
-                      type="button"
-                      onClick={() => setAllStoredOpen(true)}
-                      className="shrink-0 text-xs font-semibold text-sky-300 underline-offset-2 hover:underline"
-                    >
-                      Show all
-                    </button>
-                  ) : null}
-                </div>
-                <div className="flex shrink-0 items-center gap-1.5">
                   <button
                     type="button"
                     disabled={storedEditing}
-                    onClick={exportStoredData}
-                    className="rounded-lg px-2 py-1 text-xs font-semibold text-stone-200 ring-1 ring-white/15 disabled:opacity-40"
+                    onClick={() => setAllStoredOpen(true)}
+                    className="shrink-0 text-xs font-semibold text-sky-300 underline-offset-2 hover:underline disabled:opacity-40"
                   >
-                    Export
+                    Show all
                   </button>
-                  <button
-                    type="button"
-                    disabled={storedEditing}
-                    onClick={() => storedImportInputRef.current?.click()}
-                    className="rounded-lg px-2 py-1 text-xs font-semibold text-stone-200 ring-1 ring-white/15 disabled:opacity-40"
-                  >
-                    Import
-                  </button>
-                  <input
-                    ref={storedImportInputRef}
-                    type="file"
-                    accept="application/json,.json"
-                    className="hidden"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0] ?? null;
-                      event.target.value = "";
-                      onStoredImportFile(file);
-                    }}
-                  />
-                  {previewStoreId ?? storeId ? (
-                    <StoredEditButton editing={storedEditing} onToggle={toggleStoredEditing} />
-                  ) : null}
                 </div>
+                {previewStoreId ?? storeId ? (
+                  <StoredEditButton editing={storedEditing} onToggle={toggleStoredEditing} />
+                ) : null}
               </div>
               {previewStoreId ?? storeId ? (
                 <div className="space-y-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2.5">
@@ -2542,8 +2535,36 @@ export function ImportChartButton({
               All stored data
             </DialogTitle>
             <DialogDescription className="text-sm text-stone-400">
-              Every store saved on this device. Tap one to preview it below.
+              Every store saved on this device. Tap one to preview it below. Export
+              or import a JSON backup of the whole library.
             </DialogDescription>
+            <div className="flex flex-wrap gap-2 pt-1">
+              <button
+                type="button"
+                onClick={exportStoredData}
+                className="rounded-lg px-2.5 py-1 text-xs font-semibold text-stone-200 ring-1 ring-white/15"
+              >
+                Export
+              </button>
+              <button
+                type="button"
+                onClick={() => storedImportInputRef.current?.click()}
+                className="rounded-lg px-2.5 py-1 text-xs font-semibold text-stone-200 ring-1 ring-white/15"
+              >
+                Import
+              </button>
+              <input
+                ref={storedImportInputRef}
+                type="file"
+                accept="application/json,.json"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0] ?? null;
+                  event.target.value = "";
+                  onStoredImportFile(file);
+                }}
+              />
+            </div>
             <button
               type="button"
               className="absolute top-3 right-3 inline-flex size-10 items-center justify-center rounded-full bg-white/10 text-white"
@@ -2555,7 +2576,10 @@ export function ImportChartButton({
           </DialogHeader>
           <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-3">
             {deviceStored.length === 0 ? (
-              <p className="text-sm text-stone-500">Nothing is saved on this device yet.</p>
+              <p className="text-sm text-stone-500">
+                Nothing is saved on this device yet. Import a backup to load stores
+                and campaign presets.
+              </p>
             ) : (
               deviceStored.map((item) => {
                 const label = nameFor(item.storeId);
