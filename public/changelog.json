@@ -1,5 +1,13 @@
 [
   {
+    "version": "1.4.61",
+    "notes": [
+      "Product storage defaults are only saved when the item has more than one storage",
+      "Stored data lists name on the left and storage on the right; Edit lets you change storage",
+      "Stored data edits apply only after Done, with a change list to confirm or discard"
+    ]
+  },
+  {
     "version": "1.4.60",
     "notes": [
       "Multi-storage items (like Bacon) let you hide one storage or all",
