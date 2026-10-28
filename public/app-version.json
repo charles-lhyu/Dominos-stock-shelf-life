@@ -1,6 +1,8 @@
 {
-  "version": "1.4.59",
+  "version": "1.4.60",
   "notes": [
-    "Saved presets and hidden names update when chart titles change (Bacon (FROZEN) → Bacon, NEW Chinese Style Chicken → Chinese Style Chicken)"
+    "Multi-storage items (like Bacon) let you hide one storage or all",
+    "Hide dialog highlights the storage you are on",
+    "Settings warns when a saved product default no longer matches the chart, with Update or Remove"
   ]
 }
