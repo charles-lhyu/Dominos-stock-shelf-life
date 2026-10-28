@@ -212,7 +212,7 @@ const STORE_DATES_LABELS: Record<StoreDatesMode, string> = {
 };
 
 const STORE_LIST_LABELS: Record<StoreListMode, string> = {
-  tags: "With tags",
+  tags: "Normal",
   compact: "Compact",
 };
 
@@ -1316,10 +1316,10 @@ export function ImportChartButton({
     : storeDisplayRow
       ? storeDisplayRow.compactList
         ? "Compact"
-        : "With tags"
+        : "Normal"
       : compactList
         ? "Compact"
-        : "With tags";
+        : "Normal";
   const storeDatesValue = storedDraft
     ? storeDatesMode(storedDraft.compactDates, storedDraft.showDayCounts)
     : storeDatesMode(
@@ -1333,6 +1333,9 @@ export function ImportChartButton({
     : storeListMode(
         storeDisplayRow?.compactList === true || (!storeDisplayRow && compactList),
       );
+  const storeDatesModes: StoreDatesMode[] = debugDays
+    ? ["full", "short", "days"]
+    : ["full", "short"];
 
   function syncNavCard(id: SettingsSectionId) {
     const nav = settingsNavRef.current;
@@ -1832,11 +1835,9 @@ export function ImportChartButton({
                             value={storeDatesValue}
                             items={STORE_DATES_LABELS}
                             onValueChange={(value) => {
-                              if (
-                                value === "full" ||
-                                value === "short" ||
-                                value === "days"
-                              ) {
+                              if (value === "full" || value === "short") {
+                                changeStoreDates(previewStoreId ?? storeId, value);
+                              } else if (value === "days" && debugDays) {
                                 changeStoreDates(previewStoreId ?? storeId, value);
                               }
                             }}
@@ -1852,13 +1853,11 @@ export function ImportChartButton({
                               alignItemWithTrigger={false}
                               className="rounded-xl border-white/10 bg-popover p-1"
                             >
-                              {(Object.keys(STORE_DATES_LABELS) as StoreDatesMode[]).map(
-                                (mode) => (
-                                  <SelectItem key={mode} value={mode}>
-                                    {STORE_DATES_LABELS[mode]}
-                                  </SelectItem>
-                                ),
-                              )}
+                              {storeDatesModes.map((mode) => (
+                                <SelectItem key={mode} value={mode}>
+                                  {STORE_DATES_LABELS[mode]}
+                                </SelectItem>
+                              ))}
                             </SelectContent>
                           </Select>
                         </label>
@@ -2618,7 +2617,7 @@ export function ImportChartButton({
                       : store.compactDates
                         ? "Short"
                         : "Full";
-                    const listLabel = store.compactList ? "Compact" : "With tags";
+                    const listLabel = store.compactList ? "Compact" : "Normal";
                     return (
                       <button
                         key={store.storeId}
@@ -3225,7 +3224,7 @@ function StoredCampaignDetails({
             <p className="text-xs text-stone-500">List</p>
           </div>
           <p className="px-2 text-sm text-stone-200">
-            {item.compactList ? "Compact" : "With tags"}
+            {item.compactList ? "Compact" : "Normal"}
           </p>
         </>
       ) : null}
