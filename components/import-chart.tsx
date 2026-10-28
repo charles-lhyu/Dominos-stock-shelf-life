@@ -578,7 +578,6 @@ export function ImportChartButton({
   const settingsSelectLabels = Object.fromEntries(
     settingsNav.map((item) => [item.id, item.label]),
   );
-  const otherStored = deviceStored.filter((item) => item.storeId !== storeId);
   const storedStoreIds = [...new Set(deviceStored.map((item) => item.storeId))];
   const storeQuery = storeDraft.trim().replace(/\s+/g, "");
   const filteredStoreIds = storeQuery
@@ -590,6 +589,9 @@ export function ImportChartButton({
     ? deviceStored.filter((item) => item.storeId === previewStoreId)
     : [];
   const storeMenuVisible = storeMenuOpen && filteredStoreIds.length > 0;
+  const otherStored = deviceStored.filter(
+    (item) => item.storeId !== (previewStoreId ?? storeId),
+  );
   const selectedOther =
     otherStored.find((item) => deviceStoredKey(item) === otherStoredKey) ??
     otherStored[0] ??
@@ -1036,41 +1038,6 @@ export function ImportChartButton({
                   Confirm
                 </Button>
               </div>
-              {previewStoreId ? (
-                <div className="space-y-2">
-                  <p className="text-xs font-medium text-stone-400">
-                    Preview for store {previewStoreId}
-                  </p>
-                  {previewRows.length === 0 ? (
-                    <p className="text-xs text-stone-500">
-                      Nothing saved for store {previewStoreId} yet.
-                    </p>
-                  ) : (
-                    previewRows.map((item) => (
-                      <article
-                        key={deviceStoredKey(item)}
-                        className="rounded-xl border border-white/10 bg-black/20 px-3 py-2.5"
-                      >
-                        <p className="min-w-0 truncate text-sm font-medium text-white">
-                          {item.title}
-                        </p>
-                        <p className="mt-0.5 text-xs text-stone-400">
-                          Issued {formatShortDate(item.issued)} · Valid until{" "}
-                          {formatShortDate(item.validUntil)}
-                        </p>
-                        <StoredCampaignDetails
-                          item={item}
-                          editing={false}
-                          onRemoveHidden={() => {}}
-                          onRemoveDefault={() => {}}
-                          onRemoveAllHidden={() => {}}
-                          onRemoveAllDefaults={() => {}}
-                        />
-                      </article>
-                    ))
-                  )}
-                </div>
-              ) : null}
               <p className={cn("text-xs", storeIdError ? "text-red-300" : "text-stone-500")}>
                 {storeIdError
                   ? storeIdError
@@ -1082,9 +1049,11 @@ export function ImportChartButton({
             <div className="space-y-2 border-t border-white/10 pt-3">
               <div className="flex items-center justify-between gap-2">
                 <p className="min-w-0 truncate text-sm font-medium text-stone-300">
-                  {storeId ? `Stored for store ${storeId}` : "Stored for this store"}
+                  {(previewStoreId ?? storeId)
+                    ? `Stored for store ${previewStoreId ?? storeId}`
+                    : "Stored for this store"}
                 </p>
-                {storedEditing || canEditStored ? (
+                {!previewStoreId && (storedEditing || canEditStored) ? (
                   <StoredEditButton
                     editing={storedEditing}
                     onToggle={() => setStoredEditing((on) => !on)}
@@ -1101,18 +1070,18 @@ export function ImportChartButton({
                   }}
                 />
               ) : null}
-              {!storeId ? (
+              {!(previewStoreId ?? storeId) ? (
                 <p className="text-xs text-stone-500">
                   Set a store ID to see the hidden items and product defaults saved for it.
                 </p>
-              ) : storedRows.length === 0 ? (
+              ) : (previewStoreId ? previewRows : storedRows).length === 0 ? (
                 <p className="text-xs text-stone-500">
-                  Nothing saved for store {storeId} yet.
+                  Nothing saved for store {previewStoreId ?? storeId} yet.
                 </p>
               ) : (
                 <div className="space-y-2">
-                  {storedRows.map((item) => {
-                    const onScreen = chartOnScreen(item.issued, item.validUntil);
+                  {(previewStoreId ? previewRows : storedRows).map((item) => {
+                    const onScreen = !previewStoreId && chartOnScreen(item.issued, item.validUntil);
                     return (
                       <article
                         key={`${item.issued}|${item.validUntil}`}
@@ -1134,7 +1103,7 @@ export function ImportChartButton({
                         </p>
                         <StoredCampaignDetails
                           item={item}
-                          editing={storedEditing}
+                          editing={!previewStoreId && storedEditing}
                           onRemoveHidden={(name) =>
                             removeHidden(item.issued, item.validUntil, name, onScreen)
                           }

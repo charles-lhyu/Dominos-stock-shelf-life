@@ -1,5 +1,11 @@
 [
   {
+    "version": "1.4.29",
+    "notes": [
+      "Typing a store ID shows that store in the stored data area before you confirm"
+    ]
+  },
+  {
     "version": "1.4.28",
     "notes": [
       "The store ID dropdown filters as you type, and a valid ID previews that store's saved data before you confirm"
