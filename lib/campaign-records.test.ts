@@ -4,6 +4,7 @@ import {
   campaignKey,
   emptyCampaignLibrary,
   listCampaignSummaries,
+  listDeviceStored,
   listStoreCampaigns,
   parseCampaignLibrary,
   planStoreChange,
@@ -127,6 +128,81 @@ describe("campaign library records", () => {
     assert.deepEqual(readStoreSettings(switched.library, "99", "2026-09-07", "2026-11-17")?.hidden, [
       "Olives",
     ]);
+  });
+
+  it("writes the screen onto a store that already has this campaign when asked to keep settings", () => {
+    let library = writeStoreSettings(emptyCampaignLibrary(), "99", "2026-09-07", "2026-11-17", {
+      hidden: ["Olives"],
+      preset,
+    });
+    const kept = planStoreChange({
+      library,
+      previousStoreId: "12345",
+      nextStoreId: "99",
+      issued: "2026-09-07",
+      validUntil: "2026-11-17",
+      current: { hidden: ["Bacon"], preset },
+      keepCurrent: true,
+    });
+    assert.equal(kept.restore, null);
+    assert.deepEqual(readStoreSettings(kept.library, "99", "2026-09-07", "2026-11-17")?.hidden, [
+      "Bacon",
+    ]);
+    assert.deepEqual(
+      readStoreSettings(kept.library, "12345", "2026-09-07", "2026-11-17")?.hidden,
+      ["Bacon"],
+    );
+  });
+
+  it("loads a saved store or clears the screen when asked not to keep settings", () => {
+    const library = writeStoreSettings(emptyCampaignLibrary(), "99", "2026-09-07", "2026-11-17", {
+      hidden: ["Olives"],
+      preset,
+    });
+    const loaded = planStoreChange({
+      library,
+      previousStoreId: "12345",
+      nextStoreId: "99",
+      issued: "2026-09-07",
+      validUntil: "2026-11-17",
+      current: { hidden: ["Bacon"], preset },
+      keepCurrent: false,
+    });
+    assert.deepEqual(loaded.restore?.hidden, ["Olives"]);
+    assert.deepEqual(readStoreSettings(loaded.library, "99", "2026-09-07", "2026-11-17")?.hidden, [
+      "Olives",
+    ]);
+
+    const fresh = planStoreChange({
+      library: loaded.library,
+      previousStoreId: "99",
+      nextStoreId: "77",
+      issued: "2026-09-07",
+      validUntil: "2026-11-17",
+      current: { hidden: ["Olives"], preset },
+      keepCurrent: false,
+    });
+    assert.deepEqual(fresh.restore?.hidden, []);
+    assert.equal(readStoreSettings(fresh.library, "77", "2026-09-07", "2026-11-17"), null);
+    assert.deepEqual(readStoreSettings(fresh.library, "99", "2026-09-07", "2026-11-17")?.hidden, [
+      "Olives",
+    ]);
+  });
+
+  it("lists every store saved on the device", () => {
+    let library = writeStoreSettings(emptyCampaignLibrary(), "12345", "2026-09-07", "2026-11-17", {
+      hidden: ["Bacon"],
+      preset,
+    });
+    library = writeStoreSettings(library, "99", "2026-10-01", "2026-12-01", {
+      hidden: ["Ham"],
+      preset,
+    });
+    const rows = listDeviceStored(library);
+    assert.deepEqual(
+      rows.map((row) => `${row.storeId}:${row.hidden[0]}`),
+      ["99:Ham", "12345:Bacon"],
+    );
   });
 
   it("keeps the screen for a store that has no saved copy, and keeps the previous store when the id is cleared", () => {

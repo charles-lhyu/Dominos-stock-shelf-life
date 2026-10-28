@@ -1,4 +1,5 @@
 import {
+  DEFAULT_ITEM_PRESET,
   normalizeItemPreset,
   retainProductDefaults,
   sameItemPreset,
@@ -224,10 +225,17 @@ export function writeStoreSettings(
   };
 }
 
+const EMPTY_SETTINGS: StoreCampaignSettings = {
+  hidden: [],
+  preset: DEFAULT_ITEM_PRESET,
+};
+
 /**
  * Keep the previous store's copy when the id changes.
- * A store that already has this campaign is restored.
- * A store with nothing yet keeps the settings currently on screen.
+ * Without `keepCurrent`, a store that already has this campaign is restored,
+ * and a store with nothing yet keeps the settings currently on screen.
+ * `keepCurrent: true` writes the screen onto the new store.
+ * `keepCurrent: false` loads that store's saved copy, or clears the screen when it has none.
  */
 export function planStoreChange(input: {
   library: CampaignLibrary;
@@ -236,6 +244,7 @@ export function planStoreChange(input: {
   issued: string;
   validUntil: string;
   current: StoreCampaignSettings;
+  keepCurrent?: boolean;
 }): { library: CampaignLibrary; restore: StoreCampaignSettings | null } {
   const key = campaignKey(input.issued, input.validUntil);
   if (!key) return { library: input.library, restore: null };
@@ -250,7 +259,16 @@ export function planStoreChange(input: {
     );
   }
   if (!input.nextStoreId) return { library, restore: null };
-  if (input.previousStoreId !== input.nextStoreId) {
+  if (input.previousStoreId !== input.nextStoreId && input.keepCurrent === false) {
+    const existing = readStoreSettings(
+      library,
+      input.nextStoreId,
+      input.issued,
+      input.validUntil,
+    );
+    return { library, restore: existing ?? EMPTY_SETTINGS };
+  }
+  if (input.previousStoreId !== input.nextStoreId && input.keepCurrent !== true) {
     const existing = readStoreSettings(
       library,
       input.nextStoreId,
@@ -311,6 +329,17 @@ export function listStoreCampaigns(library: CampaignLibrary, storeId: string): S
     return a.title < b.title ? 1 : -1;
   });
   return rows;
+}
+
+export type DeviceStoredRecord = StoreCampaignView & { storeId: string };
+
+/** Every store's saved campaign settings on this device, store id then newest campaign. */
+export function listDeviceStored(library: CampaignLibrary): DeviceStoredRecord[] {
+  return Object.keys(library.stores)
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+    .flatMap((storeId) =>
+      listStoreCampaigns(library, storeId).map((row) => ({ storeId, ...row })),
+    );
 }
 
 export function listCampaignSummaries(library: CampaignLibrary): CampaignSummary[] {

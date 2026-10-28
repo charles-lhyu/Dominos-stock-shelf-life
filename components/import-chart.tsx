@@ -53,6 +53,9 @@ import {
   listCampaignsServer,
   listStoredForStore,
   listStoredForStoreServer,
+  listStoredOnDevice,
+  listStoredOnDeviceServer,
+  readSavedCampaignSettings,
   reloadCampaign,
   subscribeCampaignLibrary,
   subscribeStoredStore,
@@ -81,7 +84,7 @@ import {
 } from "@/lib/desk-store";
 import { clearPdfCrops, replacePdfCrops } from "@/lib/pdf-crop-images";
 import { parsePdfChartFile } from "@/lib/pdf-chart";
-import type { ItemPreset } from "@/lib/item-preset-store";
+import { getItemPreset, hydrateItemPresetStore, type ItemPreset } from "@/lib/item-preset-store";
 import { prepClockTime, SECTION_TAG } from "@/lib/preview";
 import {
   appVersionLabel,
@@ -128,7 +131,6 @@ import { toast } from "sonner";
 type SettingsSectionId =
   | "settings-chart"
   | "settings-display"
-  | "settings-hidden"
   | "settings-debug"
   | "settings-app"
   | "settings-system";
@@ -137,7 +139,6 @@ const SETTINGS_SECTION_IDS: SettingsSectionId[] = [
   "settings-app",
   "settings-chart",
   "settings-display",
-  "settings-hidden",
   "settings-debug",
   "settings-system",
 ];
@@ -182,6 +183,12 @@ export function ImportChartButton({
   const [scanning, setScanning] = useState(false);
   const [storeDraft, setStoreDraft] = useState("");
   const [storeIdError, setStoreIdError] = useState<string | null>(null);
+  const [storePrompt, setStorePrompt] = useState<{ next: string; hasSaved: boolean } | null>(
+    null,
+  );
+  const [otherStoredOpen, setOtherStoredOpen] = useState(false);
+  const [otherStoredKey, setOtherStoredKey] = useState<string | null>(null);
+  const storePromptRef = useRef<string | null>(null);
   const [activeSettingsSection, setActiveSettingsSection] =
     useState<SettingsSectionId>("settings-app");
   const [settingsEndPad, setSettingsEndPad] = useState(0);
@@ -254,6 +261,14 @@ export function ImportChartButton({
     },
     listStoredForStoreServer,
   );
+  const deviceStored = useSyncExternalStore(
+    subscribeCampaignLibrary,
+    () => {
+      hydrateCampaignLibrary();
+      return listStoredOnDevice();
+    },
+    listStoredOnDeviceServer,
+  );
 
   useEffect(() => () => stopScan(), []);
 
@@ -289,8 +304,34 @@ export function ImportChartButton({
         settingsJumpTimer.current = null;
       }
       settingsJumpLock.current = false;
+      storePromptRef.current = null;
+      setStorePrompt(null);
+      setStoreDraft(getStoreId());
+      setOtherStoredOpen(false);
     }
     setOpen(next);
+  }
+
+  function applyStoreChange(previous: string, next: string, keepCurrent?: boolean) {
+    setStoreId(next);
+    setStoreDraft(next);
+    adoptStoreForCampaign(previous, next, keepCurrent);
+  }
+
+  function cancelStorePrompt() {
+    if (!storePromptRef.current) return;
+    storePromptRef.current = null;
+    setStorePrompt(null);
+    setStoreDraft(getStoreId());
+  }
+
+  function confirmStorePrompt(keepCurrent: boolean) {
+    const next = storePromptRef.current;
+    if (!next) return;
+    const previous = getStoreId();
+    storePromptRef.current = null;
+    setStorePrompt(null);
+    applyStoreChange(previous, next, keepCurrent);
   }
 
   function commitStoreDraft() {
@@ -301,9 +342,31 @@ export function ImportChartButton({
     }
     setStoreIdError(null);
     const previous = getStoreId();
-    setStoreId(next);
+    if (next === previous) {
+      setStoreDraft(next);
+      return;
+    }
+    if (!next || !desk.imported || storePromptRef.current === next) {
+      if (storePromptRef.current === next) return;
+      applyStoreChange(previous, next);
+      return;
+    }
+    hydrateCampaignLibrary();
+    hydrateItemPresetStore();
+    const saved = readSavedCampaignSettings(
+      next,
+      desk.pack.chart.issued,
+      desk.pack.chart.validUntil,
+    );
+    const screenHas =
+      getHiddenNames().length > 0 || Object.keys(getItemPreset().defaults).length > 0;
+    if (!screenHas && !saved) {
+      applyStoreChange(previous, next);
+      return;
+    }
+    storePromptRef.current = next;
     setStoreDraft(next);
-    adoptStoreForCampaign(previous, next);
+    setStorePrompt({ next, hasSaved: saved != null });
   }
 
   function resetChart() {
@@ -452,12 +515,8 @@ export function ImportChartButton({
 
   const settingsNav = [
     { id: "settings-app" as const, label: "App" },
-    { id: "settings-chart" as const, label: "Import data" },
+    { id: "settings-chart" as const, label: "Import" },
     { id: "settings-display" as const, label: "Display" },
-    {
-      id: "settings-hidden" as const,
-      label: `Hidden${hiddenNames.length ? ` (${hiddenNames.length})` : ""}`,
-    },
     { id: "settings-debug" as const, label: "Debug" },
     { id: "settings-system" as const, label: "System" },
   ];
@@ -469,6 +528,11 @@ export function ImportChartButton({
   const settingsSelectLabels = Object.fromEntries(
     settingsNav.map((item) => [item.id, item.label]),
   );
+  const otherStored = deviceStored.filter((item) => item.storeId !== storeId);
+  const selectedOther =
+    otherStored.find((item) => deviceStoredKey(item) === otherStoredKey) ??
+    otherStored[0] ??
+    null;
 
   function syncNavCard(id: SettingsSectionId) {
     const nav = settingsNavRef.current;
@@ -636,7 +700,7 @@ export function ImportChartButton({
         <DialogHeader className="shrink-0 border-b border-white/10 px-4 py-3 pr-14">
           <DialogTitle className="font-display text-2xl text-white">Settings</DialogTitle>
           <DialogDescription className="sr-only">
-            Store, import data, display, hidden products, debug, and system.
+            Store, import, display, debug, and system.
           </DialogDescription>
           <button
             type="button"
@@ -765,7 +829,7 @@ export function ImportChartButton({
                 <Button
                   type="button"
                   className="h-12 shrink-0 rounded-xl px-3"
-                  disabled={normalizeStoreId(storeDraft) === storeId}
+                  disabled={normalizeStoreId(storeDraft) === storeId || storePrompt != null}
                   onClick={commitStoreDraft}
                 >
                   Save
@@ -775,9 +839,48 @@ export function ImportChartButton({
                 {storeIdError
                   ? storeIdError
                   : storeId
-                    ? `Store ${storeId}. Hidden items and product defaults stay with this store.`
-                    : "Number for this store. Setting it saves hidden items and product defaults with the campaign."}
+                    ? `Store ${storeId}. A new store ID asks whether to keep hidden items and product defaults.`
+                    : "Number for this store. A new ID asks whether to keep hidden items and product defaults."}
               </p>
+            </div>
+            <div className="space-y-2 border-t border-white/10 pt-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-medium text-stone-300">
+                  Hidden ({hiddenNames.length})
+                </p>
+                {hiddenNames.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => clearHiddenNames()}
+                    className="text-xs font-medium text-stone-400 underline-offset-2 hover:text-white hover:underline"
+                  >
+                    Show all
+                  </button>
+                ) : null}
+              </div>
+              {hiddenNames.length === 0 ? (
+                <p className="text-sm text-stone-500">
+                  Hide a product from its detail card. It leaves the list until you show it
+                  again here.
+                </p>
+              ) : (
+                <ul className="divide-y divide-white/10 rounded-xl border border-white/10 bg-black/20">
+                  {hiddenNames.map((name) => (
+                    <li key={name} className="flex items-center gap-2 px-3 py-2.5">
+                      <span className="min-w-0 flex-1 truncate text-sm text-white">{name}</span>
+                      <button
+                        type="button"
+                        onClick={() => unhideProductName(name)}
+                        className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-white/5 px-2 py-1.5 text-xs font-semibold text-stone-200 ring-1 ring-white/15 transition-colors hover:bg-white/10 hover:text-white"
+                        aria-label={`Show ${name} in the list again`}
+                      >
+                        <Eye className="size-3.5" aria-hidden />
+                        Show
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
             <div className="space-y-2 border-t border-white/10 pt-3">
               <p className="text-sm font-medium text-stone-300">
@@ -817,31 +920,25 @@ export function ImportChartButton({
                           Issued {formatShortDate(item.issued)} · Valid until{" "}
                           {formatShortDate(item.validUntil)}
                         </p>
-                        <p className="mt-2 text-xs text-stone-500">Hidden</p>
-                        {item.hidden.length === 0 ? (
-                          <p className="text-sm text-stone-200">None</p>
-                        ) : (
-                          <ul className="text-sm text-stone-200">
-                            {item.hidden.map((name) => (
-                              <li key={name}>{name}</li>
-                            ))}
-                          </ul>
-                        )}
-                        <p className="mt-2 text-xs text-stone-500">Defaults</p>
-                        {productDefaultLines(item.preset).length === 0 ? (
-                          <p className="text-sm text-stone-200">None</p>
-                        ) : (
-                          <ul className="text-sm text-stone-200">
-                            {productDefaultLines(item.preset).map((line) => (
-                              <li key={line}>{line}</li>
-                            ))}
-                          </ul>
-                        )}
+                        <StoredCampaignDetails item={item} />
                       </article>
                     );
                   })}
                 </div>
               )}
+              {otherStored.length > 0 ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-11 w-full justify-start rounded-xl border-white/10 text-sm text-white"
+                  onClick={() => {
+                    setOtherStoredKey(deviceStoredKey(otherStored[0]!));
+                    setOtherStoredOpen(true);
+                  }}
+                >
+                  Other data on this device
+                </Button>
+              ) : null}
             </div>
           </section>
           <section
@@ -853,7 +950,7 @@ export function ImportChartButton({
                 : "border-white/10 bg-card/80",
             )}
           >
-            <SettingsSectionTitle>Import data</SettingsSectionTitle>
+            <SettingsSectionTitle>Import</SettingsSectionTitle>
             <div className="space-y-2">
               <p className="text-sm font-medium text-stone-300">Saved charts</p>
               {campaigns.length === 0 ? (
@@ -1202,56 +1299,6 @@ export function ImportChartButton({
           </section>
 
           <section
-            id="settings-hidden"
-            className={cn(
-              "scroll-mt-2 space-y-3 rounded-2xl border p-3 transition-[border-color,box-shadow] duration-200",
-              activeSettingsSection === "settings-hidden"
-                ? "border-sky-400/40 bg-card shadow-[0_0_0_1px_rgba(56,189,248,0.18)]"
-                : "border-white/10 bg-card/80",
-            )}
-          >
-            <div className="flex items-center justify-between gap-2">
-              <SettingsSectionTitle>
-                Hidden ({hiddenNames.length})
-              </SettingsSectionTitle>
-              {hiddenNames.length > 0 ? (
-                <button
-                  type="button"
-                  onClick={() => clearHiddenNames()}
-                  className="text-xs font-medium text-stone-400 underline-offset-2 hover:text-white hover:underline"
-                >
-                  Show all
-                </button>
-              ) : null}
-            </div>
-            {hiddenNames.length === 0 ? (
-              <p className="text-sm text-stone-500">
-                Hide a product from its detail card. It leaves the list until you show
-                it again here. With a store ID, this list is kept for the loaded campaign.
-              </p>
-            ) : (
-              <ul className="divide-y divide-white/10 rounded-xl border border-white/10 bg-card">
-                {hiddenNames.map((name) => (
-                  <li key={name} className="flex items-center gap-2 px-3 py-2.5">
-                    <span className="min-w-0 flex-1 truncate text-sm text-white">
-                      {name}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => unhideProductName(name)}
-                      className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-white/5 px-2 py-1.5 text-xs font-semibold text-stone-200 ring-1 ring-white/15 transition-colors hover:bg-white/10 hover:text-white"
-                      aria-label={`Show ${name} in the list again`}
-                    >
-                      <Eye className="size-3.5" aria-hidden />
-                      Show
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-
-          <section
             id="settings-debug"
             className={cn(
               "scroll-mt-2 space-y-3 rounded-2xl border p-3 transition-[border-color,box-shadow] duration-200",
@@ -1485,6 +1532,121 @@ export function ImportChartButton({
       />
     ) : null}
 
+    <Dialog
+      open={storePrompt != null}
+      onOpenChange={(next) => {
+        if (!next) cancelStorePrompt();
+      }}
+    >
+      <DialogContent
+        showCloseButton={false}
+        overlayClassName="z-[60] bg-black/50"
+        className="relative z-[60] max-w-sm gap-0 overflow-hidden rounded-2xl p-0"
+      >
+        <DialogHeader className="space-y-2 px-4 pt-4 pr-14 pb-2">
+          <DialogTitle className="font-display text-xl text-white">Keep settings?</DialogTitle>
+          <DialogDescription className="text-sm text-stone-400">
+            {storePrompt?.hasSaved
+              ? `Store ${storePrompt.next} already has hidden items and product defaults for this chart. Keep what is on screen, or load the saved copy.`
+              : `Store ${storePrompt?.next ?? ""} has nothing saved for this chart. Keep what is on screen, or start fresh.`}
+          </DialogDescription>
+          <button
+            type="button"
+            className="absolute top-3 right-3 inline-flex size-10 items-center justify-center rounded-full bg-white/10 text-white"
+            aria-label="Close keep settings"
+            onClick={cancelStorePrompt}
+          >
+            <X className="size-5" />
+          </button>
+        </DialogHeader>
+        <div className="grid gap-2 border-t border-white/10 p-4">
+          <Button
+            type="button"
+            className="h-11 rounded-xl"
+            onClick={() => confirmStorePrompt(true)}
+          >
+            Keep settings
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 rounded-xl border-white/15 text-white"
+            onClick={() => confirmStorePrompt(false)}
+          >
+            {storePrompt?.hasSaved ? "Use saved" : "Start fresh"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 rounded-xl border-white/15 text-white"
+            onClick={cancelStorePrompt}
+          >
+            Cancel
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog open={otherStoredOpen} onOpenChange={setOtherStoredOpen}>
+      <DialogContent
+        showCloseButton={false}
+        overlayClassName="z-[60] bg-black/50"
+        className="relative z-[60] flex h-[min(32rem,85dvh)] w-[calc(100%-1.25rem)] max-w-sm flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-sm"
+      >
+        <DialogHeader className="shrink-0 space-y-1 border-b border-white/10 px-4 py-3 pr-14">
+          <DialogTitle className="font-display text-xl text-white">
+            Other stored data
+          </DialogTitle>
+          <DialogDescription className="text-sm text-stone-400">
+            Hidden items and product defaults saved for other stores on this device.
+          </DialogDescription>
+          <button
+            type="button"
+            className="absolute top-3 right-3 inline-flex size-10 items-center justify-center rounded-full bg-white/10 text-white"
+            aria-label="Close stored data"
+            onClick={() => setOtherStoredOpen(false)}
+          >
+            <X className="size-5" />
+          </button>
+        </DialogHeader>
+        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-3">
+          {otherStored.map((item) => {
+            const key = deviceStoredKey(item);
+            const selected = selectedOther != null && key === deviceStoredKey(selectedOther);
+            return (
+              <button
+                key={key}
+                type="button"
+                aria-pressed={selected}
+                onClick={() => setOtherStoredKey(key)}
+                className={cn(
+                  "w-full rounded-xl border px-3 py-2.5 text-left",
+                  selected
+                    ? "border-sky-400/50 bg-sky-500/15"
+                    : "border-white/10 bg-black/20 hover:border-white/20",
+                )}
+              >
+                <span className="block text-sm font-medium text-white">Store {item.storeId}</span>
+                <span className="mt-0.5 block truncate text-sm text-stone-200">{item.title}</span>
+                <span className="mt-0.5 block text-xs text-stone-400">
+                  Issued {formatShortDate(item.issued)} · Valid until {formatShortDate(item.validUntil)}
+                </span>
+              </button>
+            );
+          })}
+          {selectedOther ? (
+            <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2.5">
+              <p className="text-sm font-medium text-white">Store {selectedOther.storeId}</p>
+              <p className="text-sm text-stone-200">{selectedOther.title}</p>
+              <StoredCampaignDetails item={selectedOther} />
+            </div>
+          ) : (
+            <p className="text-sm text-stone-500">Nothing else is saved on this device.</p>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+
     <Dialog open={changelogOpen} onOpenChange={setChangelogOpen}>
       <DialogContent
         showCloseButton={false}
@@ -1512,6 +1674,42 @@ export function ImportChartButton({
         </div>
       </DialogContent>
     </Dialog>
+    </>
+  );
+}
+
+function deviceStoredKey(item: { storeId: string; issued: string; validUntil: string }) {
+  return `${item.storeId}|${item.issued}|${item.validUntil}`;
+}
+
+function StoredCampaignDetails({
+  item,
+}: {
+  item: { hidden: string[]; preset: ItemPreset };
+}) {
+  const defaults = productDefaultLines(item.preset);
+  return (
+    <>
+      <p className="mt-2 text-xs text-stone-500">Hidden</p>
+      {item.hidden.length === 0 ? (
+        <p className="text-sm text-stone-200">None</p>
+      ) : (
+        <ul className="text-sm text-stone-200">
+          {item.hidden.map((name) => (
+            <li key={name}>{name}</li>
+          ))}
+        </ul>
+      )}
+      <p className="mt-2 text-xs text-stone-500">Defaults</p>
+      {defaults.length === 0 ? (
+        <p className="text-sm text-stone-200">None</p>
+      ) : (
+        <ul className="text-sm text-stone-200">
+          {defaults.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ul>
+      )}
     </>
   );
 }

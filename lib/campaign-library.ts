@@ -2,6 +2,7 @@ import {
   campaignKey,
   emptyCampaignLibrary,
   listCampaignSummaries,
+  listDeviceStored,
   listStoreCampaigns,
   parseCampaignLibrary,
   planStoreChange,
@@ -10,6 +11,7 @@ import {
   writeStoreSettings,
   type CampaignLibrary,
   type CampaignSummary,
+  type DeviceStoredRecord,
   type StoreCampaignSettings,
   type StoreCampaignView,
 } from "./campaign-records";
@@ -39,9 +41,11 @@ import type { ChartPack, ShelfRule } from "./types";
 const STORAGE_KEY = "campaign-library-v1";
 const EMPTY_CAMPAIGNS: CampaignSummary[] = [];
 const EMPTY_STORED: StoreCampaignView[] = [];
+const EMPTY_DEVICE: DeviceStoredRecord[] = [];
 
 let library: CampaignLibrary = emptyCampaignLibrary();
 let snapshot: CampaignSummary[] = EMPTY_CAMPAIGNS;
+let deviceSnapshot: DeviceStoredRecord[] = EMPTY_DEVICE;
 let storedCache = new Map<string, StoreCampaignView[]>();
 let hydrated = false;
 let applying = false;
@@ -54,6 +58,8 @@ function emit() {
 function refreshSnapshot() {
   const next = listCampaignSummaries(library);
   snapshot = next.length === 0 ? EMPTY_CAMPAIGNS : next;
+  const device = listDeviceStored(library);
+  deviceSnapshot = device.length === 0 ? EMPTY_DEVICE : device;
   storedCache = new Map();
 }
 
@@ -108,6 +114,23 @@ export function listStoredForStore(storeId: string): StoreCampaignView[] {
 
 export function listStoredForStoreServer(): StoreCampaignView[] {
   return EMPTY_STORED;
+}
+
+export function listStoredOnDevice(): DeviceStoredRecord[] {
+  return deviceSnapshot;
+}
+
+export function listStoredOnDeviceServer(): DeviceStoredRecord[] {
+  return EMPTY_DEVICE;
+}
+
+export function readSavedCampaignSettings(
+  storeId: string,
+  issued: string,
+  validUntil: string,
+): StoreCampaignSettings | null {
+  hydrateCampaignLibrary();
+  return readStoreSettings(library, storeId, issued, validUntil);
 }
 
 export function subscribeStoredStore(listener: () => void) {
@@ -225,7 +248,7 @@ function handlePackCleared() {
   }
 }
 
-/** Remember the chart already on screen so Import data can load it again. */
+/** Remember the chart already on screen so Import can load it again. */
 export function captureActiveCampaign() {
   hydrateCampaignLibrary();
   hydrateStoreIdStore();
@@ -239,8 +262,16 @@ export function captureActiveCampaign() {
   if (!readStoreSettings(library, storeId, issued, validUntil)) saveCurrent(storeId);
 }
 
-/** Save the previous store, then load the new store's copy of this campaign. */
-export function adoptStoreForCampaign(previousStoreId: string, nextStoreId: string) {
+/**
+ * Save the previous store, then keep the screen or load the new store's copy.
+ * `keepCurrent` true writes the screen onto the new store.
+ * `keepCurrent` false loads that store's saved copy, or clears the screen when it has none.
+ */
+export function adoptStoreForCampaign(
+  previousStoreId: string,
+  nextStoreId: string,
+  keepCurrent?: boolean,
+) {
   hydrateCampaignLibrary();
   hydrateStoreIdStore();
   const desk = getDeskState();
@@ -254,6 +285,7 @@ export function adoptStoreForCampaign(previousStoreId: string, nextStoreId: stri
     issued,
     validUntil,
     current: currentSettings(),
+    keepCurrent,
   });
   commitLibrary(planned.library);
   if (planned.restore) applySettings(planned.restore, desk.pack.rules);

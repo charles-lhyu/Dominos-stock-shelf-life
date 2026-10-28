@@ -332,7 +332,7 @@ export function LifeCard({
               Hide {rule.name}?
             </DialogTitle>
             <DialogDescription className="text-stone-400">
-              It will leave the list until you show it again in Settings → Hidden.
+              It will leave the list until you show it again in Settings → App.
             </DialogDescription>
           </DialogHeader>
           <div className="flex gap-2 pt-2">
