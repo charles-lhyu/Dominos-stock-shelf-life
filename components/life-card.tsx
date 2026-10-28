@@ -419,24 +419,33 @@ export function LifeCard({
           </DialogHeader>
           {storageOptions && storageOptions.length > 1 ? (
             <div className="flex flex-col gap-2 pt-2">
-              {storageOptions.map((item) => (
-                <button
-                  key={item.sectionId}
-                  type="button"
-                  onClick={() => {
-                    hideProductSection(rule.name, item.sectionId);
-                    setHideConfirmOpen(false);
-                    const remaining = storageOptions.filter(
-                      (option) => option.sectionId !== item.sectionId,
-                    );
-                    if (remaining.length === 0) onHidden?.();
-                    else onPreferredSection?.(remaining[0]!.sectionId);
-                  }}
-                  className="h-11 rounded-xl border border-white/10 bg-card text-sm font-semibold text-stone-100 transition-colors hover:bg-white/5"
-                >
-                  Hide {SECTION_TAG[item.sectionId]}
-                </button>
-              ))}
+              {storageOptions.map((item) => {
+                const selected = item.sectionId === rule.sectionId;
+                return (
+                  <button
+                    key={item.sectionId}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => {
+                      hideProductSection(rule.name, item.sectionId);
+                      setHideConfirmOpen(false);
+                      const remaining = storageOptions.filter(
+                        (option) => option.sectionId !== item.sectionId,
+                      );
+                      if (remaining.length === 0) onHidden?.();
+                      else onPreferredSection?.(remaining[0]!.sectionId);
+                    }}
+                    className={cn(
+                      "h-11 rounded-xl text-sm font-semibold transition-colors ring-1",
+                      selected
+                        ? "bg-white text-stone-950 ring-white"
+                        : "bg-card text-stone-100 ring-white/15 hover:bg-white/5",
+                    )}
+                  >
+                    Hide {SECTION_TAG[item.sectionId]}
+                  </button>
+                );
+              })}
               <button
                 type="button"
                 onClick={() => {
