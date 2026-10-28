@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, typ
 import {
   ArrowLeft,
   ArrowUp,
-  Clock3,
+  Bug,
   List,
   RefreshCw,
   Search,
@@ -762,14 +762,13 @@ export function StockDesk() {
                 }
                 onClick={() => writeDebugDays(!debugDays)}
                 className={cn(
-                  "inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-[0.65rem] font-semibold uppercase tracking-wide ring-1 transition-colors",
+                  "inline-flex size-8 shrink-0 items-center justify-center rounded-full ring-1 transition-colors",
                   debugDays
-                    ? "bg-sky-500/20 text-sky-100 ring-sky-300/50"
-                    : "bg-white/10 text-stone-300 ring-white/25",
+                    ? "bg-sky-500/25 text-sky-100 ring-sky-300/50"
+                    : "bg-white/10 text-stone-400 ring-white/25",
                 )}
               >
-                <Clock3 className="size-3.5 shrink-0" aria-hidden />
-                {debugDays ? "Days" : "Dates"}
+                <Bug className="size-4" aria-hidden />
               </button>
             ) : null}
             <ImportChartButton
