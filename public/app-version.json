@@ -1,6 +1,6 @@
 {
-  "version": "1.4.43",
+  "version": "1.4.44",
   "notes": [
-    "Use-by times show before the date"
+    "Date and time selector shows time before the date"
   ]
 }

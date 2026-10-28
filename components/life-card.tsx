@@ -182,6 +182,13 @@ export function LifeCard({
             {datetime ? (
               <>
                 <div className="grid min-w-0 grid-cols-2 gap-2">
+                  <TimeField
+                    label="Time"
+                    value={timePart}
+                    onChange={(next) =>
+                      setClock(clock.id, `${datePart || toIsoDate(new Date())}T${next}`)
+                    }
+                  />
                   <DateField
                     label={
                       clock.id === "ambient"
@@ -192,13 +199,6 @@ export function LifeCard({
                     }
                     value={datePart}
                     onChange={(next) => setClock(clock.id, `${next}T${timePart || "00:00"}`)}
-                  />
-                  <TimeField
-                    label="Time"
-                    value={timePart}
-                    onChange={(next) =>
-                      setClock(clock.id, `${datePart || toIsoDate(new Date())}T${next}`)
-                    }
                   />
                 </div>
                 <button

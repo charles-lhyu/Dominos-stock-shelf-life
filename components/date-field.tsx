@@ -341,7 +341,7 @@ export function CollapsedDateTime({
           ? "text-red-300"
           : "text-stone-500";
   const timeTextClass = locked ? "text-red-200" : "text-emerald-200";
-  // Outer border only — date fades L→R, time R→L. Inner fill must be opaque so colour can't show through.
+  // Outer border only — time fades L→R, date R→L. Inner fill must be opaque so colour can't show through.
   const dateFrame =
     dateAccent === "emerald"
       ? "#34d399"
@@ -353,21 +353,21 @@ export function CollapsedDateTime({
   const timeFrame = locked ? "#f87171" : "#34d399";
   const frameFadeStyle = {
     background: [
-      `linear-gradient(to right, ${dateFrame}, transparent)`,
-      `linear-gradient(to left, ${timeFrame}, transparent)`,
+      `linear-gradient(to right, ${timeFrame}, transparent)`,
+      `linear-gradient(to left, ${dateFrame}, transparent)`,
     ].join(","),
   };
   const todayBtnFade =
     dateAccent === "emerald"
-      ? "bg-gradient-to-r from-emerald-400 to-emerald-400/35 text-emerald-950"
+      ? "bg-gradient-to-l from-emerald-400 to-emerald-400/35 text-emerald-950"
       : dateAccent === "orange"
-        ? "bg-gradient-to-r from-orange-400 to-orange-400/35 text-orange-950"
+        ? "bg-gradient-to-l from-orange-400 to-orange-400/35 text-orange-950"
         : dateAccent === "red"
-          ? "bg-gradient-to-r from-red-400 to-red-400/35 text-red-950"
+          ? "bg-gradient-to-l from-red-400 to-red-400/35 text-red-950"
           : "bg-white text-stone-950 hover:bg-amber-50";
   const lockBtnFade = locked
-    ? "bg-gradient-to-l from-red-500/55 to-red-500/20"
-    : "bg-gradient-to-l from-emerald-400/55 to-emerald-400/20";
+    ? "bg-gradient-to-r from-red-500/55 to-red-500/20"
+    : "bg-gradient-to-r from-emerald-400/55 to-emerald-400/20";
 
   useEffect(() => {
     setNow(new Date());
@@ -444,72 +444,9 @@ export function CollapsedDateTime({
         >
         <button
           type="button"
-          onClick={() => onDateChange(toIsoDate(new Date()))}
-          className={cn(
-            "inline-flex w-9 shrink-0 items-center justify-center border-r border-white/10 transition-colors",
-            todayBtnFade,
-          )}
-          aria-label="Set to today"
-          title="Today"
-        >
-          <CalendarCheck className="size-3.5" strokeWidth={2.25} aria-hidden />
-        </button>
-
-        <button
-          type="button"
-          onClick={openDate}
-          className={cn(
-            "flex items-center justify-center px-2 py-1 text-center transition-colors hover:bg-white/[0.03] active:bg-white/[0.05]",
-            fill ? "min-w-0 flex-1" : "shrink-0",
-          )}
-          aria-label={
-            dateEmpty ? "Choose delivery date" : `Delivery date ${dateLabel}`
-          }
-          title={dateEmpty ? "Choose date" : dateLabel}
-        >
-          <span
-            className={cn(
-              "whitespace-nowrap text-xs font-medium leading-tight",
-              fill && !longDate && "truncate",
-              dateTextClass,
-            )}
-          >
-            {dateLabel}
-          </span>
-        </button>
-
-        <span className="my-2 w-px shrink-0 bg-white/20" aria-hidden />
-
-        <button
-          type="button"
-          onClick={openTime}
-          className={cn(
-            "flex items-center justify-center px-2 py-1 text-center transition-colors hover:bg-white/[0.03] active:bg-white/[0.05]",
-            fill ? "min-w-0 flex-1" : "shrink-0",
-          )}
-          aria-label={
-            locked
-              ? `Locked prep time ${timeLabel}. Tap to change.`
-              : `Live time ${timeLabel}. Tap to set and lock.`
-          }
-          title={locked ? `Locked · ${timeLabel}` : "Live · tap to set and lock"}
-        >
-          <span
-            className={cn(
-              "whitespace-nowrap font-mono text-xs font-medium tracking-tight tabular-nums",
-              fill && spaceTier < 1 && "truncate",
-              timeTextClass,
-            )}
-          >
-            {timeLabel}
-          </span>
-        </button>
-
-        <button
-          type="button"
           onClick={() => (locked ? onTimeChange("") : onTimeChange(nowHhMm()))}
           className={cn(
-            "inline-flex w-9 shrink-0 items-center justify-center border-l border-white/10 transition-colors",
+            "inline-flex w-9 shrink-0 items-center justify-center border-r border-white/10 transition-colors",
             lockBtnFade,
           )}
           aria-label={
@@ -543,6 +480,69 @@ export function CollapsedDateTime({
               )}
             </span>
           </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={openTime}
+          className={cn(
+            "flex items-center justify-center px-2 py-1 text-center transition-colors hover:bg-white/[0.03] active:bg-white/[0.05]",
+            fill ? "min-w-0 flex-1" : "shrink-0",
+          )}
+          aria-label={
+            locked
+              ? `Locked prep time ${timeLabel}. Tap to change.`
+              : `Live time ${timeLabel}. Tap to set and lock.`
+          }
+          title={locked ? `Locked · ${timeLabel}` : "Live · tap to set and lock"}
+        >
+          <span
+            className={cn(
+              "whitespace-nowrap font-mono text-xs font-medium tracking-tight tabular-nums",
+              fill && spaceTier < 1 && "truncate",
+              timeTextClass,
+            )}
+          >
+            {timeLabel}
+          </span>
+        </button>
+
+        <span className="my-2 w-px shrink-0 bg-white/20" aria-hidden />
+
+        <button
+          type="button"
+          onClick={openDate}
+          className={cn(
+            "flex items-center justify-center px-2 py-1 text-center transition-colors hover:bg-white/[0.03] active:bg-white/[0.05]",
+            fill ? "min-w-0 flex-1" : "shrink-0",
+          )}
+          aria-label={
+            dateEmpty ? "Choose delivery date" : `Delivery date ${dateLabel}`
+          }
+          title={dateEmpty ? "Choose date" : dateLabel}
+        >
+          <span
+            className={cn(
+              "whitespace-nowrap text-xs font-medium leading-tight",
+              fill && !longDate && "truncate",
+              dateTextClass,
+            )}
+          >
+            {dateLabel}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => onDateChange(toIsoDate(new Date()))}
+          className={cn(
+            "inline-flex w-9 shrink-0 items-center justify-center border-l border-white/10 transition-colors",
+            todayBtnFade,
+          )}
+          aria-label="Set to today"
+          title="Today"
+        >
+          <CalendarCheck className="size-3.5" strokeWidth={2.25} aria-hidden />
         </button>
 
         <input
