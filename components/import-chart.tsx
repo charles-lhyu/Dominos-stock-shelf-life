@@ -396,6 +396,8 @@ export function ImportChartButton({
     storeId?: string;
   } | null>(null);
   const [allStoredOpen, setAllStoredOpen] = useState(false);
+  const [storeSettingsOpen, setStoreSettingsOpen] = useState(true);
+  const [campaignPresetsOpen, setCampaignPresetsOpen] = useState(true);
   const storedImportInputRef = useRef<HTMLInputElement>(null);
   const storePromptRef = useRef<string | null>(null);
   const [activeSettingsSection, setActiveSettingsSection] =
@@ -1074,6 +1076,8 @@ export function ImportChartButton({
     });
     setStoredConfirmOpen(false);
     setStoredEditing(true);
+    setStoreSettingsOpen(true);
+    setCampaignPresetsOpen(true);
   }
 
   function discardStoredEdit() {
@@ -1878,119 +1882,159 @@ export function ImportChartButton({
               </div>
               {previewStoreId ?? storeId ? (
                 <div className="space-y-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2.5">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">
-                    Store settings
-                  </p>
-                  {storedEditing ? (
-                    <StoreNameField
-                      value={nameFor(previewStoreId ?? storeId)}
-                      onChange={(value) => changeStoreName(previewStoreId ?? storeId, value)}
+                  <button
+                    type="button"
+                    aria-expanded={storeSettingsOpen}
+                    onClick={() => setStoreSettingsOpen((open) => !open)}
+                    className="flex w-full items-center justify-between gap-2 text-left"
+                  >
+                    <span className="text-xs font-semibold uppercase tracking-wider text-stone-500">
+                      Store settings
+                    </span>
+                    <ChevronDown
+                      className={cn(
+                        "size-3.5 shrink-0 text-stone-400 transition-transform",
+                        storeSettingsOpen && "rotate-180",
+                      )}
+                      aria-hidden
                     />
-                  ) : (
-                    <div className="space-y-0.5">
-                      <p className="text-xs text-stone-500">Name</p>
-                      <p className="truncate text-sm text-stone-200">
-                        {nameFor(previewStoreId ?? storeId) || "Not set"}
-                      </p>
-                    </div>
-                  )}
-                  <div className="grid grid-cols-2 gap-3">
-                    {storedEditing ? (
-                      <>
-                        <label className="block min-w-0 space-y-1">
-                          <span className="text-xs text-stone-500">Dates</span>
-                          <Select
-                            value={storeDatesValue}
-                            items={STORE_DATES_LABELS}
-                            onValueChange={(value) => {
-                              if (value === "full" || value === "short") {
-                                changeStoreDates(previewStoreId ?? storeId, value);
-                              } else if (value === "days" && debugDays) {
-                                changeStoreDates(previewStoreId ?? storeId, value);
-                              }
-                            }}
-                          >
-                            <SelectTrigger
-                              aria-label="Dates display"
-                              className="h-11 w-full min-w-0 rounded-xl border-white/10 bg-black/30 px-3 text-white hover:bg-black/40 focus-visible:border-white/20 focus-visible:ring-white/15 dark:bg-black/30 [&_svg]:text-stone-400"
-                            >
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent
-                              align="start"
-                              alignItemWithTrigger={false}
-                              className="rounded-xl border-white/10 bg-popover p-1"
-                            >
-                              {storeDatesModes.map((mode) => (
-                                <SelectItem key={mode} value={mode}>
-                                  {STORE_DATES_LABELS[mode]}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </label>
-                        <label className="block min-w-0 space-y-1">
-                          <span className="text-xs text-stone-500">List</span>
-                          <Select
-                            value={storeListValue}
-                            items={STORE_LIST_LABELS}
-                            onValueChange={(value) => {
-                              if (value === "tags" || value === "compact") {
-                                changeStoreList(previewStoreId ?? storeId, value);
-                              }
-                            }}
-                          >
-                            <SelectTrigger
-                              aria-label="List display"
-                              className="h-11 w-full min-w-0 rounded-xl border-white/10 bg-black/30 px-3 text-white hover:bg-black/40 focus-visible:border-white/20 focus-visible:ring-white/15 dark:bg-black/30 [&_svg]:text-stone-400"
-                            >
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent
-                              align="start"
-                              alignItemWithTrigger={false}
-                              className="rounded-xl border-white/10 bg-popover p-1"
-                            >
-                              {(Object.keys(STORE_LIST_LABELS) as StoreListMode[]).map(
-                                (mode) => (
-                                  <SelectItem key={mode} value={mode}>
-                                    {STORE_LIST_LABELS[mode]}
-                                  </SelectItem>
-                                ),
-                              )}
-                            </SelectContent>
-                          </Select>
-                        </label>
-                      </>
-                    ) : (
-                      <>
+                  </button>
+                  {storeSettingsOpen ? (
+                    <>
+                      {storedEditing ? (
+                        <StoreNameField
+                          value={nameFor(previewStoreId ?? storeId)}
+                          onChange={(value) =>
+                            changeStoreName(previewStoreId ?? storeId, value)
+                          }
+                        />
+                      ) : (
                         <div className="space-y-0.5">
-                          <p className="text-xs text-stone-500">Dates</p>
-                          <p className="text-sm text-stone-200">{storeDatesLabel}</p>
+                          <p className="text-xs text-stone-500">Name</p>
+                          <p className="truncate text-sm text-stone-200">
+                            {nameFor(previewStoreId ?? storeId) || "Not set"}
+                          </p>
                         </div>
-                        <div className="space-y-0.5">
-                          <p className="text-xs text-stone-500">List</p>
-                          <p className="text-sm text-stone-200">{storeListLabel}</p>
-                        </div>
-                      </>
-                    )}
-                  </div>
+                      )}
+                      <div className="grid grid-cols-2 gap-3">
+                        {storedEditing ? (
+                          <>
+                            <label className="block min-w-0 space-y-1">
+                              <span className="text-xs text-stone-500">Dates</span>
+                              <Select
+                                value={storeDatesValue}
+                                items={STORE_DATES_LABELS}
+                                onValueChange={(value) => {
+                                  if (value === "full" || value === "short") {
+                                    changeStoreDates(previewStoreId ?? storeId, value);
+                                  } else if (value === "days" && debugDays) {
+                                    changeStoreDates(previewStoreId ?? storeId, value);
+                                  }
+                                }}
+                              >
+                                <SelectTrigger
+                                  aria-label="Dates display"
+                                  className="h-11 w-full min-w-0 rounded-xl border-white/10 bg-black/30 px-3 text-white hover:bg-black/40 focus-visible:border-white/20 focus-visible:ring-white/15 dark:bg-black/30 [&_svg]:text-stone-400"
+                                >
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent
+                                  align="start"
+                                  alignItemWithTrigger={false}
+                                  className="rounded-xl border-white/10 bg-popover p-1"
+                                >
+                                  {storeDatesModes.map((mode) => (
+                                    <SelectItem key={mode} value={mode}>
+                                      {STORE_DATES_LABELS[mode]}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </label>
+                            <label className="block min-w-0 space-y-1">
+                              <span className="text-xs text-stone-500">List</span>
+                              <Select
+                                value={storeListValue}
+                                items={STORE_LIST_LABELS}
+                                onValueChange={(value) => {
+                                  if (value === "tags" || value === "compact") {
+                                    changeStoreList(previewStoreId ?? storeId, value);
+                                  }
+                                }}
+                              >
+                                <SelectTrigger
+                                  aria-label="List display"
+                                  className="h-11 w-full min-w-0 rounded-xl border-white/10 bg-black/30 px-3 text-white hover:bg-black/40 focus-visible:border-white/20 focus-visible:ring-white/15 dark:bg-black/30 [&_svg]:text-stone-400"
+                                >
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent
+                                  align="start"
+                                  alignItemWithTrigger={false}
+                                  className="rounded-xl border-white/10 bg-popover p-1"
+                                >
+                                  {(
+                                    Object.keys(STORE_LIST_LABELS) as StoreListMode[]
+                                  ).map((mode) => (
+                                    <SelectItem key={mode} value={mode}>
+                                      {STORE_LIST_LABELS[mode]}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </label>
+                          </>
+                        ) : (
+                          <>
+                            <div className="space-y-0.5">
+                              <p className="text-xs text-stone-500">Dates</p>
+                              <p className="text-sm text-stone-200">{storeDatesLabel}</p>
+                            </div>
+                            <div className="space-y-0.5">
+                              <p className="text-xs text-stone-500">List</p>
+                              <p className="text-sm text-stone-200">{storeListLabel}</p>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </>
+                  ) : null}
                 </div>
               ) : null}
               {!(previewStoreId ?? storeId) ? (
                 <p className="text-xs text-stone-500">
                   Set a store ID to see store settings and campaign presets saved for it.
                 </p>
-              ) : storedDisplayRows.length === 0 ? (
-                <p className="text-xs text-stone-500">
-                  No campaign presets saved for store {previewStoreId ?? storeId} yet.
-                </p>
               ) : (
                 <div className="space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">
-                    Campaign presets
-                  </p>
-                  {storedDisplayRows.map((item) => {
+                  <button
+                    type="button"
+                    aria-expanded={campaignPresetsOpen}
+                    onClick={() => setCampaignPresetsOpen((open) => !open)}
+                    className="flex w-full items-center justify-between gap-2 text-left"
+                  >
+                    <span className="text-xs font-semibold uppercase tracking-wider text-stone-500">
+                      Campaign presets
+                      {storedDisplayRows.length > 0
+                        ? ` · ${storedDisplayRows.length}`
+                        : ""}
+                    </span>
+                    <ChevronDown
+                      className={cn(
+                        "size-3.5 shrink-0 text-stone-400 transition-transform",
+                        campaignPresetsOpen && "rotate-180",
+                      )}
+                      aria-hidden
+                    />
+                  </button>
+                  {campaignPresetsOpen ? (
+                    storedDisplayRows.length === 0 ? (
+                      <p className="text-xs text-stone-500">
+                        No campaign presets saved for store{" "}
+                        {previewStoreId ?? storeId} yet.
+                      </p>
+                    ) : (
+                      storedDisplayRows.map((item) => {
                     const onScreen = !previewStoreId && chartOnScreen(item.issued, item.validUntil);
                     return (
                       <article
@@ -2071,7 +2115,9 @@ export function ImportChartButton({
                         />
                       </article>
                     );
-                  })}
+                      })
+                    )
+                  ) : null}
                 </div>
               )}
             </div>
