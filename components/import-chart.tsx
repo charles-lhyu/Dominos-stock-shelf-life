@@ -2895,7 +2895,7 @@ export function ImportChartButton({
                           </h2>
                         )}
                       </div>
-                      <p className="h-5 truncate text-sm leading-5 text-stone-400">
+                      <p className="min-h-10 text-sm leading-5 text-stone-400">
                         {previewStore
                           ? "Preview this store's settings and campaign presets."
                           : "Store settings saved on this device. Tap a card to preview."}
