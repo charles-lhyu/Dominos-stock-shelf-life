@@ -305,6 +305,46 @@ describe("campaign library records", () => {
     assert.equal(copied?.preset.defaults.Ham, undefined);
   });
 
+  it("removes selected target-only hidden items and defaults when copying", () => {
+    let library = writeStoreSettings(emptyCampaignLibrary(), "11", "2026-09-07", "2026-11-17", {
+      hidden: parseHiddenEntries(["Bacon"]),
+      preset: {
+        ...preset,
+        defaults: { Pepperoni: { section: "frozen", life: null } },
+      },
+      compactDates: false,
+      showDayCounts: false,
+      compactList: false,
+    });
+    library = writeStoreSettings(library, "22", "2026-09-07", "2026-11-17", {
+      hidden: parseHiddenEntries(["Bacon", "Olives"]),
+      preset: {
+        ...preset,
+        defaults: {
+          Pepperoni: { section: "frozen", life: null },
+          Ham: { section: "chilled", life: null },
+        },
+      },
+      compactDates: false,
+      showDayCounts: false,
+      compactList: false,
+    });
+    const key = campaignKey("2026-09-07", "2026-11-17");
+    assert.ok(key);
+    library = copyStoreData(library, "11", "22", {
+      campaignKey: key,
+      removeHiddenKeys: ["Olives"],
+      removeDefaultNames: ["Ham"],
+    });
+    const next = readStoreSettings(library, "22", "2026-09-07", "2026-11-17");
+    assert.deepEqual(
+      next?.hidden.map((entry) => entry.name).sort(),
+      ["Bacon"],
+    );
+    assert.equal(next?.preset.defaults.Pepperoni?.section, "frozen");
+    assert.equal(next?.preset.defaults.Ham, undefined);
+  });
+
   it("keeps unnamed stores that only have display settings after parse", () => {
     const library = writeStoreSettingsRecord(emptyCampaignLibrary(), "77", {
       name: "",

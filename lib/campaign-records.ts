@@ -826,17 +826,21 @@ export function listDeviceStored(library: CampaignLibrary): DeviceStoredRecord[]
 export type StoreCopySelection = {
   dates?: boolean;
   list?: boolean;
-  /** Campaign key `issued|validUntil` when copying hidden / defaults. */
+  /** Campaign key `issued|validUntil` when copying / removing hidden / defaults. */
   campaignKey?: string | null;
-  /** Hidden entry keys to copy; omit or empty = none. */
+  /** Hidden entry keys to copy from the source; omit or empty = none. */
   hiddenKeys?: string[];
-  /** Product default names to copy; omit or empty = none. */
+  /** Product default names to copy from the source; omit or empty = none. */
   defaultNames?: string[];
+  /** Hidden entry keys to drop from the target; omit or empty = none. */
+  removeHiddenKeys?: string[];
+  /** Product default names to drop from the target; omit or empty = none. */
+  removeDefaultNames?: string[];
 };
 
 /**
  * Copy selected display settings and/or campaign items from one store to another.
- * Store name is never copied.
+ * Store name is never copied. Selected remove* keys are dropped from the target.
  */
 export function copyStoreData(
   library: CampaignLibrary,
@@ -881,43 +885,94 @@ export function copyStoreData(
   const defaultNames = new Set(
     (selection.defaultNames ?? []).map((item) => item.trim()).filter(Boolean),
   );
-  if (!key || (hiddenKeys.size === 0 && defaultNames.size === 0)) return next;
-
-  const sourcePreset = source.campaigns[key];
-  if (!sourcePreset || campaignKey(sourcePreset.issued, sourcePreset.validUntil) !== key) {
+  const removeHiddenKeys = new Set(
+    (selection.removeHiddenKeys ?? []).map((item) => item.trim()).filter(Boolean),
+  );
+  const removeDefaultNames = new Set(
+    (selection.removeDefaultNames ?? [])
+      .map((item) => item.trim())
+      .filter(Boolean),
+  );
+  if (
+    !key ||
+    (hiddenKeys.size === 0 &&
+      defaultNames.size === 0 &&
+      removeHiddenKeys.size === 0 &&
+      removeDefaultNames.size === 0)
+  ) {
     return next;
   }
 
+  const sourcePreset = source.campaigns[key];
   const dest = next.stores[toStoreId] ?? emptyStoreRecord();
   const prevPreset = dest.campaigns[key];
+  if (
+    (!sourcePreset ||
+      campaignKey(sourcePreset.issued, sourcePreset.validUntil) !== key) &&
+    !prevPreset
+  ) {
+    return next;
+  }
+  if (
+    hiddenKeys.size > 0 &&
+    (!sourcePreset ||
+      campaignKey(sourcePreset.issued, sourcePreset.validUntil) !== key)
+  ) {
+    return next;
+  }
+  if (
+    defaultNames.size > 0 &&
+    (!sourcePreset ||
+      campaignKey(sourcePreset.issued, sourcePreset.validUntil) !== key)
+  ) {
+    return next;
+  }
+
   const chart = next.campaigns.find(
     (item) => campaignKey(item.issued, item.validUntil) === key,
   );
+  const issued = sourcePreset?.issued || prevPreset!.issued;
+  const validUntil = sourcePreset?.validUntil || prevPreset!.validUntil;
 
   const nextHiddenMap = new Map(
     (prevPreset?.hidden ?? []).map((entry) => [hiddenEntryKey(entry), entry]),
   );
-  for (const entry of sourcePreset.hidden) {
-    const entryKey = hiddenEntryKey(entry);
-    if (!hiddenKeys.has(entryKey)) continue;
-    nextHiddenMap.set(entryKey, { ...entry });
+  for (const entryKey of removeHiddenKeys) {
+    nextHiddenMap.delete(entryKey);
+  }
+  if (sourcePreset) {
+    for (const entry of sourcePreset.hidden) {
+      const entryKey = hiddenEntryKey(entry);
+      if (!hiddenKeys.has(entryKey)) continue;
+      nextHiddenMap.set(entryKey, { ...entry });
+    }
   }
 
   const nextDefaults = { ...(prevPreset?.preset.defaults ?? {}) };
-  for (const name of defaultNames) {
-    const value = sourcePreset.preset.defaults[name];
-    if (!value?.section) continue;
-    nextDefaults[name] = { section: value.section, life: null };
+  for (const name of removeDefaultNames) {
+    delete nextDefaults[name];
+  }
+  if (sourcePreset) {
+    for (const name of defaultNames) {
+      const value = sourcePreset.preset.defaults[name];
+      if (!value?.section) continue;
+      nextDefaults[name] = { section: value.section, life: null };
+    }
   }
 
   const nextPreset: CampaignPreset = {
-    title: prevPreset?.title || sourcePreset.title || chart?.title || "Shelf life chart",
-    issued: sourcePreset.issued,
-    validUntil: sourcePreset.validUntil,
-    version: prevPreset?.version || sourcePreset.version || chart?.version || "",
+    title:
+      prevPreset?.title ||
+      sourcePreset?.title ||
+      chart?.title ||
+      "Shelf life chart",
+    issued,
+    validUntil,
+    version:
+      prevPreset?.version || sourcePreset?.version || chart?.version || "",
     hidden: parseHiddenEntries([...nextHiddenMap.values()]),
     preset: normalizeItemPreset({
-      ...(prevPreset?.preset ?? sourcePreset.preset),
+      ...(prevPreset?.preset ?? sourcePreset?.preset ?? DEFAULT_ITEM_PRESET),
       defaults: nextDefaults,
     }),
   };

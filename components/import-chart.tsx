@@ -763,22 +763,64 @@ export function ImportChartButton({
       toast.error("Select a different current store to copy into.");
       return;
     }
-    const campaignKeyValue = autoPreviewCampaignKey(fromStoreId);
-    const hiddenKeys = storeCopyChoices
-      .filter((id) => id.startsWith("hidden:"))
-      .map((id) => id.slice("hidden:".length));
-    const defaultNames = storeCopyChoices
-      .filter((id) => id.startsWith("default:"))
-      .map((id) => id.slice("default:".length));
+    const campaignKeyValue =
+      autoPreviewCampaignKey(fromStoreId) ||
+      autoPreviewCampaignKey(toStoreId) ||
+      (desk.imported
+        ? campaignKey(desk.pack.chart.issued, desk.pack.chart.validUntil)
+        : null);
+    const sourceHiddenKeys = new Set(
+      deviceStored
+        .filter(
+          (item) =>
+            item.storeId === fromStoreId &&
+            campaignKey(item.issued, item.validUntil) === campaignKeyValue,
+        )
+        .flatMap((item) => item.hidden.map((entry) => hiddenEntryKey(entry))),
+    );
+    const sourceDefaultNames = new Set(
+      deviceStored
+        .filter(
+          (item) =>
+            item.storeId === fromStoreId &&
+            campaignKey(item.issued, item.validUntil) === campaignKeyValue,
+        )
+        .flatMap((item) =>
+          Object.entries(item.preset.defaults)
+            .filter(([, value]) => value.section)
+            .map(([name]) => name),
+        ),
+    );
+    const hiddenKeys: string[] = [];
+    const removeHiddenKeys: string[] = [];
+    for (const id of storeCopyChoices) {
+      if (!id.startsWith("hidden:")) continue;
+      const key = id.slice("hidden:".length);
+      if (sourceHiddenKeys.has(key)) hiddenKeys.push(key);
+      else removeHiddenKeys.push(key);
+    }
+    const defaultNames: string[] = [];
+    const removeDefaultNames: string[] = [];
+    for (const id of storeCopyChoices) {
+      if (!id.startsWith("default:")) continue;
+      const name = id.slice("default:".length);
+      if (sourceDefaultNames.has(name)) defaultNames.push(name);
+      else removeDefaultNames.push(name);
+    }
     const copied = copyStoredStoreData(fromStoreId, toStoreId, {
       dates: storeCopyChoices.includes("dates"),
       list: storeCopyChoices.includes("list"),
       campaignKey:
-        hiddenKeys.length > 0 || defaultNames.length > 0
+        hiddenKeys.length > 0 ||
+        defaultNames.length > 0 ||
+        removeHiddenKeys.length > 0 ||
+        removeDefaultNames.length > 0
           ? campaignKeyValue
           : null,
       hiddenKeys,
       defaultNames,
+      removeHiddenKeys,
+      removeDefaultNames,
     });
     setStoreAction(null);
     setStoreCopyChoices([]);
@@ -3659,12 +3701,8 @@ export function ImportChartButton({
               };
             });
             const settingsIds = ["dates", "list"];
-            const hiddenIds = hiddenRows
-              .filter((row) => row.inSource)
-              .map((row) => row.id);
-            const defaultIds = defaultRows
-              .filter((row) => row.inSource)
-              .map((row) => row.id);
+            const hiddenIds = hiddenRows.map((row) => row.id);
+            const defaultIds = defaultRows.map((row) => row.id);
             const campaignIds = [...hiddenIds, ...defaultIds];
             const settingsSelected = settingsIds.filter((id) =>
               storeCopyChoices.includes(id),
@@ -3927,21 +3965,17 @@ export function ImportChartButton({
                                 const selected = storeCopyChoices.includes(
                                   row.id,
                                 );
-                                const body = (
-                                  <>
+                                return (
+                                  <label key={row.id} className={itemRowClass}>
                                     <span className="inline-flex min-w-0 items-center gap-2">
-                                      {row.inSource ? (
-                                        <input
-                                          type="checkbox"
-                                          className="size-4 shrink-0 rounded border-white/20 bg-black/30"
-                                          checked={selected}
-                                          onChange={() =>
-                                            toggleStoreCopyChoice(row.id)
-                                          }
-                                        />
-                                      ) : (
-                                        <span className="size-4 shrink-0" />
-                                      )}
+                                      <input
+                                        type="checkbox"
+                                        className="size-4 shrink-0 rounded border-white/20 bg-black/30"
+                                        checked={selected}
+                                        onChange={() =>
+                                          toggleStoreCopyChoice(row.id)
+                                        }
+                                      />
                                       <span
                                         className={cn(
                                           "truncate",
@@ -3953,16 +3987,7 @@ export function ImportChartButton({
                                       </span>
                                     </span>
                                     <StoreCopyChangeTag change={row.change} />
-                                  </>
-                                );
-                                return row.inSource ? (
-                                  <label key={row.id} className={itemRowClass}>
-                                    {body}
                                   </label>
-                                ) : (
-                                  <div key={row.id} className={itemRowClass}>
-                                    {body}
-                                  </div>
                                 );
                               })}
                             </div>
@@ -4002,21 +4027,17 @@ export function ImportChartButton({
                                 const selected = storeCopyChoices.includes(
                                   row.id,
                                 );
-                                const body = (
-                                  <>
+                                return (
+                                  <label key={row.id} className={itemRowClass}>
                                     <span className="inline-flex min-w-0 items-center gap-2">
-                                      {row.inSource ? (
-                                        <input
-                                          type="checkbox"
-                                          className="size-4 shrink-0 rounded border-white/20 bg-black/30"
-                                          checked={selected}
-                                          onChange={() =>
-                                            toggleStoreCopyChoice(row.id)
-                                          }
-                                        />
-                                      ) : (
-                                        <span className="size-4 shrink-0" />
-                                      )}
+                                      <input
+                                        type="checkbox"
+                                        className="size-4 shrink-0 rounded border-white/20 bg-black/30"
+                                        checked={selected}
+                                        onChange={() =>
+                                          toggleStoreCopyChoice(row.id)
+                                        }
+                                      />
                                       <span
                                         className={cn(
                                           "truncate",
@@ -4028,16 +4049,7 @@ export function ImportChartButton({
                                       </span>
                                     </span>
                                     <StoreCopyChangeTag change={row.change} />
-                                  </>
-                                );
-                                return row.inSource ? (
-                                  <label key={row.id} className={itemRowClass}>
-                                    {body}
                                   </label>
-                                ) : (
-                                  <div key={row.id} className={itemRowClass}>
-                                    {body}
-                                  </div>
                                 );
                               })}
                             </div>

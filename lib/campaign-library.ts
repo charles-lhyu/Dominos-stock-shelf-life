@@ -274,10 +274,16 @@ export function copyStoredStoreData(
     if (preset) {
       applying = true;
       try {
-        if ((selection.hiddenKeys?.length ?? 0) > 0) {
+        if (
+          (selection.hiddenKeys?.length ?? 0) > 0 ||
+          (selection.removeHiddenKeys?.length ?? 0) > 0
+        ) {
           replaceHiddenNames(preset.hidden);
         }
-        if ((selection.defaultNames?.length ?? 0) > 0) {
+        if (
+          (selection.defaultNames?.length ?? 0) > 0 ||
+          (selection.removeDefaultNames?.length ?? 0) > 0
+        ) {
           replaceItemPreset(preset.preset);
         }
       } finally {
