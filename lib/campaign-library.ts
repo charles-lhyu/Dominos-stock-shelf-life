@@ -27,6 +27,7 @@ import {
   type StoreCopySelection,
   type StoreSettings,
 } from "./campaign-records";
+import { mergeStoresIntoLibrary } from "./stored-library-io";
 import {
   getDeskState,
   onPackCleared,
@@ -160,6 +161,30 @@ export function replaceCampaignLibrary(next: CampaignLibrary) {
   if (saved) applySettings(saved, desk.pack.rules);
 }
 
+/** Merge selected stores from an import file into the device library. */
+export function importStoredStores(
+  incoming: CampaignLibrary,
+  storeIds: Iterable<string>,
+) {
+  hydrateCampaignLibrary();
+  const parsed = parseCampaignLibrary(incoming);
+  const next = mergeStoresIntoLibrary(library, parsed, storeIds);
+  if (next === library) return false;
+  commitLibrary(next);
+  hydrateStoreIdStore();
+  const desk = getDeskState();
+  const storeId = getStoreId();
+  if (!desk.imported || !storeId) return true;
+  const ids = new Set(
+    [...storeIds].map((id) => id.trim()).filter((id) => /^\d{1,8}$/.test(id)),
+  );
+  if (!ids.has(storeId)) return true;
+  const { issued, validUntil } = desk.pack.chart;
+  const saved = readStoreSettings(next, storeId, issued, validUntil);
+  if (saved) applySettings(saved, desk.pack.rules);
+  return true;
+}
+
 export function listCampaigns(): CampaignSummary[] {
   return snapshot;
 }
@@ -243,10 +268,27 @@ export function copyStoredStoreData(
   selection: StoreCopySelection,
 ) {
   hydrateCampaignLibrary();
-  const next = copyStoreData(library, fromStoreId, toStoreId, selection);
+  const key = selection.campaignKey?.trim() || "";
+  const desk = getDeskState();
+  const toCurrent = toStoreId === getStoreId();
+  const liveMatches =
+    toCurrent &&
+    Boolean(key) &&
+    desk.imported &&
+    campaignKey(desk.pack.chart.issued, desk.pack.chart.validUntil) === key;
+  // Match the copy popup's Old column (live screen) so unselected source
+  // items are not re-inserted from a stale saved preset.
+  const effective: StoreCopySelection = liveMatches
+    ? {
+        ...selection,
+        baseHidden: getHiddenEntries(),
+        basePreset: getItemPreset(),
+      }
+    : selection;
+  const next = copyStoreData(library, fromStoreId, toStoreId, effective);
   if (next === library) return false;
   commitLibrary(next);
-  if (toStoreId !== getStoreId()) return true;
+  if (!toCurrent) return true;
   const dest = next.stores[toStoreId];
   if (!dest) return true;
   if (selection.dates || selection.list) {
@@ -263,13 +305,7 @@ export function copyStoredStoreData(
       applying = false;
     }
   }
-  const key = selection.campaignKey?.trim() || "";
-  const desk = getDeskState();
-  if (
-    key &&
-    desk.imported &&
-    campaignKey(desk.pack.chart.issued, desk.pack.chart.validUntil) === key
-  ) {
+  if (liveMatches) {
     const preset = dest.campaigns[key];
     if (preset) {
       applying = true;

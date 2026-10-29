@@ -11,7 +11,9 @@ import type { ItemPreset } from "./item-preset-store";
 import type { ChartPack } from "./types";
 import {
   buildStoredLibraryPayload,
+  mergeStoresIntoLibrary,
   parseStoredLibraryPayload,
+  pickStoresFromLibrary,
   summarizeStoredLibrary,
   STORED_LIBRARY_FORMAT_V1,
   STORED_LIBRARY_FORMAT_V2,
@@ -120,5 +122,55 @@ describe("stored library import export", () => {
 
     assert.equal(parseStoredLibraryPayload({ format: "nope", library: legacy }), null);
     assert.deepEqual(parseCampaignLibrary(legacy).stores["99"]?.settings.name, "Town");
+  });
+
+  it("exports and merges individual stores without wiping the rest", () => {
+    let library = upsertCampaign(
+      emptyCampaignLibrary(),
+      pack("2026-09-07", "2026-11-17"),
+      "a.pdf",
+      "t1",
+    );
+    library = writeStoreName(library, "11", "Source");
+    library = writeStoreSettings(library, "11", "2026-09-07", "2026-11-17", {
+      hidden: [],
+      preset,
+      compactDates: true,
+    });
+    library = writeStoreName(library, "22", "Keep");
+    library = writeStoreSettings(library, "22", "2026-09-07", "2026-11-17", {
+      hidden: [],
+      preset,
+      compactList: true,
+    });
+    const payload = buildStoredLibraryPayload(library, { storeIds: ["11"] });
+    assert.deepEqual(Object.keys(payload.library.stores), ["11"]);
+    assert.equal(payload.storeId, "11");
+    assert.equal(payload.library.campaigns.length, 1);
+
+    const picked = pickStoresFromLibrary(library, ["22"]);
+    assert.deepEqual(Object.keys(picked.stores), ["22"]);
+
+    const incoming = writeStoreName(
+      writeStoreSettings(
+        upsertCampaign(
+          emptyCampaignLibrary(),
+          pack("2026-09-07", "2026-11-17", "Incoming"),
+          "b.pdf",
+          "t2",
+        ),
+        "11",
+        "2026-09-07",
+        "2026-11-17",
+        { hidden: [], preset, showDayCounts: true },
+      ),
+      "11",
+      "Imported",
+    );
+    const merged = mergeStoresIntoLibrary(library, incoming, ["11"]);
+    assert.equal(merged.stores["11"]?.settings.name, "Imported");
+    assert.equal(merged.stores["11"]?.settings.showDayCounts, true);
+    assert.equal(merged.stores["22"]?.settings.name, "Keep");
+    assert.equal(merged.stores["22"]?.settings.compactList, true);
   });
 });

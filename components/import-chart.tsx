@@ -71,7 +71,7 @@ import {
   listStoreSettingsOnDeviceServer,
   readSavedCampaignSettings,
   reloadCampaign,
-  replaceCampaignLibrary,
+  importStoredStores,
   subscribeCampaignLibrary,
   subscribeStoredStore,
   writeSavedDefault,
@@ -83,6 +83,7 @@ import {
   buildStoredLibraryPayload,
   parseStoredLibraryPayload,
   summarizeStoredLibrary,
+  type StoredLibraryPayload,
 } from "@/lib/stored-library-io";
 import { CHANGELOG } from "@/lib/changelog";
 import { parseChartPack } from "@/lib/chart-pack";
@@ -395,11 +396,18 @@ export function ImportChartButton({
   const [storedEditing, setStoredEditing] = useState(false);
   const [storedDraft, setStoredDraft] = useState<StoredEditDraft | null>(null);
   const [storedConfirmOpen, setStoredConfirmOpen] = useState(false);
-  const [storedImportConfirm, setStoredImportConfirm] = useState<{
-    summary: { stores: number; campaigns: number; charts: number };
-    library: ReturnType<typeof getCampaignLibrary>;
-    storeId?: string;
-  } | null>(null);
+  /** In-panel Import / Export store picker (same style as copy popup). */
+  const [storedIo, setStoredIo] = useState<
+    | { mode: "export" }
+    | {
+        mode: "import";
+        summary: { stores: number; campaigns: number; charts: number };
+        library: StoredLibraryPayload["library"];
+        storeId?: string;
+      }
+    | null
+  >(null);
+  const [storedIoChoices, setStoredIoChoices] = useState<string[]>([]);
   const [allStoredOpen, setAllStoredOpen] = useState(false);
   /** Store id being previewed inside Show all; null = card list. */
   const [allStoredPreviewId, setAllStoredPreviewId] = useState<string | null>(
@@ -414,6 +422,9 @@ export function ImportChartButton({
     step: "menu" | "copy";
   } | null>(null);
   const [storeCopyChoices, setStoreCopyChoices] = useState<string[]>([]);
+  /** Blocks clicks under the copy popup for a beat after dismiss (ghost taps). */
+  const [storeActionClickGuard, setStoreActionClickGuard] = useState(false);
+  const storeActionGuardTimer = useRef<number | null>(null);
   const [storeSettingsOpen, setStoreSettingsOpen] = useState(true);
   const [campaignPresetsOpen, setCampaignPresetsOpen] = useState(true);
   const storedImportInputRef = useRef<HTMLInputElement>(null);
@@ -543,6 +554,15 @@ export function ImportChartButton({
 
   useEffect(() => () => stopScan(), []);
 
+  useEffect(
+    () => () => {
+      if (storeActionGuardTimer.current != null) {
+        window.clearTimeout(storeActionGuardTimer.current);
+      }
+    },
+    [],
+  );
+
   useEffect(() => {
     if (!open) return;
     hydrateStoreIdStore();
@@ -553,7 +573,8 @@ export function ImportChartButton({
     setStoredEditing(false);
     setStoredDraft(null);
     setStoredConfirmOpen(false);
-    setStoredImportConfirm(null);
+    setStoredIo(null);
+    setStoredIoChoices([]);
     setActiveSettingsSection("settings-app");
     const raf = window.requestAnimationFrame(() => {
       settingsBodyRef.current?.scrollTo({ top: 0 });
@@ -626,7 +647,8 @@ export function ImportChartButton({
       setStoredEditing(false);
       setStoredDraft(null);
       setStoredConfirmOpen(false);
-      setStoredImportConfirm(null);
+      setStoredIo(null);
+      setStoredIoChoices([]);
       setAllStoredOpen(false);
       setAllStoredPreviewId(null);
       setStoreMenuOpen(false);
@@ -689,6 +711,7 @@ export function ImportChartButton({
   }
 
   function commitStoreIdValue(raw: string) {
+    if (storeActionClickGuard) return;
     setStoreMenuOpen(false);
     setStoreMenuAll(false);
     const next = normalizeStoreId(raw);
@@ -755,12 +778,32 @@ export function ImportChartButton({
     });
   }
 
+  /** Close copy/menu without applying. Guards against ghost taps selecting a store. */
+  function dismissStoreAction() {
+    setStoreAction(null);
+    setStoreCopyChoices([]);
+    setStoreActionClickGuard(true);
+    if (storeActionGuardTimer.current != null) {
+      window.clearTimeout(storeActionGuardTimer.current);
+    }
+    storeActionGuardTimer.current = window.setTimeout(() => {
+      storeActionGuardTimer.current = null;
+      setStoreActionClickGuard(false);
+    }, 400);
+  }
+
   function confirmStoreCopy() {
     if (!storeAction || storeAction.step !== "copy") return;
     const fromStoreId = storeAction.storeId;
     const toStoreId = storeId;
     if (!toStoreId || fromStoreId === toStoreId) {
       toast.error("Select a different current store to copy into.");
+      return;
+    }
+    const selected = [...storeCopyChoices];
+    // Closing / empty selection must never mutate campaign items.
+    if (selected.length === 0) {
+      dismissStoreAction();
       return;
     }
     const campaignKeyValue =
@@ -793,7 +836,7 @@ export function ImportChartButton({
     );
     const hiddenKeys: string[] = [];
     const removeHiddenKeys: string[] = [];
-    for (const id of storeCopyChoices) {
+    for (const id of selected) {
       if (!id.startsWith("hidden:")) continue;
       const key = id.slice("hidden:".length);
       if (sourceHiddenKeys.has(key)) hiddenKeys.push(key);
@@ -801,15 +844,15 @@ export function ImportChartButton({
     }
     const defaultNames: string[] = [];
     const removeDefaultNames: string[] = [];
-    for (const id of storeCopyChoices) {
+    for (const id of selected) {
       if (!id.startsWith("default:")) continue;
       const name = id.slice("default:".length);
       if (sourceDefaultNames.has(name)) defaultNames.push(name);
       else removeDefaultNames.push(name);
     }
     const copied = copyStoredStoreData(fromStoreId, toStoreId, {
-      dates: storeCopyChoices.includes("dates"),
-      list: storeCopyChoices.includes("list"),
+      dates: selected.includes("dates"),
+      list: selected.includes("list"),
       campaignKey:
         hiddenKeys.length > 0 ||
         defaultNames.length > 0 ||
@@ -822,8 +865,7 @@ export function ImportChartButton({
       removeHiddenKeys,
       removeDefaultNames,
     });
-    setStoreAction(null);
-    setStoreCopyChoices([]);
+    dismissStoreAction();
     if (!copied) {
       toast.error("Nothing was copied.");
       return;
@@ -1341,15 +1383,35 @@ export function ImportChartButton({
 
   const storedEditChanges = storedDraft ? listStoredEditChanges(storedDraft) : [];
 
-  function exportStoredData() {
+  function dismissStoredIo() {
+    setStoredIo(null);
+    setStoredIoChoices([]);
+  }
+
+  function openStoredExport() {
+    dismissStoreAction();
+    const ids = deviceStoreSettings.map((store) => store.storeId);
+    const preferred =
+      allStoredPreviewId && ids.includes(allStoredPreviewId)
+        ? allStoredPreviewId
+        : storeId && ids.includes(storeId)
+          ? storeId
+          : null;
+    setStoredIoChoices(preferred ? [preferred] : [...ids]);
+    setStoredIo({ mode: "export" });
+  }
+
+  function exportStoredData(storeIds: string[]) {
+    if (storeIds.length === 0) return;
     hydrateCampaignLibrary();
     const library = getCampaignLibrary();
-    const activeStore = previewStoreId ?? storeId;
     const payload = buildStoredLibraryPayload(library, {
-      storeId: activeStore || undefined,
+      storeIds,
+      storeId: storeIds.length === 1 ? storeIds[0] : undefined,
     });
     const stamp = new Date().toISOString().slice(0, 10);
-    const nameBit = activeStore || "device";
+    const nameBit =
+      storeIds.length === 1 ? storeIds[0]! : `stores-${storeIds.length}`;
     const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], {
       type: "application/json",
     });
@@ -1359,6 +1421,12 @@ export function ImportChartButton({
     link.download = `shelf-life-stored-${nameBit}-${stamp}.json`;
     link.click();
     URL.revokeObjectURL(url);
+    dismissStoredIo();
+    toast.success(
+      storeIds.length === 1
+        ? `Exported store ${storeIds[0]}.`
+        : `Exported ${storeIds.length} stores.`,
+    );
   }
 
   function onStoredImportFile(file: File | null) {
@@ -1370,7 +1438,17 @@ export function ImportChartButton({
           toast.error("That file is not a Stored data backup.");
           return;
         }
-        setStoredImportConfirm({
+        dismissStoreAction();
+        const ids = Object.keys(parsed.library.stores).sort((a, b) =>
+          a.localeCompare(b, undefined, { numeric: true }),
+        );
+        const preferred =
+          parsed.storeId && ids.includes(parsed.storeId)
+            ? parsed.storeId
+            : null;
+        setStoredIoChoices(preferred ? [preferred] : [...ids]);
+        setStoredIo({
+          mode: "import",
           summary: summarizeStoredLibrary(parsed.library),
           library: parsed.library,
           storeId: parsed.storeId,
@@ -1381,12 +1459,22 @@ export function ImportChartButton({
     });
   }
 
-  function confirmStoredImport() {
-    if (!storedImportConfirm) return;
-    replaceCampaignLibrary(storedImportConfirm.library);
-    setStoredImportConfirm(null);
+  function confirmStoredImport(storeIds: string[]) {
+    if (!storedIo || storedIo.mode !== "import" || storeIds.length === 0) {
+      return;
+    }
+    const ok = importStoredStores(storedIo.library, storeIds);
+    dismissStoredIo();
     discardStoredEdit();
-    toast.success("Stored data replaced on this device.");
+    if (!ok) {
+      toast.error("Nothing was imported.");
+      return;
+    }
+    toast.success(
+      storeIds.length === 1
+        ? `Imported store ${storeIds[0]}.`
+        : `Imported ${storeIds.length} stores.`,
+    );
   }
 
   function patchStoredCampaign(
@@ -2026,8 +2114,7 @@ export function ImportChartButton({
                     onClick={() => {
                       setAllStoredPreviewId(null);
                       setAllStoredPreviewCampaignKey(null);
-                      setStoreAction(null);
-                      setStoreCopyChoices([]);
+                      dismissStoreAction();
                       setAllStoredOpen(true);
                     }}
                     className="shrink-0 text-xs font-semibold text-sky-300 underline-offset-2 hover:underline disabled:opacity-40"
@@ -2832,8 +2919,11 @@ export function ImportChartButton({
               aria-label="Dismiss all stored data"
               onClick={() => {
                 if (storeAction) {
-                  setStoreAction(null);
-                  setStoreCopyChoices([]);
+                  dismissStoreAction();
+                  return;
+                }
+                if (storedIo) {
+                  dismissStoredIo();
                   return;
                 }
                 setAllStoredOpen(false);
@@ -2847,11 +2937,17 @@ export function ImportChartButton({
               aria-labelledby="all-stored-title"
               className={cn(
                 "relative z-10 mt-[3.75rem] flex min-h-0 flex-1 flex-col overflow-hidden rounded-t-2xl bg-popover shadow-2xl ring-1 ring-foreground/10 transition-[filter]",
-                storeAction &&
-                  "pointer-events-none blur-[2.5px] brightness-75 saturate-75",
+                (storeAction || storeActionClickGuard || storedIo) &&
+                  "pointer-events-none",
+                (storeAction || storedIo) &&
+                  "blur-[2.5px] brightness-75 saturate-75",
               )}
-              inert={storeAction ? true : undefined}
-              aria-hidden={storeAction ? true : undefined}
+              inert={
+                storeAction || storeActionClickGuard || storedIo
+                  ? true
+                  : undefined
+              }
+              aria-hidden={storeAction || storedIo ? true : undefined}
               onClick={(event) => event.stopPropagation()}
               onKeyDown={(event) => event.stopPropagation()}
             >
@@ -3027,8 +3123,9 @@ export function ImportChartButton({
                         <div className="flex flex-wrap gap-2">
                           <button
                             type="button"
-                            onClick={exportStoredData}
-                            className="rounded-lg px-2.5 py-1 text-xs font-semibold text-stone-200 ring-1 ring-white/15"
+                            onClick={openStoredExport}
+                            disabled={deviceStoreSettings.length === 0}
+                            className="rounded-lg px-2.5 py-1 text-xs font-semibold text-stone-200 ring-1 ring-white/15 disabled:opacity-40"
                           >
                             Export
                           </button>
@@ -3535,9 +3632,15 @@ export function ImportChartButton({
                   type="button"
                   className="absolute inset-0 bg-black/45"
                   aria-label="Dismiss store actions"
-                  onClick={() => {
-                    setStoreAction(null);
-                    setStoreCopyChoices([]);
+                  onPointerDown={(event) => {
+                    // Swallow the gesture so a synthetic click cannot hit the
+                    // store list underneath and adopt another store's items.
+                    event.preventDefault();
+                  }}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    dismissStoreAction();
                   }}
                 />
                 <div
@@ -3748,10 +3851,7 @@ export function ImportChartButton({
                       type="button"
                       className="absolute top-3 right-3 inline-flex size-10 items-center justify-center rounded-full bg-white/10 text-white"
                       aria-label="Close store actions"
-                      onClick={() => {
-                        setStoreAction(null);
-                        setStoreCopyChoices([]);
-                      }}
+                      onClick={dismissStoreAction}
                     >
                       <X className="size-5" />
                     </button>
@@ -3784,10 +3884,7 @@ export function ImportChartButton({
                       type="button"
                       variant="outline"
                       className="h-11 rounded-xl border-white/15 text-white"
-                      onClick={() => {
-                        setStoreAction(null);
-                        setStoreCopyChoices([]);
-                      }}
+                      onClick={dismissStoreAction}
                     >
                       Cancel
                     </Button>
@@ -3814,10 +3911,7 @@ export function ImportChartButton({
                     type="button"
                     className="absolute top-3 right-3 inline-flex size-10 items-center justify-center rounded-full bg-white/10 text-white"
                     aria-label="Close copy store data"
-                    onClick={() => {
-                      setStoreAction(null);
-                      setStoreCopyChoices([]);
-                    }}
+                    onClick={dismissStoreAction}
                   >
                     <X className="size-5" />
                   </button>
@@ -4072,9 +4166,10 @@ export function ImportChartButton({
                     type="button"
                     variant="outline"
                     className="h-11 rounded-xl border-white/15 text-white"
-                    onClick={() =>
-                      setStoreAction({ storeId: sourceId, step: "menu" })
-                    }
+                    onClick={() => {
+                      setStoreCopyChoices([]);
+                      setStoreAction({ storeId: sourceId, step: "menu" });
+                    }}
                   >
                     Back
                   </Button>
@@ -4086,54 +4181,205 @@ export function ImportChartButton({
                 </div>
               </div>
             ) : null}
+            {storedIo ? (
+              <div className="absolute inset-0 z-20 flex items-center justify-center p-4">
+                <button
+                  type="button"
+                  className="absolute inset-0 bg-black/45"
+                  aria-label={
+                    storedIo.mode === "export"
+                      ? "Dismiss export stored data"
+                      : "Dismiss import stored data"
+                  }
+                  onPointerDown={(event) => event.preventDefault()}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    dismissStoredIo();
+                  }}
+                />
+                <div
+                  role="dialog"
+                  aria-modal="true"
+                  className="relative z-10 flex max-h-[min(36rem,calc(100dvh-2rem))] w-full max-w-sm flex-col overflow-hidden rounded-2xl bg-popover shadow-2xl ring-1 ring-foreground/10"
+                  onClick={(event) => event.stopPropagation()}
+                  onKeyDown={(event) => event.stopPropagation()}
+                >
+                  {(() => {
+                    const exportMode = storedIo.mode === "export";
+                    const importSummary =
+                      storedIo.mode === "import" ? storedIo.summary : null;
+                    const importLibrary =
+                      storedIo.mode === "import" ? storedIo.library : null;
+                    const storeRows = exportMode
+                      ? deviceStoreSettings.map((store) => ({
+                          storeId: store.storeId,
+                          name: nameFor(store.storeId) || store.name,
+                          detail:
+                            store.campaignCount === 0
+                              ? "No presets"
+                              : store.campaignCount === 1
+                                ? "1 preset"
+                                : `${store.campaignCount} presets`,
+                        }))
+                      : Object.keys(importLibrary?.stores ?? {})
+                          .sort((a, b) =>
+                            a.localeCompare(b, undefined, { numeric: true }),
+                          )
+                          .map((id) => {
+                            const store = importLibrary!.stores[id]!;
+                            const count = Object.keys(store.campaigns).length;
+                            return {
+                              storeId: id,
+                              name: store.settings.name,
+                              detail:
+                                count === 0
+                                  ? "No presets"
+                                  : count === 1
+                                    ? "1 preset"
+                                    : `${count} presets`,
+                            };
+                          });
+                    const allIds = storeRows.map((row) => row.storeId);
+                    const selectedCount = allIds.filter((id) =>
+                      storedIoChoices.includes(id),
+                    ).length;
+                    const allSelected =
+                      allIds.length > 0 && selectedCount === allIds.length;
+                    return (
+                      <>
+                        <DialogHeader className="space-y-2 px-4 pt-4 pr-14 pb-2">
+                          <DialogTitle className="font-display text-xl text-white">
+                            {exportMode
+                              ? "Export stored data"
+                              : "Import stored data"}
+                          </DialogTitle>
+                          <DialogDescription className="text-sm text-stone-400">
+                            {exportMode || !importSummary
+                              ? "Choose all stores or individual ones to include in the backup file."
+                              : `Choose all stores or individual ones to merge onto this device. File has ${importSummary.stores} store${importSummary.stores === 1 ? "" : "s"}, ${importSummary.campaigns} campaign preset${importSummary.campaigns === 1 ? "" : "s"}, and ${importSummary.charts} chart${importSummary.charts === 1 ? "" : "s"}.`}
+                          </DialogDescription>
+                          <button
+                            type="button"
+                            className="absolute top-3 right-3 inline-flex size-10 items-center justify-center rounded-full bg-white/10 text-white"
+                            aria-label={
+                              exportMode
+                                ? "Close export stored data"
+                                : "Close import stored data"
+                            }
+                            onClick={dismissStoredIo}
+                          >
+                            <X className="size-5" />
+                          </button>
+                        </DialogHeader>
+                        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto border-t border-white/10 px-4 py-3">
+                          <label className="flex min-w-0 items-center gap-2 text-sm font-medium text-stone-200">
+                            <input
+                              type="checkbox"
+                              className="size-4 rounded border-white/20 bg-black/30"
+                              disabled={allIds.length === 0}
+                              checked={allSelected}
+                              ref={(node) => {
+                                if (!node) return;
+                                node.indeterminate =
+                                  selectedCount > 0 &&
+                                  selectedCount < allIds.length;
+                              }}
+                              onChange={(event) =>
+                                setStoredIoChoices(
+                                  event.target.checked ? [...allIds] : [],
+                                )
+                              }
+                            />
+                            All stores
+                            <span className="text-xs font-normal text-stone-500">
+                              · {allIds.length}
+                            </span>
+                          </label>
+                          <div className="space-y-1 border-l border-white/10 pl-4">
+                            {storeRows.length === 0 ? (
+                              <p className="text-xs text-stone-500">
+                                {exportMode
+                                  ? "No stores saved on this device."
+                                  : "No stores in this file."}
+                              </p>
+                            ) : (
+                              storeRows.map((row) => {
+                                const selected = storedIoChoices.includes(
+                                  row.storeId,
+                                );
+                                return (
+                                  <label
+                                    key={row.storeId}
+                                    className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 text-sm text-stone-300"
+                                  >
+                                    <span className="inline-flex min-w-0 items-center gap-2">
+                                      <input
+                                        type="checkbox"
+                                        className="size-4 shrink-0 rounded border-white/20 bg-black/30"
+                                        checked={selected}
+                                        onChange={() =>
+                                          setStoredIoChoices((current) =>
+                                            current.includes(row.storeId)
+                                              ? current.filter(
+                                                  (id) => id !== row.storeId,
+                                                )
+                                              : [...current, row.storeId],
+                                          )
+                                        }
+                                      />
+                                      <span className="min-w-0 truncate">
+                                        {row.name || "Unnamed store"}
+                                      </span>
+                                    </span>
+                                    <span className="shrink-0 font-mono text-xs text-stone-400">
+                                      {row.storeId}
+                                      <span className="text-stone-600"> · </span>
+                                      {row.detail}
+                                    </span>
+                                  </label>
+                                );
+                              })
+                            )}
+                          </div>
+                        </div>
+                        <div className="grid gap-2 border-t border-white/10 p-4">
+                          <Button
+                            type="button"
+                            className="h-11 rounded-xl"
+                            disabled={storedIoChoices.length === 0}
+                            onClick={() =>
+                              exportMode
+                                ? exportStoredData(storedIoChoices)
+                                : confirmStoredImport(storedIoChoices)
+                            }
+                          >
+                            {exportMode
+                              ? storedIoChoices.length === 1
+                                ? "Export selected store"
+                                : "Export selected stores"
+                              : storedIoChoices.length === 1
+                                ? "Import selected store"
+                                : "Import selected stores"}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="h-11 rounded-xl border-white/15 text-white"
+                            onClick={dismissStoredIo}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : null}
       </DialogContent>
-      <Dialog
-        open={storedImportConfirm != null}
-        onOpenChange={(next) => {
-          if (!next) setStoredImportConfirm(null);
-        }}
-      >
-        <DialogContent
-          showCloseButton={false}
-          overlayClassName="z-[60] bg-black/50"
-          className="z-[60] max-h-[min(40rem,calc(100dvh-2rem))] max-w-sm gap-0 overflow-y-auto rounded-2xl p-0"
-        >
-          <DialogHeader className="space-y-2 px-4 pt-4 pr-14 pb-2">
-            <DialogTitle className="font-display text-xl text-white">
-              Replace stored data?
-            </DialogTitle>
-            <DialogDescription className="text-sm text-stone-400">
-              Import replaces every store and campaign preset saved on this device.
-              {storedImportConfirm
-                ? ` This file has ${storedImportConfirm.summary.stores} store${storedImportConfirm.summary.stores === 1 ? "" : "s"}, ${storedImportConfirm.summary.campaigns} campaign preset${storedImportConfirm.summary.campaigns === 1 ? "" : "s"}, and ${storedImportConfirm.summary.charts} chart${storedImportConfirm.summary.charts === 1 ? "" : "s"}.`
-                : ""}
-            </DialogDescription>
-            <button
-              type="button"
-              className="absolute top-3 right-3 inline-flex size-10 items-center justify-center rounded-full bg-white/10 text-white"
-              aria-label="Close stored import"
-              onClick={() => setStoredImportConfirm(null)}
-            >
-              <X className="size-5" />
-            </button>
-          </DialogHeader>
-          <div className="grid gap-2 border-t border-white/10 p-4">
-            <Button type="button" className="h-11 rounded-xl" onClick={confirmStoredImport}>
-              Replace stored data
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="h-11 rounded-xl border-white/15 text-white"
-              onClick={() => setStoredImportConfirm(null)}
-            >
-              Cancel
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
       <Dialog
         open={storedConfirmOpen}
         onOpenChange={(next) => {

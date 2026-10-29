@@ -345,6 +345,131 @@ describe("campaign library records", () => {
     assert.equal(next?.preset.defaults.Ham, undefined);
   });
 
+  it("does not insert unselected source items when the target has no saved campaign", () => {
+    let library = writeStoreSettings(emptyCampaignLibrary(), "11", "2026-09-07", "2026-11-17", {
+      hidden: parseHiddenEntries(["Bacon", "Olives", "Mushrooms"]),
+      preset: {
+        ...preset,
+        defaults: {
+          Pepperoni: { section: "frozen", life: null },
+          Ham: { section: "chilled", life: null },
+          Dough: { section: "frozen", life: null },
+        },
+      },
+      compactDates: true,
+      showDayCounts: false,
+      compactList: false,
+    });
+    library = writeStoreSettingsRecord(library, "22", {
+      name: "Target",
+      compactDates: false,
+      showDayCounts: false,
+      compactList: false,
+    });
+    const key = campaignKey("2026-09-07", "2026-11-17");
+    assert.ok(key);
+    library = copyStoreData(library, "11", "22", {
+      dates: true,
+      campaignKey: key,
+      hiddenKeys: ["Bacon"],
+      defaultNames: ["Pepperoni"],
+    });
+    const copied = readStoreSettings(library, "22", "2026-09-07", "2026-11-17");
+    assert.deepEqual(
+      copied?.hidden.map((entry) => entry.name).sort(),
+      ["Bacon"],
+    );
+    assert.equal(copied?.preset.defaults.Pepperoni?.section, "frozen");
+    assert.equal(copied?.preset.defaults.Ham, undefined);
+    assert.equal(copied?.preset.defaults.Dough, undefined);
+    assert.equal(library.stores["22"]?.settings.compactDates, true);
+  });
+
+  it("uses a live base so stale saved target items are not re-applied with a partial copy", () => {
+    let library = writeStoreSettings(emptyCampaignLibrary(), "11", "2026-09-07", "2026-11-17", {
+      hidden: parseHiddenEntries(["Bacon", "Olives"]),
+      preset: {
+        ...preset,
+        defaults: {
+          Pepperoni: { section: "frozen", life: null },
+          Ham: { section: "chilled", life: null },
+        },
+      },
+      compactDates: false,
+      showDayCounts: false,
+      compactList: false,
+    });
+    // Target saved copy already has Olives/Ham (stale vs the live screen).
+    library = writeStoreSettings(library, "22", "2026-09-07", "2026-11-17", {
+      hidden: parseHiddenEntries(["Olives"]),
+      preset: {
+        ...preset,
+        defaults: { Ham: { section: "chilled", life: null } },
+      },
+      compactDates: false,
+      showDayCounts: false,
+      compactList: false,
+    });
+    const key = campaignKey("2026-09-07", "2026-11-17");
+    assert.ok(key);
+    library = copyStoreData(library, "11", "22", {
+      campaignKey: key,
+      hiddenKeys: ["Bacon"],
+      defaultNames: ["Pepperoni"],
+      baseHidden: [],
+      basePreset: preset,
+    });
+    const copied = readStoreSettings(library, "22", "2026-09-07", "2026-11-17");
+    assert.deepEqual(
+      copied?.hidden.map((entry) => entry.name),
+      ["Bacon"],
+    );
+    assert.equal(copied?.preset.defaults.Pepperoni?.section, "frozen");
+    assert.equal(copied?.preset.defaults.Ham, undefined);
+  });
+
+  it("leaves campaign items alone when the copy selection is only dates or empty", () => {
+    let library = writeStoreSettings(emptyCampaignLibrary(), "11", "2026-09-07", "2026-11-17", {
+      hidden: parseHiddenEntries(["Bacon", "Olives"]),
+      preset: {
+        ...preset,
+        defaults: { Pepperoni: { section: "frozen", life: null } },
+      },
+      compactDates: true,
+      showDayCounts: false,
+      compactList: true,
+    });
+    library = writeStoreSettings(library, "22", "2026-09-07", "2026-11-17", {
+      hidden: parseHiddenEntries(["Ham"]),
+      preset: {
+        ...preset,
+        defaults: { Dough: { section: "frozen", life: null } },
+      },
+      compactDates: false,
+      showDayCounts: false,
+      compactList: false,
+    });
+    const key = campaignKey("2026-09-07", "2026-11-17");
+    assert.ok(key);
+    const datesOnly = copyStoreData(library, "11", "22", {
+      dates: true,
+      list: true,
+    });
+    const afterDates = readStoreSettings(datesOnly, "22", "2026-09-07", "2026-11-17");
+    assert.deepEqual(
+      afterDates?.hidden.map((entry) => entry.name),
+      ["Ham"],
+    );
+    assert.equal(afterDates?.preset.defaults.Dough?.section, "frozen");
+    assert.equal(afterDates?.preset.defaults.Pepperoni, undefined);
+    const closed = copyStoreData(library, "11", "22", {
+      campaignKey: key,
+      hiddenKeys: [],
+      defaultNames: [],
+    });
+    assert.equal(closed, library);
+  });
+
   it("keeps unnamed stores that only have display settings after parse", () => {
     const library = writeStoreSettingsRecord(emptyCampaignLibrary(), "77", {
       name: "",

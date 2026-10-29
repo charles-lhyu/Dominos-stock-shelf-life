@@ -1,4 +1,5 @@
 import {
+  campaignKey,
   parseCampaignLibrary,
   type CampaignLibrary,
 } from "./campaign-records";
@@ -17,20 +18,89 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value != null && !Array.isArray(value);
 }
 
+/** Keep only the given stores and the chart packs they reference. */
+export function pickStoresFromLibrary(
+  library: CampaignLibrary,
+  storeIds: Iterable<string>,
+): CampaignLibrary {
+  const wanted = new Set(
+    [...storeIds].map((id) => id.trim()).filter((id) => /^\d{1,8}$/.test(id)),
+  );
+  const stores: CampaignLibrary["stores"] = {};
+  const neededKeys = new Set<string>();
+  for (const storeId of wanted) {
+    const store = library.stores[storeId];
+    if (!store) continue;
+    stores[storeId] = store;
+    for (const key of Object.keys(store.campaigns)) neededKeys.add(key);
+  }
+  const campaigns = library.campaigns.filter((item) => {
+    const key = campaignKey(item.issued, item.validUntil);
+    return Boolean(key && neededKeys.has(key));
+  });
+  return { campaigns, stores };
+}
+
+/**
+ * Overlay selected stores from `incoming` onto `current`.
+ * Other device stores are kept. Charts for the chosen stores are upserted.
+ */
+export function mergeStoresIntoLibrary(
+  current: CampaignLibrary,
+  incoming: CampaignLibrary,
+  storeIds: Iterable<string>,
+): CampaignLibrary {
+  const picked = pickStoresFromLibrary(incoming, storeIds);
+  if (Object.keys(picked.stores).length === 0) return current;
+  const byKey = new Map(
+    current.campaigns.map((item) => [
+      campaignKey(item.issued, item.validUntil) ?? "",
+      item,
+    ]),
+  );
+  for (const item of picked.campaigns) {
+    const key = campaignKey(item.issued, item.validUntil);
+    if (!key) continue;
+    byKey.set(key, item);
+  }
+  return {
+    campaigns: [...byKey.values()].filter((item) =>
+      Boolean(campaignKey(item.issued, item.validUntil)),
+    ),
+    stores: {
+      ...current.stores,
+      ...picked.stores,
+    },
+  };
+}
+
 /** Build a downloadable backup of the device Stored data library. */
 export function buildStoredLibraryPayload(
   library: CampaignLibrary,
-  options: { storeId?: string; exportedAt?: string } = {},
+  options: {
+    storeId?: string;
+    storeIds?: Iterable<string>;
+    exportedAt?: string;
+  } = {},
 ): StoredLibraryPayload {
+  const storeIds = options.storeIds
+    ? [...options.storeIds].map((id) => id.trim()).filter((id) => /^\d{1,8}$/.test(id))
+    : null;
+  const sliced =
+    storeIds && storeIds.length > 0
+      ? pickStoresFromLibrary(library, storeIds)
+      : library;
   const storeId =
     typeof options.storeId === "string" && /^\d{1,8}$/.test(options.storeId)
       ? options.storeId
-      : undefined;
+      : storeIds?.length === 1
+        ? storeIds[0]
+        : undefined;
   return {
     format: STORED_LIBRARY_FORMAT_V2,
     exportedAt: options.exportedAt ?? new Date().toISOString(),
     ...(storeId ? { storeId } : {}),
-    library,
+    library: sliced,
   };
 }
 

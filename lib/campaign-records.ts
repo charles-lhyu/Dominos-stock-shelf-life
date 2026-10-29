@@ -836,11 +836,19 @@ export type StoreCopySelection = {
   removeHiddenKeys?: string[];
   /** Product default names to drop from the target; omit or empty = none. */
   removeDefaultNames?: string[];
+  /**
+   * Optional merge base for the current screen. When set (e.g. live hidden /
+   * preset), unselected source items are never pulled in from a stale saved
+   * copy — only explicit hiddenKeys / defaultNames are added.
+   */
+  baseHidden?: HiddenEntry[];
+  basePreset?: ItemPreset;
 };
 
 /**
  * Copy selected display settings and/or campaign items from one store to another.
  * Store name is never copied. Selected remove* keys are dropped from the target.
+ * Unselected source items are never inserted.
  */
 export function copyStoreData(
   library: CampaignLibrary,
@@ -906,10 +914,13 @@ export function copyStoreData(
   const sourcePreset = source.campaigns[key];
   const dest = next.stores[toStoreId] ?? emptyStoreRecord();
   const prevPreset = dest.campaigns[key];
+  const hasBase =
+    selection.baseHidden !== undefined || selection.basePreset !== undefined;
   if (
     (!sourcePreset ||
       campaignKey(sourcePreset.issued, sourcePreset.validUntil) !== key) &&
-    !prevPreset
+    !prevPreset &&
+    !hasBase
   ) {
     return next;
   }
@@ -931,11 +942,21 @@ export function copyStoreData(
   const chart = next.campaigns.find(
     (item) => campaignKey(item.issued, item.validUntil) === key,
   );
-  const issued = sourcePreset?.issued || prevPreset!.issued;
-  const validUntil = sourcePreset?.validUntil || prevPreset!.validUntil;
+  const issued =
+    sourcePreset?.issued || prevPreset?.issued || key.split("|")[0] || "";
+  const validUntil =
+    sourcePreset?.validUntil ||
+    prevPreset?.validUntil ||
+    key.split("|")[1] ||
+    "";
+  if (!issued || !validUntil) return next;
 
+  const hiddenBase =
+    selection.baseHidden !== undefined
+      ? selection.baseHidden
+      : (prevPreset?.hidden ?? []);
   const nextHiddenMap = new Map(
-    (prevPreset?.hidden ?? []).map((entry) => [hiddenEntryKey(entry), entry]),
+    hiddenBase.map((entry) => [hiddenEntryKey(entry), entry]),
   );
   for (const entryKey of removeHiddenKeys) {
     nextHiddenMap.delete(entryKey);
@@ -948,7 +969,9 @@ export function copyStoreData(
     }
   }
 
-  const nextDefaults = { ...(prevPreset?.preset.defaults ?? {}) };
+  const presetBase =
+    selection.basePreset ?? prevPreset?.preset ?? DEFAULT_ITEM_PRESET;
+  const nextDefaults = { ...presetBase.defaults };
   for (const name of removeDefaultNames) {
     delete nextDefaults[name];
   }
@@ -971,8 +994,10 @@ export function copyStoreData(
     version:
       prevPreset?.version || sourcePreset?.version || chart?.version || "",
     hidden: parseHiddenEntries([...nextHiddenMap.values()]),
+    // Never seed from the source preset — that would insert unselected items
+    // via filter/default fields. Only explicit keys above are merged in.
     preset: normalizeItemPreset({
-      ...(prevPreset?.preset ?? sourcePreset?.preset ?? DEFAULT_ITEM_PRESET),
+      ...presetBase,
       defaults: nextDefaults,
     }),
   };
