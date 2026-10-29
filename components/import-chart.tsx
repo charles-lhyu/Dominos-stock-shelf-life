@@ -3549,7 +3549,17 @@ export function ImportChartButton({
               : targetId
                 ? storeListLabel
                 : "—";
-            const copyCampaignKey = autoPreviewCampaignKey(sourceId);
+            const deskCampaignKey =
+              desk.imported && desk.pack.chart.issued && desk.pack.chart.validUntil
+                ? campaignKey(
+                    desk.pack.chart.issued,
+                    desk.pack.chart.validUntil,
+                  )
+                : null;
+            const copyCampaignKey =
+              autoPreviewCampaignKey(sourceId) ||
+              (targetId ? autoPreviewCampaignKey(targetId) : null) ||
+              deskCampaignKey;
             const copyCampaign = copyCampaignKey
               ? deviceStored.find(
                   (item) =>
@@ -3571,10 +3581,20 @@ export function ImportChartButton({
             const copyDefaults = copyCampaign
               ? productDefaultRows(copyCampaign.preset)
               : [];
-            const targetHidden = targetCampaign?.hidden ?? [];
-            const targetDefaults = targetCampaign
-              ? productDefaultRows(targetCampaign.preset)
-              : [];
+            const targetUsesLive =
+              Boolean(targetId) &&
+              targetId === storeId &&
+              Boolean(copyCampaignKey) &&
+              Boolean(deskCampaignKey) &&
+              copyCampaignKey === deskCampaignKey;
+            const targetHidden = targetUsesLive
+              ? hiddenEntries
+              : (targetCampaign?.hidden ?? []);
+            const targetDefaults = targetUsesLive
+              ? productDefaultRows(itemPreset)
+              : targetCampaign
+                ? productDefaultRows(targetCampaign.preset)
+                : [];
             const targetHiddenKeys = new Set(
               targetHidden.map((entry) => hiddenEntryKey(entry)),
             );
@@ -3926,7 +3946,7 @@ export function ImportChartButton({
                                         className={cn(
                                           "truncate",
                                           row.change === "removed" &&
-                                            "text-stone-500 line-through",
+                                            "text-red-300/90 line-through",
                                         )}
                                       >
                                         {row.label}
@@ -4001,7 +4021,7 @@ export function ImportChartButton({
                                         className={cn(
                                           "truncate",
                                           row.change === "removed" &&
-                                            "text-stone-500 line-through",
+                                            "text-red-300/90 line-through",
                                         )}
                                       >
                                         {row.name}
