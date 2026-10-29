@@ -27,6 +27,8 @@ import {
   Unlock,
   X,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Equal,
   Minus,
   MoreHorizontal,
@@ -71,7 +73,7 @@ import {
   listStoreSettingsOnDeviceServer,
   readSavedCampaignSettings,
   reloadCampaign,
-  importStoredStores,
+  importStoredStoreSelections,
   subscribeCampaignLibrary,
   subscribeStoredStore,
   writeSavedDefault,
@@ -401,13 +403,20 @@ export function ImportChartButton({
     | { mode: "export" }
     | {
         mode: "import";
+        step: "pick" | "review";
         summary: { stores: number; campaigns: number; charts: number };
         library: StoredLibraryPayload["library"];
         storeId?: string;
+        reviewIds: string[];
+        reviewIndex: number;
       }
     | null
   >(null);
   const [storedIoChoices, setStoredIoChoices] = useState<string[]>([]);
+  /** Per-store copy-style item choices while paging import review. */
+  const [storedIoReviewChoices, setStoredIoReviewChoices] = useState<
+    Record<string, string[]>
+  >({});
   const [allStoredOpen, setAllStoredOpen] = useState(false);
   /** Store id being previewed inside Show all; null = card list. */
   const [allStoredPreviewId, setAllStoredPreviewId] = useState<string | null>(
@@ -575,6 +584,7 @@ export function ImportChartButton({
     setStoredConfirmOpen(false);
     setStoredIo(null);
     setStoredIoChoices([]);
+    setStoredIoReviewChoices({});
     setActiveSettingsSection("settings-app");
     const raf = window.requestAnimationFrame(() => {
       settingsBodyRef.current?.scrollTo({ top: 0 });
@@ -649,6 +659,7 @@ export function ImportChartButton({
       setStoredConfirmOpen(false);
       setStoredIo(null);
       setStoredIoChoices([]);
+      setStoredIoReviewChoices({});
       setAllStoredOpen(false);
       setAllStoredPreviewId(null);
       setStoreMenuOpen(false);
@@ -1386,6 +1397,7 @@ export function ImportChartButton({
   function dismissStoredIo() {
     setStoredIo(null);
     setStoredIoChoices([]);
+    setStoredIoReviewChoices({});
   }
 
   function openStoredExport() {
@@ -1447,11 +1459,15 @@ export function ImportChartButton({
             ? parsed.storeId
             : null;
         setStoredIoChoices(preferred ? [preferred] : [...ids]);
+        setStoredIoReviewChoices({});
         setStoredIo({
           mode: "import",
+          step: "pick",
           summary: summarizeStoredLibrary(parsed.library),
           library: parsed.library,
           storeId: parsed.storeId,
+          reviewIds: [],
+          reviewIndex: 0,
         });
       } catch {
         toast.error("Could not read that Stored data file.");
@@ -1459,11 +1475,136 @@ export function ImportChartButton({
     });
   }
 
-  function confirmStoredImport(storeIds: string[]) {
+  function beginImportReview(storeIds: string[]) {
     if (!storedIo || storedIo.mode !== "import" || storeIds.length === 0) {
       return;
     }
-    const ok = importStoredStores(storedIo.library, storeIds);
+    const ids = [...storeIds].sort((a, b) =>
+      a.localeCompare(b, undefined, { numeric: true }),
+    );
+    setStoredIoReviewChoices({});
+    setStoredIo({
+      ...storedIo,
+      step: "review",
+      reviewIds: ids,
+      reviewIndex: 0,
+    });
+  }
+
+  function importReviewCampaignKey(
+    fileLibrary: StoredLibraryPayload["library"],
+    forStoreId: string,
+  ): string | null {
+    const fileStore = fileLibrary.stores[forStoreId];
+    const fileKeys = fileStore
+      ? Object.keys(fileStore.campaigns).sort((a, b) => {
+          const aUntil = a.split("|")[1] ?? "";
+          const bUntil = b.split("|")[1] ?? "";
+          if (aUntil !== bUntil) return aUntil < bUntil ? 1 : -1;
+          return a < b ? 1 : -1;
+        })
+      : [];
+    if (desk.imported) {
+      const current = campaignKey(
+        desk.pack.chart.issued,
+        desk.pack.chart.validUntil,
+      );
+      if (
+        current &&
+        (fileKeys.includes(current) ||
+          deviceStored.some(
+            (item) =>
+              item.storeId === forStoreId &&
+              campaignKey(item.issued, item.validUntil) === current,
+          ))
+      ) {
+        return current;
+      }
+    }
+    if (fileKeys[0]) return fileKeys[0];
+    return autoPreviewCampaignKey(forStoreId);
+  }
+
+  function selectionFromCopyChoices(
+    choices: string[],
+    sourceHiddenKeys: Set<string>,
+    sourceDefaultNames: Set<string>,
+    campaignKeyValue: string | null,
+  ) {
+    const hiddenKeys: string[] = [];
+    const removeHiddenKeys: string[] = [];
+    for (const id of choices) {
+      if (!id.startsWith("hidden:")) continue;
+      const key = id.slice("hidden:".length);
+      if (sourceHiddenKeys.has(key)) hiddenKeys.push(key);
+      else removeHiddenKeys.push(key);
+    }
+    const defaultNames: string[] = [];
+    const removeDefaultNames: string[] = [];
+    for (const id of choices) {
+      if (!id.startsWith("default:")) continue;
+      const name = id.slice("default:".length);
+      if (sourceDefaultNames.has(name)) defaultNames.push(name);
+      else removeDefaultNames.push(name);
+    }
+    return {
+      dates: choices.includes("dates"),
+      list: choices.includes("list"),
+      campaignKey:
+        hiddenKeys.length > 0 ||
+        defaultNames.length > 0 ||
+        removeHiddenKeys.length > 0 ||
+        removeDefaultNames.length > 0
+          ? campaignKeyValue
+          : null,
+      hiddenKeys,
+      defaultNames,
+      removeHiddenKeys,
+      removeDefaultNames,
+    };
+  }
+
+  function confirmImportReview() {
+    if (!storedIo || storedIo.mode !== "import" || storedIo.step !== "review") {
+      return;
+    }
+    const pages = storedIo.reviewIds.flatMap((id) => {
+      const choices = storedIoReviewChoices[id] ?? [];
+      if (choices.length === 0) return [];
+      const fileStore = storedIo.library.stores[id];
+      if (!fileStore) return [];
+      const campaignKeyValue = importReviewCampaignKey(storedIo.library, id);
+      const sourceHiddenKeys = new Set(
+        campaignKeyValue && fileStore.campaigns[campaignKeyValue]
+          ? fileStore.campaigns[campaignKeyValue]!.hidden.map((entry) =>
+              hiddenEntryKey(entry),
+            )
+          : [],
+      );
+      const sourceDefaultNames = new Set(
+        campaignKeyValue && fileStore.campaigns[campaignKeyValue]
+          ? Object.entries(fileStore.campaigns[campaignKeyValue]!.preset.defaults)
+              .filter(([, value]) => value.section)
+              .map(([name]) => name)
+          : [],
+      );
+      return [
+        {
+          storeId: id,
+          selection: selectionFromCopyChoices(
+            choices,
+            sourceHiddenKeys,
+            sourceDefaultNames,
+            campaignKeyValue,
+          ),
+        },
+      ];
+    });
+    if (pages.length === 0) {
+      toast.error("Select something to import.");
+      return;
+    }
+    const ok = importStoredStoreSelections(storedIo.library, pages);
     dismissStoredIo();
     discardStoredEdit();
     if (!ok) {
@@ -1471,9 +1612,9 @@ export function ImportChartButton({
       return;
     }
     toast.success(
-      storeIds.length === 1
-        ? `Imported store ${storeIds[0]}.`
-        : `Imported ${storeIds.length} stores.`,
+      pages.length === 1
+        ? `Imported into store ${pages[0]!.storeId}.`
+        : `Imported into ${pages.length} stores.`,
     );
   }
 
@@ -4206,6 +4347,579 @@ export function ImportChartButton({
                   onKeyDown={(event) => event.stopPropagation()}
                 >
                   {(() => {
+                    if (
+                      storedIo.mode === "import" &&
+                      storedIo.step === "review"
+                    ) {
+                      const reviewIds = storedIo.reviewIds;
+                      const pageCount = reviewIds.length;
+                      const pageIndex = Math.min(
+                        Math.max(storedIo.reviewIndex, 0),
+                        Math.max(pageCount - 1, 0),
+                      );
+                      const pageStoreId = reviewIds[pageIndex] ?? "";
+                      const fileStore = storedIo.library.stores[pageStoreId];
+                      const deviceStore = deviceStoreSettings.find(
+                        (item) => item.storeId === pageStoreId,
+                      );
+                      const fileLabel =
+                        fileStore?.settings.name || pageStoreId;
+                      const deviceLabel =
+                        nameFor(pageStoreId) ||
+                        deviceStore?.name ||
+                        pageStoreId;
+                      const fileDatesLabel = fileStore
+                        ? fileStore.settings.showDayCounts
+                          ? "Days and hours"
+                          : fileStore.settings.compactDates
+                            ? "Short"
+                            : "Full"
+                        : "—";
+                      const fileListLabel = fileStore
+                        ? fileStore.settings.compactList
+                          ? "Compact"
+                          : "Normal"
+                        : "—";
+                      const deviceDatesLabel = deviceStore
+                        ? deviceStore.showDayCounts
+                          ? "Days and hours"
+                          : deviceStore.compactDates
+                            ? "Short"
+                            : "Full"
+                        : pageStoreId === storeId
+                          ? storeDatesLabel
+                          : "—";
+                      const deviceListLabel = deviceStore
+                        ? deviceStore.compactList
+                          ? "Compact"
+                          : "Normal"
+                        : pageStoreId === storeId
+                          ? storeListLabel
+                          : "—";
+                      const deskCampaignKey =
+                        desk.imported &&
+                        desk.pack.chart.issued &&
+                        desk.pack.chart.validUntil
+                          ? campaignKey(
+                              desk.pack.chart.issued,
+                              desk.pack.chart.validUntil,
+                            )
+                          : null;
+                      const reviewCampaignKey = importReviewCampaignKey(
+                        storedIo.library,
+                        pageStoreId,
+                      );
+                      const fileCampaign =
+                        reviewCampaignKey && fileStore
+                          ? fileStore.campaigns[reviewCampaignKey]
+                          : null;
+                      const deviceCampaign =
+                        reviewCampaignKey
+                          ? deviceStored.find(
+                              (item) =>
+                                item.storeId === pageStoreId &&
+                                campaignKey(item.issued, item.validUntil) ===
+                                  reviewCampaignKey,
+                            )
+                          : null;
+                      const fileHidden = fileCampaign?.hidden ?? [];
+                      const fileDefaults = fileCampaign
+                        ? productDefaultRows(fileCampaign.preset)
+                        : [];
+                      const targetUsesLive =
+                        pageStoreId === storeId &&
+                        Boolean(reviewCampaignKey) &&
+                        Boolean(deskCampaignKey) &&
+                        reviewCampaignKey === deskCampaignKey;
+                      const deviceHidden = targetUsesLive
+                        ? hiddenEntries
+                        : (deviceCampaign?.hidden ?? []);
+                      const deviceDefaults = targetUsesLive
+                        ? productDefaultRows(itemPreset)
+                        : deviceCampaign
+                          ? productDefaultRows(deviceCampaign.preset)
+                          : [];
+                      const deviceHiddenKeys = new Set(
+                        deviceHidden.map((entry) => hiddenEntryKey(entry)),
+                      );
+                      const fileHiddenKeys = new Set(
+                        fileHidden.map((entry) => hiddenEntryKey(entry)),
+                      );
+                      const deviceDefaultByName = new Map(
+                        deviceDefaults.map((row) => [row.name, row]),
+                      );
+                      const fileDefaultByName = new Map(
+                        fileDefaults.map((row) => [row.name, row]),
+                      );
+                      const hiddenRows = [
+                        ...fileHidden.map((entry) => {
+                          const key = hiddenEntryKey(entry);
+                          return {
+                            id: `hidden:${key}`,
+                            label: formatHiddenLabel(entry),
+                            change: (deviceHiddenKeys.has(key)
+                              ? "unchanged"
+                              : "add") as StoreCopyChangeKind,
+                          };
+                        }),
+                        ...deviceHidden
+                          .filter(
+                            (entry) =>
+                              !fileHiddenKeys.has(hiddenEntryKey(entry)),
+                          )
+                          .map((entry) => {
+                            const key = hiddenEntryKey(entry);
+                            return {
+                              id: `hidden:${key}`,
+                              label: formatHiddenLabel(entry),
+                              change: "removed" as StoreCopyChangeKind,
+                            };
+                          }),
+                      ];
+                      const defaultNames = [
+                        ...new Set([
+                          ...fileDefaults.map((row) => row.name),
+                          ...deviceDefaults.map((row) => row.name),
+                        ]),
+                      ].sort((a, b) => a.localeCompare(b));
+                      const defaultRows = defaultNames.map((name) => {
+                        const fileRow = fileDefaultByName.get(name);
+                        const deviceRow = deviceDefaultByName.get(name);
+                        const change: StoreCopyChangeKind = !fileRow
+                          ? "removed"
+                          : !deviceRow
+                            ? "add"
+                            : fileRow.section === deviceRow.section
+                              ? "unchanged"
+                              : "add";
+                        return {
+                          id: `default:${name}`,
+                          name,
+                          change,
+                        };
+                      });
+                      const settingsIds = ["dates", "list"];
+                      const hiddenIds = hiddenRows.map((row) => row.id);
+                      const defaultIds = defaultRows.map((row) => row.id);
+                      const campaignIds = [...hiddenIds, ...defaultIds];
+                      const pageChoices =
+                        storedIoReviewChoices[pageStoreId] ?? [];
+                      const settingsSelected = settingsIds.filter((id) =>
+                        pageChoices.includes(id),
+                      );
+                      const hiddenSelected = hiddenIds.filter((id) =>
+                        pageChoices.includes(id),
+                      );
+                      const defaultSelected = defaultIds.filter((id) =>
+                        pageChoices.includes(id),
+                      );
+                      const campaignSelected = campaignIds.filter((id) =>
+                        pageChoices.includes(id),
+                      );
+                      const anySelected = reviewIds.some(
+                        (id) => (storedIoReviewChoices[id] ?? []).length > 0,
+                      );
+                      const setPageChoices = (
+                        updater: (current: string[]) => string[],
+                      ) => {
+                        setStoredIoReviewChoices((current) => ({
+                          ...current,
+                          [pageStoreId]: updater(current[pageStoreId] ?? []),
+                        }));
+                      };
+                      const togglePageChoice = (id: string) => {
+                        setPageChoices((current) =>
+                          current.includes(id)
+                            ? current.filter((item) => item !== id)
+                            : [...current, id],
+                        );
+                      };
+                      const setPageGroup = (ids: string[], on: boolean) => {
+                        setPageChoices((current) => {
+                          const without = current.filter(
+                            (item) => !ids.includes(item),
+                          );
+                          return on ? [...without, ...ids] : without;
+                        });
+                      };
+                      const settingsRowClass =
+                        "grid w-full min-w-0 grid-cols-[minmax(0,1fr)_3.25rem_3.25rem_1.5rem] items-center gap-1.5 text-sm text-stone-300";
+                      const itemRowClass =
+                        "grid w-full min-w-0 grid-cols-[minmax(0,1fr)_1.5rem] items-center gap-1.5 text-sm text-stone-300";
+                      const goPage = (nextIndex: number) => {
+                        setStoredIo({
+                          ...storedIo,
+                          reviewIndex: nextIndex,
+                        });
+                      };
+                      return (
+                        <>
+                          <DialogHeader className="space-y-2 px-4 pt-4 pr-14 pb-2">
+                            <DialogTitle className="font-display text-xl text-white">
+                              Import store data
+                            </DialogTitle>
+                            <DialogDescription className="text-sm text-stone-400">
+                              Store {pageIndex + 1} of {pageCount}
+                              {pageStoreId
+                                ? ` · ${pageStoreId}${
+                                    fileLabel && fileLabel !== pageStoreId
+                                      ? ` · ${fileLabel}`
+                                      : deviceLabel &&
+                                          deviceLabel !== pageStoreId
+                                        ? ` · ${deviceLabel}`
+                                        : ""
+                                  }`
+                                : ""}
+                              . Choose what to bring from the file (New) onto
+                              this device (Old).
+                            </DialogDescription>
+                            <button
+                              type="button"
+                              className="absolute top-3 right-3 inline-flex size-10 items-center justify-center rounded-full bg-white/10 text-white"
+                              aria-label="Close import review"
+                              onClick={dismissStoredIo}
+                            >
+                              <X className="size-5" />
+                            </button>
+                          </DialogHeader>
+                          <div className="min-h-0 flex-1 space-y-3 overflow-x-hidden overflow-y-auto border-t border-white/10 px-4 py-3">
+                            <div className="space-y-1.5">
+                              <label className="flex min-w-0 items-center gap-2 text-sm font-medium text-stone-200">
+                                <input
+                                  type="checkbox"
+                                  className="size-4 rounded border-white/20 bg-black/30"
+                                  checked={
+                                    settingsIds.length > 0 &&
+                                    settingsSelected.length ===
+                                      settingsIds.length
+                                  }
+                                  ref={(node) => {
+                                    if (!node) return;
+                                    node.indeterminate =
+                                      settingsSelected.length > 0 &&
+                                      settingsSelected.length <
+                                        settingsIds.length;
+                                  }}
+                                  onChange={(event) =>
+                                    setPageGroup(
+                                      settingsIds,
+                                      event.target.checked,
+                                    )
+                                  }
+                                />
+                                Store settings
+                              </label>
+                              <div className="space-y-1 border-l border-white/10 pl-4">
+                                <div
+                                  className={cn(
+                                    settingsRowClass,
+                                    "text-[0.65rem] font-semibold uppercase tracking-wider text-stone-500",
+                                  )}
+                                >
+                                  <span />
+                                  <span className="text-right">Old</span>
+                                  <span className="text-right">New</span>
+                                  <span className="sr-only">Change</span>
+                                </div>
+                                {(
+                                  [
+                                    {
+                                      id: "dates",
+                                      label: "Dates",
+                                      current: deviceDatesLabel,
+                                      next: fileDatesLabel,
+                                    },
+                                    {
+                                      id: "list",
+                                      label: "List",
+                                      current: deviceListLabel,
+                                      next: fileListLabel,
+                                    },
+                                  ] as const
+                                ).map((row) => {
+                                  const change: StoreCopyChangeKind =
+                                    row.current === row.next
+                                      ? "unchanged"
+                                      : "add";
+                                  const selected = pageChoices.includes(row.id);
+                                  return (
+                                    <label
+                                      key={row.id}
+                                      className={settingsRowClass}
+                                    >
+                                      <span className="inline-flex min-w-0 items-center gap-2">
+                                        <input
+                                          type="checkbox"
+                                          className="size-4 shrink-0 rounded border-white/20 bg-black/30"
+                                          checked={selected}
+                                          onChange={() =>
+                                            togglePageChoice(row.id)
+                                          }
+                                        />
+                                        <span className="truncate">
+                                          {row.label}
+                                        </span>
+                                      </span>
+                                      <span
+                                        className={cn(
+                                          "truncate text-right text-xs",
+                                          selected && change === "add"
+                                            ? "text-stone-500 line-through"
+                                            : "text-stone-400",
+                                        )}
+                                      >
+                                        {row.current}
+                                      </span>
+                                      <span
+                                        className={cn(
+                                          "truncate text-right text-xs",
+                                          selected
+                                            ? "text-sky-300"
+                                            : "text-stone-400",
+                                        )}
+                                      >
+                                        {row.next}
+                                      </span>
+                                      <StoreCopyChangeTag change={change} />
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                            <div className="space-y-1.5">
+                              <label className="flex min-w-0 items-center gap-2 text-sm font-medium text-stone-200">
+                                <input
+                                  type="checkbox"
+                                  className="size-4 rounded border-white/20 bg-black/30"
+                                  disabled={campaignIds.length === 0}
+                                  checked={
+                                    campaignIds.length > 0 &&
+                                    campaignSelected.length ===
+                                      campaignIds.length
+                                  }
+                                  ref={(node) => {
+                                    if (!node) return;
+                                    node.indeterminate =
+                                      campaignSelected.length > 0 &&
+                                      campaignSelected.length <
+                                        campaignIds.length;
+                                  }}
+                                  onChange={(event) =>
+                                    setPageGroup(
+                                      campaignIds,
+                                      event.target.checked,
+                                    )
+                                  }
+                                />
+                                <span className="min-w-0 truncate">
+                                  Current campaign
+                                  {fileCampaign
+                                    ? ` · ${fileCampaign.title}`
+                                    : ""}
+                                </span>
+                              </label>
+                              {hiddenRows.length === 0 &&
+                              defaultRows.length === 0 ? (
+                                <p className="border-l border-white/10 pl-4 text-xs text-stone-500">
+                                  No campaign preset to import for this store.
+                                </p>
+                              ) : (
+                                <div className="space-y-2 border-l border-white/10 pl-4">
+                                  {hiddenRows.length > 0 ? (
+                                    <div className="space-y-1">
+                                      <label className="flex items-center gap-2 text-sm font-medium text-stone-200">
+                                        <input
+                                          type="checkbox"
+                                          className="size-4 rounded border-white/20 bg-black/30"
+                                          checked={
+                                            hiddenIds.length > 0 &&
+                                            hiddenSelected.length ===
+                                              hiddenIds.length
+                                          }
+                                          ref={(node) => {
+                                            if (!node) return;
+                                            node.indeterminate =
+                                              hiddenSelected.length > 0 &&
+                                              hiddenSelected.length <
+                                                hiddenIds.length;
+                                          }}
+                                          onChange={(event) =>
+                                            setPageGroup(
+                                              hiddenIds,
+                                              event.target.checked,
+                                            )
+                                          }
+                                        />
+                                        All hidden
+                                        <span className="text-xs font-normal text-stone-500">
+                                          · {hiddenIds.length}
+                                        </span>
+                                      </label>
+                                      <div className="space-y-1 border-l border-white/10 pl-4">
+                                        {hiddenRows.map((row) => {
+                                          const selected = pageChoices.includes(
+                                            row.id,
+                                          );
+                                          return (
+                                            <label
+                                              key={row.id}
+                                              className={itemRowClass}
+                                            >
+                                              <span className="inline-flex min-w-0 items-center gap-2">
+                                                <input
+                                                  type="checkbox"
+                                                  className="size-4 shrink-0 rounded border-white/20 bg-black/30"
+                                                  checked={selected}
+                                                  onChange={() =>
+                                                    togglePageChoice(row.id)
+                                                  }
+                                                />
+                                                <span
+                                                  className={cn(
+                                                    "truncate",
+                                                    row.change === "removed" &&
+                                                      "text-red-300/90 line-through",
+                                                  )}
+                                                >
+                                                  {row.label}
+                                                </span>
+                                              </span>
+                                              <StoreCopyChangeTag
+                                                change={row.change}
+                                              />
+                                            </label>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  ) : null}
+                                  {defaultRows.length > 0 ? (
+                                    <div className="space-y-1">
+                                      <label className="flex items-center gap-2 text-sm font-medium text-stone-200">
+                                        <input
+                                          type="checkbox"
+                                          className="size-4 rounded border-white/20 bg-black/30"
+                                          checked={
+                                            defaultIds.length > 0 &&
+                                            defaultSelected.length ===
+                                              defaultIds.length
+                                          }
+                                          ref={(node) => {
+                                            if (!node) return;
+                                            node.indeterminate =
+                                              defaultSelected.length > 0 &&
+                                              defaultSelected.length <
+                                                defaultIds.length;
+                                          }}
+                                          onChange={(event) =>
+                                            setPageGroup(
+                                              defaultIds,
+                                              event.target.checked,
+                                            )
+                                          }
+                                        />
+                                        All defaults
+                                        <span className="text-xs font-normal text-stone-500">
+                                          · {defaultIds.length}
+                                        </span>
+                                      </label>
+                                      <div className="space-y-1 border-l border-white/10 pl-4">
+                                        {defaultRows.map((row) => {
+                                          const selected = pageChoices.includes(
+                                            row.id,
+                                          );
+                                          return (
+                                            <label
+                                              key={row.id}
+                                              className={itemRowClass}
+                                            >
+                                              <span className="inline-flex min-w-0 items-center gap-2">
+                                                <input
+                                                  type="checkbox"
+                                                  className="size-4 shrink-0 rounded border-white/20 bg-black/30"
+                                                  checked={selected}
+                                                  onChange={() =>
+                                                    togglePageChoice(row.id)
+                                                  }
+                                                />
+                                                <span
+                                                  className={cn(
+                                                    "truncate",
+                                                    row.change === "removed" &&
+                                                      "text-red-300/90 line-through",
+                                                  )}
+                                                >
+                                                  {row.name}
+                                                </span>
+                                              </span>
+                                              <StoreCopyChangeTag
+                                                change={row.change}
+                                              />
+                                            </label>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  ) : null}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <div className="grid gap-2 border-t border-white/10 p-4">
+                            {pageCount > 1 ? (
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  className="h-11 flex-1 rounded-xl border-white/15 text-white"
+                                  disabled={pageIndex <= 0}
+                                  onClick={() => goPage(pageIndex - 1)}
+                                >
+                                  <ChevronLeft className="size-4" aria-hidden />
+                                  Previous
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  className="h-11 flex-1 rounded-xl border-white/15 text-white"
+                                  disabled={pageIndex >= pageCount - 1}
+                                  onClick={() => goPage(pageIndex + 1)}
+                                >
+                                  Next
+                                  <ChevronRight
+                                    className="size-4"
+                                    aria-hidden
+                                  />
+                                </Button>
+                              </div>
+                            ) : null}
+                            <Button
+                              type="button"
+                              className="h-11 rounded-xl"
+                              disabled={!anySelected}
+                              onClick={confirmImportReview}
+                            >
+                              Import selected
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="h-11 rounded-xl border-white/15 text-white"
+                              onClick={() =>
+                                setStoredIo({
+                                  ...storedIo,
+                                  step: "pick",
+                                  reviewIndex: 0,
+                                })
+                              }
+                            >
+                              Back
+                            </Button>
+                          </div>
+                        </>
+                      );
+                    }
+
                     const exportMode = storedIo.mode === "export";
                     const importSummary =
                       storedIo.mode === "import" ? storedIo.summary : null;
@@ -4257,7 +4971,7 @@ export function ImportChartButton({
                           <DialogDescription className="text-sm text-stone-400">
                             {exportMode || !importSummary
                               ? "Choose all stores or individual ones to include in the backup file."
-                              : `Choose all stores or individual ones to merge onto this device. File has ${importSummary.stores} store${importSummary.stores === 1 ? "" : "s"}, ${importSummary.campaigns} campaign preset${importSummary.campaigns === 1 ? "" : "s"}, and ${importSummary.charts} chart${importSummary.charts === 1 ? "" : "s"}.`}
+                              : `Choose all stores or individual ones, then review each like Copy. File has ${importSummary.stores} store${importSummary.stores === 1 ? "" : "s"}, ${importSummary.campaigns} campaign preset${importSummary.campaigns === 1 ? "" : "s"}, and ${importSummary.charts} chart${importSummary.charts === 1 ? "" : "s"}.`}
                           </DialogDescription>
                           <button
                             type="button"
@@ -4351,7 +5065,7 @@ export function ImportChartButton({
                             onClick={() =>
                               exportMode
                                 ? exportStoredData(storedIoChoices)
-                                : confirmStoredImport(storedIoChoices)
+                                : beginImportReview(storedIoChoices)
                             }
                           >
                             {exportMode
@@ -4359,8 +5073,8 @@ export function ImportChartButton({
                                 ? "Export selected store"
                                 : "Export selected stores"
                               : storedIoChoices.length === 1
-                                ? "Import selected store"
-                                : "Import selected stores"}
+                                ? "Review store"
+                                : "Review selected stores"}
                           </Button>
                           <Button
                             type="button"

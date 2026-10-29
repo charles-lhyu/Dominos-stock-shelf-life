@@ -14,6 +14,7 @@ import {
   planStoreChange,
   readStoreSettings,
   upsertCampaign,
+  applyStoreCopyFrom,
   copyStoreData,
   writeStoreName,
   writeStoreSettings,
@@ -182,6 +183,132 @@ export function importStoredStores(
   const { issued, validUntil } = desk.pack.chart;
   const saved = readStoreSettings(next, storeId, issued, validUntil);
   if (saved) applySettings(saved, desk.pack.rules);
+  return true;
+}
+
+export type StoreImportPageSelection = {
+  storeId: string;
+  selection: StoreCopySelection;
+};
+
+/**
+ * Apply per-store copy-style selections from an import file onto this device.
+ * Charts referenced by the selections are upserted from the file first.
+ */
+export function importStoredStoreSelections(
+  incoming: CampaignLibrary,
+  pages: StoreImportPageSelection[],
+) {
+  hydrateCampaignLibrary();
+  const parsed = parseCampaignLibrary(incoming);
+  const usable = pages.filter(
+    (page) =>
+      /^\d{1,8}$/.test(page.storeId) &&
+      parsed.stores[page.storeId] &&
+      (page.selection.dates === true ||
+        page.selection.list === true ||
+        (page.selection.hiddenKeys?.length ?? 0) > 0 ||
+        (page.selection.defaultNames?.length ?? 0) > 0 ||
+        (page.selection.removeHiddenKeys?.length ?? 0) > 0 ||
+        (page.selection.removeDefaultNames?.length ?? 0) > 0),
+  );
+  if (usable.length === 0) return false;
+
+  const neededKeys = new Set(
+    usable
+      .map((page) => page.selection.campaignKey?.trim() || "")
+      .filter(Boolean),
+  );
+  const byKey = new Map(
+    library.campaigns.map((item) => [
+      campaignKey(item.issued, item.validUntil) ?? "",
+      item,
+    ]),
+  );
+  for (const item of parsed.campaigns) {
+    const key = campaignKey(item.issued, item.validUntil);
+    if (!key || !neededKeys.has(key)) continue;
+    byKey.set(key, item);
+  }
+  let next: CampaignLibrary = {
+    ...library,
+    campaigns: [...byKey.values()].filter((item) =>
+      Boolean(campaignKey(item.issued, item.validUntil)),
+    ),
+  };
+
+  const touched = new Set<string>();
+  for (const page of usable) {
+    const source = parsed.stores[page.storeId]!;
+    let selection = page.selection;
+    if (
+      page.storeId === getStoreId() &&
+      selection.campaignKey &&
+      getDeskState().imported &&
+      campaignKey(
+        getDeskState().pack.chart.issued,
+        getDeskState().pack.chart.validUntil,
+      ) === selection.campaignKey
+    ) {
+      selection = {
+        ...selection,
+        baseHidden: getHiddenEntries(),
+        basePreset: getItemPreset(),
+      };
+    }
+    const after = applyStoreCopyFrom(next, source, page.storeId, selection);
+    if (after !== next) touched.add(page.storeId);
+    next = after;
+  }
+  if (touched.size === 0) return false;
+  commitLibrary(next);
+  hydrateStoreIdStore();
+  const desk = getDeskState();
+  const storeId = getStoreId();
+  if (!desk.imported || !storeId || !touched.has(storeId)) return true;
+  const page = usable.find((item) => item.storeId === storeId);
+  const dest = next.stores[storeId];
+  if (!dest || !page) return true;
+  if (page.selection.dates || page.selection.list) {
+    applying = true;
+    try {
+      if (page.selection.dates) {
+        setCompactDateFormat(dest.settings.compactDates === true);
+        writeDebugDays(dest.settings.showDayCounts === true);
+      }
+      if (page.selection.list) {
+        setCompactList(dest.settings.compactList === true);
+      }
+    } finally {
+      applying = false;
+    }
+  }
+  const key = page.selection.campaignKey?.trim() || "";
+  if (
+    key &&
+    campaignKey(desk.pack.chart.issued, desk.pack.chart.validUntil) === key
+  ) {
+    const preset = dest.campaigns[key];
+    if (preset) {
+      applying = true;
+      try {
+        if (
+          (page.selection.hiddenKeys?.length ?? 0) > 0 ||
+          (page.selection.removeHiddenKeys?.length ?? 0) > 0
+        ) {
+          replaceHiddenNames(preset.hidden);
+        }
+        if (
+          (page.selection.defaultNames?.length ?? 0) > 0 ||
+          (page.selection.removeDefaultNames?.length ?? 0) > 0
+        ) {
+          replaceItemPreset(preset.preset);
+        }
+      } finally {
+        applying = false;
+      }
+    }
+  }
   return true;
 }
 

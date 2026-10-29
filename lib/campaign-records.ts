@@ -846,25 +846,17 @@ export type StoreCopySelection = {
 };
 
 /**
- * Copy selected display settings and/or campaign items from one store to another.
- * Store name is never copied. Selected remove* keys are dropped from the target.
- * Unselected source items are never inserted.
+ * Apply a copy selection from an in-memory store record onto `toStoreId`.
+ * Used by store-to-store copy and by import review (file store → device).
+ * Store name is never copied. Unselected source items are never inserted.
  */
-export function copyStoreData(
+export function applyStoreCopyFrom(
   library: CampaignLibrary,
-  fromStoreId: string,
+  source: StoreRecord,
   toStoreId: string,
   selection: StoreCopySelection,
 ): CampaignLibrary {
-  if (
-    !/^\d{1,8}$/.test(fromStoreId) ||
-    !/^\d{1,8}$/.test(toStoreId) ||
-    fromStoreId === toStoreId
-  ) {
-    return library;
-  }
-  const source = library.stores[fromStoreId];
-  if (!source) return library;
+  if (!/^\d{1,8}$/.test(toStoreId)) return library;
 
   let next = library;
   const target = next.stores[toStoreId] ?? emptyStoreRecord();
@@ -1015,6 +1007,29 @@ export function copyStoreData(
       },
     },
   };
+}
+
+/**
+ * Copy selected display settings and/or campaign items from one store to another.
+ * Store name is never copied. Selected remove* keys are dropped from the target.
+ * Unselected source items are never inserted.
+ */
+export function copyStoreData(
+  library: CampaignLibrary,
+  fromStoreId: string,
+  toStoreId: string,
+  selection: StoreCopySelection,
+): CampaignLibrary {
+  if (
+    !/^\d{1,8}$/.test(fromStoreId) ||
+    !/^\d{1,8}$/.test(toStoreId) ||
+    fromStoreId === toStoreId
+  ) {
+    return library;
+  }
+  const source = library.stores[fromStoreId];
+  if (!source) return library;
+  return applyStoreCopyFrom(library, source, toStoreId, selection);
 }
 
 /** One store's display settings for the All stored list. */
