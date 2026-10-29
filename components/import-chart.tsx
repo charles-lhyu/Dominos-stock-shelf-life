@@ -3488,7 +3488,7 @@ export function ImportChartButton({
               })()}
             </div>
             {storeAction ? (
-              <div className="absolute inset-0 z-20 flex items-end justify-center p-3 pt-14 sm:items-center">
+              <div className="absolute inset-0 z-20 flex items-center justify-center p-4">
                 <button
                   type="button"
                   className="absolute inset-0 bg-black/45"
@@ -3501,7 +3501,7 @@ export function ImportChartButton({
                 <div
                   role="dialog"
                   aria-modal="true"
-                  className="relative z-10 flex max-h-[min(36rem,calc(100dvh-5rem))] w-full max-w-[min(24rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-2xl bg-popover shadow-2xl ring-1 ring-foreground/10"
+                  className="relative z-10 flex max-h-[min(36rem,calc(100dvh-2rem))] w-full max-w-sm flex-col overflow-hidden rounded-2xl bg-popover shadow-2xl ring-1 ring-foreground/10"
                   onClick={(event) => event.stopPropagation()}
                   onKeyDown={(event) => event.stopPropagation()}
                 >
