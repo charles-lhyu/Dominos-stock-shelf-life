@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import { parseHiddenEntries } from "./hidden-entries";
 import {
   campaignKey,
+  copyStoreData,
   emptyCampaignLibrary,
   dropAllStoredDefaults,
   dropAllStoredHidden,
@@ -255,6 +256,53 @@ describe("campaign library records", () => {
         },
       ],
     );
+  });
+
+  it("copies store dates, list, and selected campaign items without the name", () => {
+    let library = writeStoreSettingsRecord(emptyCampaignLibrary(), "11", {
+      name: "Source",
+      compactDates: true,
+      showDayCounts: false,
+      compactList: true,
+    });
+    library = writeStoreSettings(library, "11", "2026-09-07", "2026-11-17", {
+      hidden: parseHiddenEntries(["Bacon", "Olives"]),
+      preset: {
+        ...preset,
+        defaults: {
+          Pepperoni: { section: "frozen", life: null },
+          Ham: { section: "chilled", life: null },
+        },
+      },
+      compactDates: true,
+      showDayCounts: false,
+      compactList: true,
+    });
+    library = writeStoreSettingsRecord(library, "22", {
+      name: "Target",
+      compactDates: false,
+      showDayCounts: false,
+      compactList: false,
+    });
+    const key = campaignKey("2026-09-07", "2026-11-17");
+    assert.ok(key);
+    library = copyStoreData(library, "11", "22", {
+      dates: true,
+      list: true,
+      campaignKey: key,
+      hiddenKeys: ["Bacon"],
+      defaultNames: ["Pepperoni"],
+    });
+    assert.equal(readStoreName(library, "22"), "Target");
+    assert.equal(library.stores["22"]?.settings.compactDates, true);
+    assert.equal(library.stores["22"]?.settings.compactList, true);
+    const copied = readStoreSettings(library, "22", "2026-09-07", "2026-11-17");
+    assert.deepEqual(
+      copied?.hidden.map((entry) => entry.name),
+      ["Bacon"],
+    );
+    assert.equal(copied?.preset.defaults.Pepperoni?.section, "frozen");
+    assert.equal(copied?.preset.defaults.Ham, undefined);
   });
 
   it("keeps unnamed stores that only have display settings after parse", () => {

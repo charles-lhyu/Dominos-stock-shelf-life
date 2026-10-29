@@ -14,6 +14,7 @@ import {
   planStoreChange,
   readStoreSettings,
   upsertCampaign,
+  copyStoreData,
   writeStoreName,
   writeStoreSettings,
   writeStoreSettingsRecord,
@@ -23,6 +24,7 @@ import {
   type DeviceStoreSettingsView,
   type StoreCampaignSettings,
   type StoreCampaignView,
+  type StoreCopySelection,
   type StoreSettings,
 } from "./campaign-records";
 import {
@@ -232,6 +234,58 @@ export function writeStoreDisplaySettings(
   } finally {
     applying = false;
   }
+}
+
+/** Copy selected settings / campaign items from one stored store onto another. */
+export function copyStoredStoreData(
+  fromStoreId: string,
+  toStoreId: string,
+  selection: StoreCopySelection,
+) {
+  hydrateCampaignLibrary();
+  const next = copyStoreData(library, fromStoreId, toStoreId, selection);
+  if (next === library) return false;
+  commitLibrary(next);
+  if (toStoreId !== getStoreId()) return true;
+  const dest = next.stores[toStoreId];
+  if (!dest) return true;
+  if (selection.dates || selection.list) {
+    applying = true;
+    try {
+      if (selection.dates) {
+        setCompactDateFormat(dest.settings.compactDates === true);
+        writeDebugDays(dest.settings.showDayCounts === true);
+      }
+      if (selection.list) {
+        setCompactList(dest.settings.compactList === true);
+      }
+    } finally {
+      applying = false;
+    }
+  }
+  const key = selection.campaignKey?.trim() || "";
+  const desk = getDeskState();
+  if (
+    key &&
+    desk.imported &&
+    campaignKey(desk.pack.chart.issued, desk.pack.chart.validUntil) === key
+  ) {
+    const preset = dest.campaigns[key];
+    if (preset) {
+      applying = true;
+      try {
+        if ((selection.hiddenKeys?.length ?? 0) > 0) {
+          replaceHiddenNames(preset.hidden);
+        }
+        if ((selection.defaultNames?.length ?? 0) > 0) {
+          replaceItemPreset(preset.preset);
+        }
+      } finally {
+        applying = false;
+      }
+    }
+  }
+  return true;
 }
 
 export function readSavedCampaignSettings(

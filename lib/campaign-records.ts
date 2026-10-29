@@ -822,6 +822,121 @@ export function listDeviceStored(library: CampaignLibrary): DeviceStoredRecord[]
     );
 }
 
+/** What to copy from one store onto another (never includes store name). */
+export type StoreCopySelection = {
+  dates?: boolean;
+  list?: boolean;
+  /** Campaign key `issued|validUntil` when copying hidden / defaults. */
+  campaignKey?: string | null;
+  /** Hidden entry keys to copy; omit or empty = none. */
+  hiddenKeys?: string[];
+  /** Product default names to copy; omit or empty = none. */
+  defaultNames?: string[];
+};
+
+/**
+ * Copy selected display settings and/or campaign items from one store to another.
+ * Store name is never copied.
+ */
+export function copyStoreData(
+  library: CampaignLibrary,
+  fromStoreId: string,
+  toStoreId: string,
+  selection: StoreCopySelection,
+): CampaignLibrary {
+  if (
+    !/^\d{1,8}$/.test(fromStoreId) ||
+    !/^\d{1,8}$/.test(toStoreId) ||
+    fromStoreId === toStoreId
+  ) {
+    return library;
+  }
+  const source = library.stores[fromStoreId];
+  if (!source) return library;
+
+  let next = library;
+  const target = next.stores[toStoreId] ?? emptyStoreRecord();
+  const copyDates = selection.dates === true;
+  const copyList = selection.list === true;
+  if (copyDates || copyList) {
+    const settings: StoreSettings = {
+      name: target.settings.name,
+      compactDates: copyDates
+        ? source.settings.compactDates === true
+        : target.settings.compactDates === true,
+      showDayCounts: copyDates
+        ? source.settings.showDayCounts === true
+        : target.settings.showDayCounts === true,
+      compactList: copyList
+        ? source.settings.compactList === true
+        : target.settings.compactList === true,
+    };
+    next = writeStoreSettingsRecord(next, toStoreId, settings);
+  }
+
+  const key = selection.campaignKey?.trim() || "";
+  const hiddenKeys = new Set(
+    (selection.hiddenKeys ?? []).map((item) => item.trim()).filter(Boolean),
+  );
+  const defaultNames = new Set(
+    (selection.defaultNames ?? []).map((item) => item.trim()).filter(Boolean),
+  );
+  if (!key || (hiddenKeys.size === 0 && defaultNames.size === 0)) return next;
+
+  const sourcePreset = source.campaigns[key];
+  if (!sourcePreset || campaignKey(sourcePreset.issued, sourcePreset.validUntil) !== key) {
+    return next;
+  }
+
+  const dest = next.stores[toStoreId] ?? emptyStoreRecord();
+  const prevPreset = dest.campaigns[key];
+  const chart = next.campaigns.find(
+    (item) => campaignKey(item.issued, item.validUntil) === key,
+  );
+
+  const nextHiddenMap = new Map(
+    (prevPreset?.hidden ?? []).map((entry) => [hiddenEntryKey(entry), entry]),
+  );
+  for (const entry of sourcePreset.hidden) {
+    const entryKey = hiddenEntryKey(entry);
+    if (!hiddenKeys.has(entryKey)) continue;
+    nextHiddenMap.set(entryKey, { ...entry });
+  }
+
+  const nextDefaults = { ...(prevPreset?.preset.defaults ?? {}) };
+  for (const name of defaultNames) {
+    const value = sourcePreset.preset.defaults[name];
+    if (!value?.section) continue;
+    nextDefaults[name] = { section: value.section, life: null };
+  }
+
+  const nextPreset: CampaignPreset = {
+    title: prevPreset?.title || sourcePreset.title || chart?.title || "Shelf life chart",
+    issued: sourcePreset.issued,
+    validUntil: sourcePreset.validUntil,
+    version: prevPreset?.version || sourcePreset.version || chart?.version || "",
+    hidden: parseHiddenEntries([...nextHiddenMap.values()]),
+    preset: normalizeItemPreset({
+      ...(prevPreset?.preset ?? sourcePreset.preset),
+      defaults: nextDefaults,
+    }),
+  };
+
+  return {
+    ...next,
+    stores: {
+      ...next.stores,
+      [toStoreId]: {
+        settings: (next.stores[toStoreId] ?? dest).settings,
+        campaigns: {
+          ...(next.stores[toStoreId] ?? dest).campaigns,
+          [key]: nextPreset,
+        },
+      },
+    },
+  };
+}
+
 /** One store's display settings for the All stored list. */
 export type DeviceStoreSettingsView = StoreSettings & {
   storeId: string;

@@ -27,6 +27,7 @@ import {
   Unlock,
   X,
   ChevronDown,
+  MoreHorizontal,
 } from "lucide-react";
 import { ChangelogBrowser } from "@/components/changelog-notes";
 import { UpdateConfirmDialog } from "@/components/update-confirm";
@@ -72,6 +73,7 @@ import {
   subscribeStoredStore,
   writeSavedDefault,
   writeStoreDisplaySettings,
+  copyStoredStoreData,
 } from "@/lib/campaign-library";
 import { canonicalProductName } from "@/lib/chart-name-migrate";
 import {
@@ -403,6 +405,12 @@ export function ImportChartButton({
   /** Campaign key (`issued|validUntil`) in Show all detail; null = campaign list. */
   const [allStoredPreviewCampaignKey, setAllStoredPreviewCampaignKey] =
     useState<string | null>(null);
+  /** ⋮ menu / copy flow for a store card in Show all. */
+  const [storeAction, setStoreAction] = useState<{
+    storeId: string;
+    step: "menu" | "copy";
+  } | null>(null);
+  const [storeCopyChoices, setStoreCopyChoices] = useState<string[]>([]);
   const [storeSettingsOpen, setStoreSettingsOpen] = useState(true);
   const [campaignPresetsOpen, setCampaignPresetsOpen] = useState(true);
   const storedImportInputRef = useRef<HTMLInputElement>(null);
@@ -677,10 +685,10 @@ export function ImportChartButton({
     adoptStoreForCampaign(previous, next, undefined, merged);
   }
 
-  function commitStoreDraft() {
+  function commitStoreIdValue(raw: string) {
     setStoreMenuOpen(false);
     setStoreMenuAll(false);
-    const next = normalizeStoreId(storeDraft);
+    const next = normalizeStoreId(raw);
     if (next == null) {
       setStoreIdError("Store ID is numbers only, up to 8 digits.");
       return;
@@ -723,6 +731,59 @@ export function ImportChartButton({
     setChangesOpen(false);
     setChangeChoices([]);
     setStorePrompt({ next, hasSaved: false });
+  }
+
+  function commitStoreDraft() {
+    commitStoreIdValue(storeDraft);
+  }
+
+  function toggleStoreCopyChoice(id: string) {
+    setStoreCopyChoices((current) =>
+      current.includes(id)
+        ? current.filter((item) => item !== id)
+        : [...current, id],
+    );
+  }
+
+  function setStoreCopyGroup(ids: string[], on: boolean) {
+    setStoreCopyChoices((current) => {
+      const without = current.filter((item) => !ids.includes(item));
+      return on ? [...without, ...ids] : without;
+    });
+  }
+
+  function confirmStoreCopy() {
+    if (!storeAction || storeAction.step !== "copy") return;
+    const fromStoreId = storeAction.storeId;
+    const toStoreId = storeId;
+    if (!toStoreId || fromStoreId === toStoreId) {
+      toast.error("Select a different current store to copy into.");
+      return;
+    }
+    const campaignKeyValue = autoPreviewCampaignKey(fromStoreId);
+    const hiddenKeys = storeCopyChoices
+      .filter((id) => id.startsWith("hidden:"))
+      .map((id) => id.slice("hidden:".length));
+    const defaultNames = storeCopyChoices
+      .filter((id) => id.startsWith("default:"))
+      .map((id) => id.slice("default:".length));
+    const copied = copyStoredStoreData(fromStoreId, toStoreId, {
+      dates: storeCopyChoices.includes("dates"),
+      list: storeCopyChoices.includes("list"),
+      campaignKey:
+        hiddenKeys.length > 0 || defaultNames.length > 0
+          ? campaignKeyValue
+          : null,
+      hiddenKeys,
+      defaultNames,
+    });
+    setStoreAction(null);
+    setStoreCopyChoices([]);
+    if (!copied) {
+      toast.error("Nothing was copied.");
+      return;
+    }
+    toast.success(`Copied into store ${toStoreId}.`);
   }
 
   function resetChart() {
@@ -1916,6 +1977,8 @@ export function ImportChartButton({
                     onClick={() => {
                       setAllStoredPreviewId(null);
                       setAllStoredPreviewCampaignKey(null);
+                      setStoreAction(null);
+                      setStoreCopyChoices([]);
                       setAllStoredOpen(true);
                     }}
                     className="shrink-0 text-xs font-semibold text-sky-300 underline-offset-2 hover:underline disabled:opacity-40"
@@ -3308,8 +3371,7 @@ export function ImportChartButton({
                       ) : (
                         deviceStoreSettings.map((store) => {
                           const label = nameFor(store.storeId) || store.name;
-                          const active =
-                            (previewStoreId ?? storeId) === store.storeId;
+                          const isCurrent = storeId === store.storeId;
                           const datesLabel = store.showDayCounts
                             ? "Days and hours"
                             : store.compactDates
@@ -3319,45 +3381,86 @@ export function ImportChartButton({
                             ? "Compact"
                             : "Normal";
                           return (
-                            <button
+                            <div
                               key={store.storeId}
-                              type="button"
-                              onClick={() => {
-                                setAllStoredPreviewId(store.storeId);
-                                setAllStoredPreviewCampaignKey(
-                                  autoPreviewCampaignKey(store.storeId),
-                                );
-                                setStoreDraft(store.storeId);
-                                setStoreMenuOpen(false);
-                                setStoreMenuAll(false);
-                              }}
                               className={cn(
-                                "w-full rounded-lg border px-2.5 py-2 text-left transition-colors",
-                                active
+                                "flex w-full items-stretch gap-1 rounded-lg border px-1.5 py-1.5",
+                                isCurrent
                                   ? "border-sky-400/40 bg-sky-500/10"
-                                  : "border-white/10 bg-black/20 hover:bg-white/[0.06]",
+                                  : "border-white/10 bg-black/20",
                               )}
                             >
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="min-w-0 truncate text-sm font-medium text-white">
-                                  {label || "Unnamed store"}
-                                </span>
-                                <span className="shrink-0 font-mono text-xs text-stone-300">
-                                  {store.storeId}
-                                </span>
-                              </div>
-                              <p className="mt-0.5 truncate text-[0.7rem] text-stone-400">
-                                Dates {datesLabel}
-                                <span className="text-stone-600"> · </span>
-                                List {listLabel}
-                                <span className="text-stone-600"> · </span>
-                                {store.campaignCount === 0
-                                  ? "No presets"
-                                  : store.campaignCount === 1
-                                    ? "1 preset"
-                                    : `${store.campaignCount} presets`}
-                              </p>
-                            </button>
+                              <button
+                                type="button"
+                                aria-label={
+                                  isCurrent
+                                    ? `Current store ${store.storeId}`
+                                    : `Select store ${store.storeId} as current`
+                                }
+                                aria-pressed={isCurrent}
+                                onClick={() =>
+                                  commitStoreIdValue(store.storeId)
+                                }
+                                className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg text-white hover:bg-white/[0.06]"
+                              >
+                                <span
+                                  className={cn(
+                                    "size-3.5 rounded-full border-2",
+                                    isCurrent
+                                      ? "border-sky-300 bg-sky-300"
+                                      : "border-stone-500 bg-transparent",
+                                  )}
+                                  aria-hidden
+                                />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setAllStoredPreviewId(store.storeId);
+                                  setAllStoredPreviewCampaignKey(
+                                    autoPreviewCampaignKey(store.storeId),
+                                  );
+                                  setStoreDraft(store.storeId);
+                                  setStoreMenuOpen(false);
+                                  setStoreMenuAll(false);
+                                }}
+                                className="min-w-0 flex-1 rounded-lg px-1.5 py-1 text-left hover:bg-white/[0.06]"
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="min-w-0 truncate text-sm font-medium text-white">
+                                    {label || "Unnamed store"}
+                                  </span>
+                                  <span className="shrink-0 font-mono text-xs text-stone-300">
+                                    {store.storeId}
+                                  </span>
+                                </div>
+                                <p className="mt-0.5 truncate text-[0.7rem] text-stone-400">
+                                  Dates {datesLabel}
+                                  <span className="text-stone-600"> · </span>
+                                  List {listLabel}
+                                  <span className="text-stone-600"> · </span>
+                                  {store.campaignCount === 0
+                                    ? "No presets"
+                                    : store.campaignCount === 1
+                                      ? "1 preset"
+                                      : `${store.campaignCount} presets`}
+                                </p>
+                              </button>
+                              <button
+                                type="button"
+                                aria-label={`Store ${store.storeId} actions`}
+                                onClick={() => {
+                                  setStoreAction({
+                                    storeId: store.storeId,
+                                    step: "menu",
+                                  });
+                                  setStoreCopyChoices([]);
+                                }}
+                                className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg text-stone-300 hover:bg-white/[0.06] hover:text-white"
+                              >
+                                <MoreHorizontal className="size-4" aria-hidden />
+                              </button>
+                            </div>
                           );
                         })
                       )}
@@ -3369,6 +3472,307 @@ export function ImportChartButton({
           </div>
         ) : null}
       </DialogContent>
+      <Dialog
+        open={storeAction != null}
+        onOpenChange={(next) => {
+          if (!next) {
+            setStoreAction(null);
+            setStoreCopyChoices([]);
+          }
+        }}
+      >
+        <DialogContent
+          showCloseButton={false}
+          overlayClassName="z-[70] bg-black/50"
+          className="z-[70] max-h-[min(40rem,calc(100dvh-2rem))] max-w-sm gap-0 overflow-y-auto rounded-2xl p-0"
+        >
+          {(() => {
+            if (!storeAction) return null;
+            const sourceId = storeAction.storeId;
+            const targetId = storeId;
+            const sourceLabel =
+              nameFor(sourceId) ||
+              deviceStoreSettings.find((item) => item.storeId === sourceId)
+                ?.name ||
+              sourceId;
+            const targetLabel = targetId
+              ? nameFor(targetId) ||
+                deviceStoreSettings.find((item) => item.storeId === targetId)
+                  ?.name ||
+                targetId
+              : "";
+            const copyCampaignKey = autoPreviewCampaignKey(sourceId);
+            const copyCampaign = copyCampaignKey
+              ? deviceStored.find(
+                  (item) =>
+                    item.storeId === sourceId &&
+                    campaignKey(item.issued, item.validUntil) ===
+                      copyCampaignKey,
+                )
+              : null;
+            const copyHidden = copyCampaign?.hidden ?? [];
+            const copyDefaults = copyCampaign
+              ? productDefaultRows(copyCampaign.preset)
+              : [];
+            const settingsIds = ["dates", "list"];
+            const campaignIds = [
+              ...copyHidden.map((entry) => `hidden:${hiddenEntryKey(entry)}`),
+              ...copyDefaults.map((row) => `default:${row.name}`),
+            ];
+            const settingsSelected = settingsIds.filter((id) =>
+              storeCopyChoices.includes(id),
+            );
+            const campaignSelected = campaignIds.filter((id) =>
+              storeCopyChoices.includes(id),
+            );
+
+            if (storeAction.step === "menu") {
+              return (
+                <>
+                  <DialogHeader className="space-y-2 px-4 pt-4 pr-14 pb-2">
+                    <DialogTitle className="font-display text-xl text-white">
+                      Store {sourceId}
+                    </DialogTitle>
+                    <DialogDescription className="text-sm text-stone-400">
+                      {sourceLabel || "Unnamed store"}
+                    </DialogDescription>
+                    <button
+                      type="button"
+                      className="absolute top-3 right-3 inline-flex size-10 items-center justify-center rounded-full bg-white/10 text-white"
+                      aria-label="Close store actions"
+                      onClick={() => {
+                        setStoreAction(null);
+                        setStoreCopyChoices([]);
+                      }}
+                    >
+                      <X className="size-5" />
+                    </button>
+                  </DialogHeader>
+                  <div className="grid gap-2 border-t border-white/10 p-4">
+                    <Button
+                      type="button"
+                      className="h-11 rounded-xl"
+                      disabled={!targetId || targetId === sourceId}
+                      onClick={() => {
+                        setStoreCopyChoices([]);
+                        setStoreAction({ storeId: sourceId, step: "copy" });
+                      }}
+                    >
+                      Copy to current store
+                      {targetId && targetId !== sourceId
+                        ? ` (${targetId})`
+                        : ""}
+                    </Button>
+                    {!targetId ? (
+                      <p className="text-xs text-stone-500">
+                        Select a current store with the dot control first.
+                      </p>
+                    ) : targetId === sourceId ? (
+                      <p className="text-xs text-stone-500">
+                        Choose a different current store to copy into.
+                      </p>
+                    ) : null}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-11 rounded-xl border-white/15 text-white"
+                      onClick={() => {
+                        setStoreAction(null);
+                        setStoreCopyChoices([]);
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </>
+              );
+            }
+
+            return (
+              <>
+                <DialogHeader className="space-y-2 px-4 pt-4 pr-14 pb-2">
+                  <DialogTitle className="font-display text-xl text-white">
+                    Copy store data
+                  </DialogTitle>
+                  <DialogDescription className="text-sm text-stone-400">
+                    From {sourceId}
+                    {sourceLabel ? ` · ${sourceLabel}` : ""} into {targetId}
+                    {targetLabel && targetLabel !== targetId
+                      ? ` · ${targetLabel}`
+                      : ""}
+                    . Store name is never copied.
+                  </DialogDescription>
+                  <button
+                    type="button"
+                    className="absolute top-3 right-3 inline-flex size-10 items-center justify-center rounded-full bg-white/10 text-white"
+                    aria-label="Close copy store data"
+                    onClick={() => {
+                      setStoreAction(null);
+                      setStoreCopyChoices([]);
+                    }}
+                  >
+                    <X className="size-5" />
+                  </button>
+                </DialogHeader>
+                <div className="space-y-3 border-t border-white/10 px-4 py-3">
+                  <div className="space-y-1.5">
+                    <label className="flex items-center gap-2 text-sm font-medium text-stone-200">
+                      <input
+                        type="checkbox"
+                        className="size-4 rounded border-white/20 bg-black/30"
+                        checked={
+                          settingsIds.length > 0 &&
+                          settingsSelected.length === settingsIds.length
+                        }
+                        ref={(node) => {
+                          if (!node) return;
+                          node.indeterminate =
+                            settingsSelected.length > 0 &&
+                            settingsSelected.length < settingsIds.length;
+                        }}
+                        onChange={(event) =>
+                          setStoreCopyGroup(settingsIds, event.target.checked)
+                        }
+                      />
+                      Store settings
+                    </label>
+                    <div className="space-y-1 border-l border-white/10 pl-4">
+                      <label className="flex items-center gap-2 text-sm text-stone-300">
+                        <input
+                          type="checkbox"
+                          className="size-4 rounded border-white/20 bg-black/30"
+                          checked={storeCopyChoices.includes("dates")}
+                          onChange={() => toggleStoreCopyChoice("dates")}
+                        />
+                        Dates
+                      </label>
+                      <label className="flex items-center gap-2 text-sm text-stone-300">
+                        <input
+                          type="checkbox"
+                          className="size-4 rounded border-white/20 bg-black/30"
+                          checked={storeCopyChoices.includes("list")}
+                          onChange={() => toggleStoreCopyChoice("list")}
+                        />
+                        List
+                      </label>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="flex items-center gap-2 text-sm font-medium text-stone-200">
+                      <input
+                        type="checkbox"
+                        className="size-4 rounded border-white/20 bg-black/30"
+                        disabled={campaignIds.length === 0}
+                        checked={
+                          campaignIds.length > 0 &&
+                          campaignSelected.length === campaignIds.length
+                        }
+                        ref={(node) => {
+                          if (!node) return;
+                          node.indeterminate =
+                            campaignSelected.length > 0 &&
+                            campaignSelected.length < campaignIds.length;
+                        }}
+                        onChange={(event) =>
+                          setStoreCopyGroup(campaignIds, event.target.checked)
+                        }
+                      />
+                      Current campaign
+                      {copyCampaign ? ` · ${copyCampaign.title}` : ""}
+                    </label>
+                    {campaignIds.length === 0 ? (
+                      <p className="border-l border-white/10 pl-4 text-xs text-stone-500">
+                        No campaign preset to copy from this store.
+                      </p>
+                    ) : (
+                      <div className="space-y-2 border-l border-white/10 pl-4">
+                        {copyHidden.length > 0 ? (
+                          <div className="space-y-1">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">
+                              Hidden
+                            </p>
+                            {copyHidden.map((entry) => {
+                              const id = `hidden:${hiddenEntryKey(entry)}`;
+                              return (
+                                <label
+                                  key={id}
+                                  className="flex items-center gap-2 text-sm text-stone-300"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    className="size-4 rounded border-white/20 bg-black/30"
+                                    checked={storeCopyChoices.includes(id)}
+                                    onChange={() => toggleStoreCopyChoice(id)}
+                                  />
+                                  {formatHiddenLabel(entry)}
+                                </label>
+                              );
+                            })}
+                          </div>
+                        ) : null}
+                        {copyDefaults.length > 0 ? (
+                          <div className="space-y-1">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">
+                              Defaults
+                            </p>
+                            {copyDefaults.map((row) => {
+                              const id = `default:${row.name}`;
+                              return (
+                                <label
+                                  key={id}
+                                  className="flex items-center justify-between gap-2 text-sm text-stone-300"
+                                >
+                                  <span className="inline-flex min-w-0 items-center gap-2">
+                                    <input
+                                      type="checkbox"
+                                      className="size-4 shrink-0 rounded border-white/20 bg-black/30"
+                                      checked={storeCopyChoices.includes(id)}
+                                      onChange={() => toggleStoreCopyChoice(id)}
+                                    />
+                                    <span className="truncate">{row.name}</span>
+                                  </span>
+                                  <span className="shrink-0 text-xs text-stone-500">
+                                    {row.storage}
+                                  </span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        ) : null}
+                        {copyHidden.length === 0 && copyDefaults.length === 0 ? (
+                          <p className="text-xs text-stone-500">
+                            This campaign has no hidden items or defaults.
+                          </p>
+                        ) : null}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="grid gap-2 border-t border-white/10 p-4">
+                  <Button
+                    type="button"
+                    className="h-11 rounded-xl"
+                    disabled={storeCopyChoices.length === 0}
+                    onClick={confirmStoreCopy}
+                  >
+                    Copy selected
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-11 rounded-xl border-white/15 text-white"
+                    onClick={() =>
+                      setStoreAction({ storeId: sourceId, step: "menu" })
+                    }
+                  >
+                    Back
+                  </Button>
+                </div>
+              </>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
       <Dialog
         open={storedImportConfirm != null}
         onOpenChange={(next) => {
