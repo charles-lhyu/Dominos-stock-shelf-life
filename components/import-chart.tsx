@@ -217,8 +217,10 @@ const STORE_LIST_LABELS: Record<StoreListMode, string> = {
   compact: "Compact",
 };
 
-/** Only PDF chart import is shipped; other inputs stay visible but disabled. */
+/** Only PDF chart import is shipped; other inputs stay visible but greyed out. */
 const CHART_INPUT_PDF_ONLY = true;
+const CHART_INPUT_UNAVAILABLE_NOTICE =
+  "Not available yet — use PDF chart.";
 
 function storeDatesMode(compactDates: boolean, showDayCounts: boolean): StoreDatesMode {
   if (showDayCounts) return "days";
@@ -2289,13 +2291,20 @@ export function ImportChartButton({
                   "h-12 justify-start rounded-xl border-white/10 text-sm text-white",
                   CHART_INPUT_PDF_ONLY && "opacity-40",
                 )}
-                disabled={busy || CHART_INPUT_PDF_ONLY}
+                disabled={busy}
+                aria-disabled={CHART_INPUT_PDF_ONLY || undefined}
                 title={
                   CHART_INPUT_PDF_ONLY
-                    ? "Not available yet — use PDF chart"
+                    ? CHART_INPUT_UNAVAILABLE_NOTICE
                     : undefined
                 }
-                onClick={() => photoRef.current?.click()}
+                onClick={() => {
+                  if (CHART_INPUT_PDF_ONLY) {
+                    toast.message(CHART_INPUT_UNAVAILABLE_NOTICE);
+                    return;
+                  }
+                  photoRef.current?.click();
+                }}
               >
                 <ImageUp className="size-4" />
                 Camera
@@ -2308,13 +2317,20 @@ export function ImportChartButton({
                     "h-12 justify-start rounded-xl border-white/10 text-sm text-white",
                     CHART_INPUT_PDF_ONLY && "opacity-40",
                   )}
-                  disabled={busy || CHART_INPUT_PDF_ONLY}
+                  disabled={busy}
+                  aria-disabled={CHART_INPUT_PDF_ONLY || undefined}
                   title={
                     CHART_INPUT_PDF_ONLY
-                      ? "Not available yet — use PDF chart"
+                      ? CHART_INPUT_UNAVAILABLE_NOTICE
                       : undefined
                   }
-                  onClick={startScan}
+                  onClick={() => {
+                    if (CHART_INPUT_PDF_ONLY) {
+                      toast.message(CHART_INPUT_UNAVAILABLE_NOTICE);
+                      return;
+                    }
+                    void startScan();
+                  }}
                 >
                   <QrCode className="size-4" />
                   Scan QR
@@ -2358,53 +2374,57 @@ export function ImportChartButton({
               link stay greyed out until they are ready.
             </p>
 
-            <div
-              className={cn(
-                "space-y-2",
-                CHART_INPUT_PDF_ONLY && "opacity-40",
-              )}
-            >
-              <label
-                htmlFor="chart-url"
-                className="text-sm font-medium text-stone-300"
-              >
-                Google Drive link
-              </label>
-              <div className="flex gap-2">
-                <Input
-                  id="chart-url"
-                  type="url"
-                  inputMode="url"
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  placeholder="https://drive.google.com/file/d/…"
-                  value={url}
-                  disabled={CHART_INPUT_PDF_ONLY || busy}
-                  onChange={(event) => setUrl(event.target.value)}
-                  className="h-12 rounded-xl border-white/10 bg-black/30 text-base text-white placeholder:text-stone-500 disabled:cursor-not-allowed"
-                />
-                <Button
+            <div className="relative space-y-2">
+              {CHART_INPUT_PDF_ONLY ? (
+                <button
                   type="button"
-                  className="h-12 shrink-0 rounded-xl px-3"
-                  disabled={
-                    CHART_INPUT_PDF_ONLY || busy || !url.trim()
-                  }
-                  title={
-                    CHART_INPUT_PDF_ONLY
-                      ? "Not available yet — use PDF chart"
-                      : undefined
-                  }
-                  onClick={() => importFromUrl(url)}
+                  className="absolute inset-0 z-10 cursor-pointer rounded-xl"
+                  aria-label={CHART_INPUT_UNAVAILABLE_NOTICE}
+                  onClick={() => toast.message(CHART_INPUT_UNAVAILABLE_NOTICE)}
+                />
+              ) : null}
+              <div
+                className={cn(
+                  "space-y-2",
+                  CHART_INPUT_PDF_ONLY && "pointer-events-none opacity-40",
+                )}
+                aria-hidden={CHART_INPUT_PDF_ONLY || undefined}
+              >
+                <label
+                  htmlFor="chart-url"
+                  className="text-sm font-medium text-stone-300"
                 >
-                  <Link2 className="size-4" />
-                  Load
-                </Button>
+                  Google Drive link
+                </label>
+                <div className="flex gap-2">
+                  <Input
+                    id="chart-url"
+                    type="url"
+                    inputMode="url"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    placeholder="https://drive.google.com/file/d/…"
+                    value={url}
+                    disabled={busy}
+                    onChange={(event) => setUrl(event.target.value)}
+                    className="h-12 rounded-xl border-white/10 bg-black/30 text-base text-white placeholder:text-stone-500"
+                  />
+                  <Button
+                    type="button"
+                    className="h-12 shrink-0 rounded-xl px-3"
+                    disabled={busy || !url.trim()}
+                    onClick={() => importFromUrl(url)}
+                  >
+                    <Link2 className="size-4" />
+                    Load
+                  </Button>
+                </div>
+                <p className="text-xs text-stone-500">
+                  {CHART_INPUT_PDF_ONLY
+                    ? "Drive links and QR import are not available yet."
+                    : "Share the PDF as “Anyone with the link”, then paste that link or put it in a QR code."}
+                </p>
               </div>
-              <p className="text-xs text-stone-500">
-                {CHART_INPUT_PDF_ONLY
-                  ? "Drive links and QR import are not available yet."
-                  : "Share the PDF as “Anyone with the link”, then paste that link or put it in a QR code."}
-              </p>
             </div>
 
             {desk.imported ? (
