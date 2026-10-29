@@ -3642,12 +3642,14 @@ export function ImportChartButton({
             const campaignSelected = campaignIds.filter((id) =>
               storeCopyChoices.includes(id),
             );
-            const copyRowClass =
+            const settingsRowClass =
               "grid w-full min-w-0 grid-cols-[minmax(0,1fr)_3.25rem_3.25rem_1.5rem] items-center gap-1.5 text-sm text-stone-300";
-            const copyCompareHeader = (
+            const itemRowClass =
+              "grid w-full min-w-0 grid-cols-[minmax(0,1fr)_1.5rem] items-center gap-1.5 text-sm text-stone-300";
+            const settingsCompareHeader = (
               <div
                 className={cn(
-                  copyRowClass,
+                  settingsRowClass,
                   "text-[0.65rem] font-semibold uppercase tracking-wider text-stone-500",
                 )}
               >
@@ -3768,7 +3770,7 @@ export function ImportChartButton({
                       />
                       Store settings
                     </label>
-                    {copyCompareHeader}
+                    {settingsCompareHeader}
                     <div className="space-y-1">
                       {(
                         [
@@ -3790,10 +3792,7 @@ export function ImportChartButton({
                           row.current === row.next ? "unchanged" : "add";
                         const selected = storeCopyChoices.includes(row.id);
                         return (
-                          <label
-                            key={row.id}
-                            className={copyRowClass}
-                          >
+                          <label key={row.id} className={settingsRowClass}>
                             <span className="inline-flex min-w-0 items-center gap-2">
                               <input
                                 type="checkbox"
@@ -3887,7 +3886,6 @@ export function ImportChartButton({
                                 · {hiddenIds.length}
                               </span>
                             </label>
-                            {copyCompareHeader}
                             <div className="space-y-1">
                               {hiddenRows.map((row) => {
                                 const selected = storeCopyChoices.includes(
@@ -3918,28 +3916,15 @@ export function ImportChartButton({
                                         {row.label}
                                       </span>
                                     </span>
-                                    <span className="truncate text-right text-xs text-stone-400">
-                                      {row.inTarget ? "Yes" : "—"}
-                                    </span>
-                                    <span
-                                      className={cn(
-                                        "truncate text-right text-xs",
-                                        selected
-                                          ? "text-sky-300"
-                                          : "text-stone-400",
-                                      )}
-                                    >
-                                      {row.inSource ? "Yes" : "—"}
-                                    </span>
                                     <StoreCopyChangeTag change={row.change} />
                                   </>
                                 );
                                 return row.inSource ? (
-                                  <label key={row.id} className={copyRowClass}>
+                                  <label key={row.id} className={itemRowClass}>
                                     {body}
                                   </label>
                                 ) : (
-                                  <div key={row.id} className={copyRowClass}>
+                                  <div key={row.id} className={itemRowClass}>
                                     {body}
                                   </div>
                                 );
@@ -3976,7 +3961,6 @@ export function ImportChartButton({
                                 · {defaultIds.length}
                               </span>
                             </label>
-                            {copyCompareHeader}
                             <div className="space-y-1">
                               {defaultRows.map((row) => {
                                 const selected = storeCopyChoices.includes(
@@ -4007,37 +3991,15 @@ export function ImportChartButton({
                                         {row.name}
                                       </span>
                                     </span>
-                                    <span
-                                      className={cn(
-                                        "truncate text-right text-xs",
-                                        selected &&
-                                          row.change === "add" &&
-                                          row.targetStorage !== "—"
-                                          ? "text-stone-500 line-through"
-                                          : "text-stone-400",
-                                      )}
-                                    >
-                                      {row.targetStorage}
-                                    </span>
-                                    <span
-                                      className={cn(
-                                        "truncate text-right text-xs",
-                                        selected
-                                          ? "text-sky-300"
-                                          : "text-stone-400",
-                                      )}
-                                    >
-                                      {row.sourceStorage}
-                                    </span>
                                     <StoreCopyChangeTag change={row.change} />
                                   </>
                                 );
                                 return row.inSource ? (
-                                  <label key={row.id} className={copyRowClass}>
+                                  <label key={row.id} className={itemRowClass}>
                                     {body}
                                   </label>
                                 ) : (
-                                  <div key={row.id} className={copyRowClass}>
+                                  <div key={row.id} className={itemRowClass}>
                                     {body}
                                   </div>
                                 );
