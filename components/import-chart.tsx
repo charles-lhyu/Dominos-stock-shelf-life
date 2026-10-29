@@ -4457,9 +4457,9 @@ function StoreCopyChangeTag({ change }: { change: StoreCopyChangeKind }) {
     <span
       className={cn(
         "inline-flex size-6 shrink-0 items-center justify-center justify-self-end rounded-md",
-        change === "add" && "bg-emerald-500/15 text-emerald-300",
-        change === "removed" && "bg-red-500/15 text-red-300",
-        change === "unchanged" && "bg-white/5 text-stone-400",
+        change === "add" && "bg-emerald-500/20 text-emerald-400",
+        change === "removed" && "bg-red-500/20 text-red-400",
+        change === "unchanged" && "bg-stone-500/15 text-stone-500",
       )}
       title={label}
       aria-label={label}
