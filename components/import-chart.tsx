@@ -1657,7 +1657,11 @@ export function ImportChartButton({
         showCloseButton={false}
       >
         <div
-          className="flex min-h-0 flex-1 flex-col overflow-hidden"
+          className={cn(
+            "flex min-h-0 flex-1 flex-col overflow-hidden transition-[filter]",
+            allStoredOpen &&
+              "pointer-events-none blur-[2.5px] brightness-75 saturate-75",
+          )}
           inert={allStoredOpen ? true : undefined}
           aria-hidden={allStoredOpen || undefined}
         >
@@ -2782,9 +2786,14 @@ export function ImportChartButton({
           <div className="absolute inset-0 z-50 flex flex-col">
             <button
               type="button"
-              className="absolute inset-0 bg-black/55 backdrop-blur-md supports-backdrop-filter:backdrop-blur-md"
+              className="absolute inset-0 z-0 bg-black/45"
               aria-label="Dismiss all stored data"
               onClick={() => {
+                if (storeAction) {
+                  setStoreAction(null);
+                  setStoreCopyChoices([]);
+                  return;
+                }
                 setAllStoredOpen(false);
                 setAllStoredPreviewId(null);
                 setAllStoredPreviewCampaignKey(null);
@@ -2794,7 +2803,13 @@ export function ImportChartButton({
               role="dialog"
               aria-modal="true"
               aria-labelledby="all-stored-title"
-              className="relative z-10 mt-[3.75rem] flex min-h-0 flex-1 flex-col overflow-hidden rounded-t-2xl bg-popover shadow-2xl ring-1 ring-foreground/10"
+              className={cn(
+                "relative z-10 mt-[3.75rem] flex min-h-0 flex-1 flex-col overflow-hidden rounded-t-2xl bg-popover shadow-2xl ring-1 ring-foreground/10 transition-[filter]",
+                storeAction &&
+                  "pointer-events-none blur-[2.5px] brightness-75 saturate-75",
+              )}
+              inert={storeAction ? true : undefined}
+              aria-hidden={storeAction ? true : undefined}
               onClick={(event) => event.stopPropagation()}
               onKeyDown={(event) => event.stopPropagation()}
             >
@@ -3472,23 +3487,25 @@ export function ImportChartButton({
                 );
               })()}
             </div>
-          </div>
-        ) : null}
-      </DialogContent>
-      <Dialog
-        open={storeAction != null}
-        onOpenChange={(next) => {
-          if (!next) {
-            setStoreAction(null);
-            setStoreCopyChoices([]);
-          }
-        }}
-      >
-        <DialogContent
-          showCloseButton={false}
-          overlayClassName="z-[70] isolate-auto bg-black/55 backdrop-blur-md supports-backdrop-filter:backdrop-blur-md"
-          className="z-[70] w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] max-h-[min(36rem,calc(100dvh-2rem))] gap-0 overflow-x-hidden overflow-y-auto rounded-2xl p-0 sm:max-w-sm"
-        >
+            {storeAction ? (
+              <div className="absolute inset-0 z-20 flex items-end justify-center p-3 pt-14 sm:items-center">
+                <button
+                  type="button"
+                  className="absolute inset-0 bg-black/45"
+                  aria-label="Dismiss store actions"
+                  onClick={() => {
+                    setStoreAction(null);
+                    setStoreCopyChoices([]);
+                  }}
+                />
+                <div
+                  role="dialog"
+                  aria-modal="true"
+                  className="relative z-10 flex max-h-[min(36rem,calc(100dvh-5rem))] w-full max-w-[min(24rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-2xl bg-popover shadow-2xl ring-1 ring-foreground/10"
+                  onClick={(event) => event.stopPropagation()}
+                  onKeyDown={(event) => event.stopPropagation()}
+                >
+                  <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
           {(() => {
             if (!storeAction) return null;
             const sourceId = storeAction.storeId;
@@ -4033,8 +4050,13 @@ export function ImportChartButton({
               </>
             );
           })()}
-        </DialogContent>
-      </Dialog>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </DialogContent>
       <Dialog
         open={storedImportConfirm != null}
         onOpenChange={(next) => {
