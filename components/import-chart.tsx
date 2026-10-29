@@ -2835,65 +2835,67 @@ export function ImportChartButton({
                 return (
                   <>
                     <div className="relative shrink-0 space-y-2 border-b border-white/10 px-4 py-3 pr-14">
-                      {previewStore ? (
-                        <div className="flex items-center gap-2 pr-1">
-                          <Select
-                            value={previewStore.storeId}
-                            items={storeSelectItems}
-                            onValueChange={(value) => {
-                              if (typeof value === "string" && value) {
-                                setAllStoredPreviewId(value);
-                                setAllStoredPreviewCampaignKey(
-                                  autoPreviewCampaignKey(value),
-                                );
-                                setStoreDraft(value);
-                              }
-                            }}
-                          >
-                            <SelectTrigger
-                              id="all-stored-title"
-                              aria-label="Preview store"
-                              className="h-auto min-w-0 flex-1 gap-1.5 rounded-lg border-0 bg-transparent px-0 py-0.5 text-left text-white shadow-none hover:bg-transparent focus-visible:border-transparent focus-visible:ring-0 dark:bg-transparent [&_svg]:size-4 [&_svg]:text-stone-400 [&_[data-slot=select-value]]:font-display [&_[data-slot=select-value]]:text-xl [&_[data-slot=select-value]]:font-medium [&_[data-slot=select-value]]:leading-tight"
+                      <div className="flex h-9 items-center gap-2 pr-1">
+                        {previewStore ? (
+                          <>
+                            <Select
+                              value={previewStore.storeId}
+                              items={storeSelectItems}
+                              onValueChange={(value) => {
+                                if (typeof value === "string" && value) {
+                                  setAllStoredPreviewId(value);
+                                  setAllStoredPreviewCampaignKey(
+                                    autoPreviewCampaignKey(value),
+                                  );
+                                  setStoreDraft(value);
+                                }
+                              }}
                             >
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent
-                              align="start"
-                              alignItemWithTrigger={false}
-                              className="z-[120] max-w-[min(24rem,calc(100vw-2.5rem))] rounded-xl border-white/10 bg-popover p-1"
+                              <SelectTrigger
+                                id="all-stored-title"
+                                aria-label="Preview store"
+                                className="h-9 min-w-0 flex-1 gap-1.5 rounded-lg border-0 bg-transparent px-0 py-0 text-left text-white shadow-none hover:bg-transparent focus-visible:border-transparent focus-visible:ring-0 dark:bg-transparent [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-stone-400 [&_[data-slot=select-value]]:font-display [&_[data-slot=select-value]]:text-xl [&_[data-slot=select-value]]:font-medium [&_[data-slot=select-value]]:leading-none"
+                              >
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent
+                                align="start"
+                                alignItemWithTrigger={false}
+                                className="z-[120] max-w-[min(24rem,calc(100vw-2.5rem))] rounded-xl border-white/10 bg-popover p-1"
+                              >
+                                {deviceStoreSettings.map((store) => (
+                                  <SelectItem
+                                    key={store.storeId}
+                                    value={store.storeId}
+                                  >
+                                    {storeSelectMenuLabel(store.storeId)}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <button
+                              type="button"
+                              aria-label="Back to store list"
+                              onClick={() => {
+                                setAllStoredPreviewId(null);
+                                setAllStoredPreviewCampaignKey(null);
+                              }}
+                              className="inline-flex h-9 shrink-0 items-center gap-1 rounded-lg px-2.5 text-xs font-semibold text-stone-200 ring-1 ring-white/15"
                             >
-                              {deviceStoreSettings.map((store) => (
-                                <SelectItem
-                                  key={store.storeId}
-                                  value={store.storeId}
-                                >
-                                  {storeSelectMenuLabel(store.storeId)}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <button
-                            type="button"
-                            aria-label="Back to store list"
-                            onClick={() => {
-                              setAllStoredPreviewId(null);
-                              setAllStoredPreviewCampaignKey(null);
-                            }}
-                            className="inline-flex h-9 shrink-0 items-center gap-1 rounded-lg px-2.5 text-xs font-semibold text-stone-200 ring-1 ring-white/15"
+                              <X className="size-3.5" aria-hidden />
+                              Clear
+                            </button>
+                          </>
+                        ) : (
+                          <h2
+                            id="all-stored-title"
+                            className="flex h-9 min-w-0 flex-1 items-center font-display text-xl font-medium leading-none text-white"
                           >
-                            <X className="size-3.5" aria-hidden />
-                            Clear
-                          </button>
-                        </div>
-                      ) : (
-                        <h2
-                          id="all-stored-title"
-                          className="font-display text-xl font-medium text-white"
-                        >
-                          All stored data
-                        </h2>
-                      )}
-                      <p className="text-sm text-stone-400">
+                            All stored data
+                          </h2>
+                        )}
+                      </div>
+                      <p className="h-5 truncate text-sm leading-5 text-stone-400">
                         {previewStore
                           ? "Preview this store's settings and campaign presets."
                           : "Store settings saved on this device. Tap a card to preview."}
