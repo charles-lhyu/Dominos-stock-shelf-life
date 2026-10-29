@@ -3477,6 +3477,7 @@ export function ImportChartButton({
       </DialogContent>
       <Dialog
         open={storeAction != null}
+        modal={false}
         onOpenChange={(next) => {
           if (!next) {
             setStoreAction(null);
@@ -3486,8 +3487,8 @@ export function ImportChartButton({
       >
         <DialogContent
           showCloseButton={false}
-          overlayClassName="z-[70] bg-black/55 backdrop-blur-md supports-backdrop-filter:backdrop-blur-md"
-          className="z-[70] max-h-[min(40rem,calc(100dvh-2rem))] max-w-md gap-0 overflow-y-auto rounded-2xl p-0"
+          overlayClassName="z-[70] bg-black/40 backdrop-blur-sm supports-backdrop-filter:backdrop-blur-sm"
+          className="z-[70] w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] max-h-[min(36rem,calc(100dvh-2rem))] gap-0 overflow-x-hidden overflow-y-auto rounded-2xl p-0 sm:max-w-sm"
         >
           {(() => {
             if (!storeAction) return null;
@@ -3641,11 +3642,19 @@ export function ImportChartButton({
             const campaignSelected = campaignIds.filter((id) =>
               storeCopyChoices.includes(id),
             );
+            const copyRowClass =
+              "grid w-full min-w-0 grid-cols-[minmax(0,1fr)_3.25rem_3.25rem_1.5rem] items-center gap-1.5 text-sm text-stone-300";
             const copyCompareHeader = (
-              <div className="grid shrink-0 grid-cols-[minmax(3.75rem,4.5rem)_minmax(3.75rem,4.5rem)_4.25rem] gap-2 text-right text-[0.65rem] font-semibold uppercase tracking-wider text-stone-500">
-                <span>Current</span>
-                <span>New</span>
-                <span>Change</span>
+              <div
+                className={cn(
+                  copyRowClass,
+                  "text-[0.65rem] font-semibold uppercase tracking-wider text-stone-500",
+                )}
+              >
+                <span />
+                <span className="text-right">Now</span>
+                <span className="text-right">New</span>
+                <span className="sr-only">Change</span>
               </div>
             );
 
@@ -3739,30 +3748,28 @@ export function ImportChartButton({
                 </DialogHeader>
                 <div className="space-y-3 border-t border-white/10 px-4 py-3">
                   <div className="space-y-1.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <label className="flex min-w-0 items-center gap-2 text-sm font-medium text-stone-200">
-                        <input
-                          type="checkbox"
-                          className="size-4 rounded border-white/20 bg-black/30"
-                          checked={
-                            settingsIds.length > 0 &&
-                            settingsSelected.length === settingsIds.length
-                          }
-                          ref={(node) => {
-                            if (!node) return;
-                            node.indeterminate =
-                              settingsSelected.length > 0 &&
-                              settingsSelected.length < settingsIds.length;
-                          }}
-                          onChange={(event) =>
-                            setStoreCopyGroup(settingsIds, event.target.checked)
-                          }
-                        />
-                        Store settings
-                      </label>
-                      {copyCompareHeader}
-                    </div>
-                    <div className="space-y-1 border-l border-white/10 pl-4">
+                    <label className="flex min-w-0 items-center gap-2 text-sm font-medium text-stone-200">
+                      <input
+                        type="checkbox"
+                        className="size-4 rounded border-white/20 bg-black/30"
+                        checked={
+                          settingsIds.length > 0 &&
+                          settingsSelected.length === settingsIds.length
+                        }
+                        ref={(node) => {
+                          if (!node) return;
+                          node.indeterminate =
+                            settingsSelected.length > 0 &&
+                            settingsSelected.length < settingsIds.length;
+                        }}
+                        onChange={(event) =>
+                          setStoreCopyGroup(settingsIds, event.target.checked)
+                        }
+                      />
+                      Store settings
+                    </label>
+                    {copyCompareHeader}
+                    <div className="space-y-1">
                       {(
                         [
                           {
@@ -3785,7 +3792,7 @@ export function ImportChartButton({
                         return (
                           <label
                             key={row.id}
-                            className="grid grid-cols-[minmax(0,1fr)_minmax(3.75rem,4.5rem)_minmax(3.75rem,4.5rem)_4.25rem] items-center gap-2 text-sm text-stone-300"
+                            className={copyRowClass}
                           >
                             <span className="inline-flex min-w-0 items-center gap-2">
                               <input
@@ -3821,39 +3828,36 @@ export function ImportChartButton({
                     </div>
                   </div>
                   <div className="space-y-1.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <label className="flex min-w-0 items-center gap-2 text-sm font-medium text-stone-200">
-                        <input
-                          type="checkbox"
-                          className="size-4 rounded border-white/20 bg-black/30"
-                          disabled={campaignIds.length === 0}
-                          checked={
-                            campaignIds.length > 0 &&
-                            campaignSelected.length === campaignIds.length
-                          }
-                          ref={(node) => {
-                            if (!node) return;
-                            node.indeterminate =
-                              campaignSelected.length > 0 &&
-                              campaignSelected.length < campaignIds.length;
-                          }}
-                          onChange={(event) =>
-                            setStoreCopyGroup(campaignIds, event.target.checked)
-                          }
-                        />
-                        <span className="min-w-0 truncate">
-                          Current campaign
-                          {copyCampaign ? ` · ${copyCampaign.title}` : ""}
-                        </span>
-                      </label>
-                      {copyCompareHeader}
-                    </div>
+                    <label className="flex min-w-0 items-center gap-2 text-sm font-medium text-stone-200">
+                      <input
+                        type="checkbox"
+                        className="size-4 rounded border-white/20 bg-black/30"
+                        disabled={campaignIds.length === 0}
+                        checked={
+                          campaignIds.length > 0 &&
+                          campaignSelected.length === campaignIds.length
+                        }
+                        ref={(node) => {
+                          if (!node) return;
+                          node.indeterminate =
+                            campaignSelected.length > 0 &&
+                            campaignSelected.length < campaignIds.length;
+                        }}
+                        onChange={(event) =>
+                          setStoreCopyGroup(campaignIds, event.target.checked)
+                        }
+                      />
+                      <span className="min-w-0 truncate">
+                        Current campaign
+                        {copyCampaign ? ` · ${copyCampaign.title}` : ""}
+                      </span>
+                    </label>
                     {hiddenRows.length === 0 && defaultRows.length === 0 ? (
-                      <p className="border-l border-white/10 pl-4 text-xs text-stone-500">
+                      <p className="text-xs text-stone-500">
                         No campaign preset to copy from this store.
                       </p>
                     ) : (
-                      <div className="space-y-2 border-l border-white/10 pl-4">
+                      <div className="space-y-2">
                         {hiddenRows.length > 0 ? (
                           <div className="space-y-1">
                             <label className="flex items-center gap-2 text-sm font-medium text-stone-200">
@@ -3883,7 +3887,8 @@ export function ImportChartButton({
                                 · {hiddenIds.length}
                               </span>
                             </label>
-                            <div className="space-y-1 border-l border-white/10 pl-4">
+                            {copyCompareHeader}
+                            <div className="space-y-1">
                               {hiddenRows.map((row) => {
                                 const selected = storeCopyChoices.includes(
                                   row.id,
@@ -3930,17 +3935,11 @@ export function ImportChartButton({
                                   </>
                                 );
                                 return row.inSource ? (
-                                  <label
-                                    key={row.id}
-                                    className="grid grid-cols-[minmax(0,1fr)_minmax(3.75rem,4.5rem)_minmax(3.75rem,4.5rem)_4.25rem] items-center gap-2 text-sm text-stone-300"
-                                  >
+                                  <label key={row.id} className={copyRowClass}>
                                     {body}
                                   </label>
                                 ) : (
-                                  <div
-                                    key={row.id}
-                                    className="grid grid-cols-[minmax(0,1fr)_minmax(3.75rem,4.5rem)_minmax(3.75rem,4.5rem)_4.25rem] items-center gap-2 text-sm text-stone-300"
-                                  >
+                                  <div key={row.id} className={copyRowClass}>
                                     {body}
                                   </div>
                                 );
@@ -3977,7 +3976,8 @@ export function ImportChartButton({
                                 · {defaultIds.length}
                               </span>
                             </label>
-                            <div className="space-y-1 border-l border-white/10 pl-4">
+                            {copyCompareHeader}
+                            <div className="space-y-1">
                               {defaultRows.map((row) => {
                                 const selected = storeCopyChoices.includes(
                                   row.id,
@@ -4033,17 +4033,11 @@ export function ImportChartButton({
                                   </>
                                 );
                                 return row.inSource ? (
-                                  <label
-                                    key={row.id}
-                                    className="grid grid-cols-[minmax(0,1fr)_minmax(3.75rem,4.5rem)_minmax(3.75rem,4.5rem)_4.25rem] items-center gap-2 text-sm text-stone-300"
-                                  >
+                                  <label key={row.id} className={copyRowClass}>
                                     {body}
                                   </label>
                                 ) : (
-                                  <div
-                                    key={row.id}
-                                    className="grid grid-cols-[minmax(0,1fr)_minmax(3.75rem,4.5rem)_minmax(3.75rem,4.5rem)_4.25rem] items-center gap-2 text-sm text-stone-300"
-                                  >
+                                  <div key={row.id} className={copyRowClass}>
                                     {body}
                                   </div>
                                 );
@@ -4479,16 +4473,15 @@ function StoreCopyChangeTag({ change }: { change: StoreCopyChangeKind }) {
   return (
     <span
       className={cn(
-        "inline-flex h-6 items-center justify-end gap-0.5 rounded-md px-1.5 text-[0.65rem] font-semibold uppercase tracking-wide",
+        "inline-flex size-6 shrink-0 items-center justify-center justify-self-end rounded-md",
         change === "add" && "bg-emerald-500/15 text-emerald-300",
         change === "removed" && "bg-red-500/15 text-red-300",
         change === "unchanged" && "bg-white/5 text-stone-400",
       )}
       title={label}
+      aria-label={label}
     >
-      <Icon className="size-3" aria-hidden strokeWidth={2.5} />
-      <span className="sr-only">{label}</span>
-      <span aria-hidden>{label}</span>
+      <Icon className="size-3.5" aria-hidden strokeWidth={2.5} />
     </span>
   );
 }
