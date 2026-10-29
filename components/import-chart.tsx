@@ -3483,24 +3483,52 @@ export function ImportChartButton({
       >
         <DialogContent
           showCloseButton={false}
-          overlayClassName="z-[70] bg-black/50"
-          className="z-[70] max-h-[min(40rem,calc(100dvh-2rem))] max-w-sm gap-0 overflow-y-auto rounded-2xl p-0"
+          overlayClassName="z-[70] bg-black/55 backdrop-blur-md supports-backdrop-filter:backdrop-blur-md"
+          className="z-[70] max-h-[min(40rem,calc(100dvh-2rem))] max-w-md gap-0 overflow-y-auto rounded-2xl p-0"
         >
           {(() => {
             if (!storeAction) return null;
             const sourceId = storeAction.storeId;
             const targetId = storeId;
+            const sourceStore = deviceStoreSettings.find(
+              (item) => item.storeId === sourceId,
+            );
+            const targetStore = targetId
+              ? deviceStoreSettings.find((item) => item.storeId === targetId)
+              : null;
             const sourceLabel =
-              nameFor(sourceId) ||
-              deviceStoreSettings.find((item) => item.storeId === sourceId)
-                ?.name ||
-              sourceId;
+              nameFor(sourceId) || sourceStore?.name || sourceId;
             const targetLabel = targetId
-              ? nameFor(targetId) ||
-                deviceStoreSettings.find((item) => item.storeId === targetId)
-                  ?.name ||
-                targetId
+              ? nameFor(targetId) || targetStore?.name || targetId
               : "";
+            const sourceDatesLabel = sourceStore
+              ? sourceStore.showDayCounts
+                ? "Days and hours"
+                : sourceStore.compactDates
+                  ? "Short"
+                  : "Full"
+              : "—";
+            const sourceListLabel = sourceStore
+              ? sourceStore.compactList
+                ? "Compact"
+                : "Normal"
+              : "—";
+            const targetDatesLabel = targetStore
+              ? targetStore.showDayCounts
+                ? "Days and hours"
+                : targetStore.compactDates
+                  ? "Short"
+                  : "Full"
+              : targetId
+                ? storeDatesLabel
+                : "—";
+            const targetListLabel = targetStore
+              ? targetStore.compactList
+                ? "Compact"
+                : "Normal"
+              : targetId
+                ? storeListLabel
+                : "—";
             const copyCampaignKey = autoPreviewCampaignKey(sourceId);
             const copyCampaign = copyCampaignKey
               ? deviceStored.find(
@@ -3515,11 +3543,18 @@ export function ImportChartButton({
               ? productDefaultRows(copyCampaign.preset)
               : [];
             const settingsIds = ["dates", "list"];
-            const campaignIds = [
-              ...copyHidden.map((entry) => `hidden:${hiddenEntryKey(entry)}`),
-              ...copyDefaults.map((row) => `default:${row.name}`),
-            ];
+            const hiddenIds = copyHidden.map(
+              (entry) => `hidden:${hiddenEntryKey(entry)}`,
+            );
+            const defaultIds = copyDefaults.map((row) => `default:${row.name}`);
+            const campaignIds = [...hiddenIds, ...defaultIds];
             const settingsSelected = settingsIds.filter((id) =>
+              storeCopyChoices.includes(id),
+            );
+            const hiddenSelected = hiddenIds.filter((id) =>
+              storeCopyChoices.includes(id),
+            );
+            const defaultSelected = defaultIds.filter((id) =>
               storeCopyChoices.includes(id),
             );
             const campaignSelected = campaignIds.filter((id) =>
@@ -3616,44 +3651,96 @@ export function ImportChartButton({
                 </DialogHeader>
                 <div className="space-y-3 border-t border-white/10 px-4 py-3">
                   <div className="space-y-1.5">
-                    <label className="flex items-center gap-2 text-sm font-medium text-stone-200">
-                      <input
-                        type="checkbox"
-                        className="size-4 rounded border-white/20 bg-black/30"
-                        checked={
-                          settingsIds.length > 0 &&
-                          settingsSelected.length === settingsIds.length
-                        }
-                        ref={(node) => {
-                          if (!node) return;
-                          node.indeterminate =
-                            settingsSelected.length > 0 &&
-                            settingsSelected.length < settingsIds.length;
-                        }}
-                        onChange={(event) =>
-                          setStoreCopyGroup(settingsIds, event.target.checked)
-                        }
-                      />
-                      Store settings
-                    </label>
-                    <div className="space-y-1 border-l border-white/10 pl-4">
-                      <label className="flex items-center gap-2 text-sm text-stone-300">
+                    <div className="flex items-center justify-between gap-2">
+                      <label className="flex min-w-0 items-center gap-2 text-sm font-medium text-stone-200">
                         <input
                           type="checkbox"
                           className="size-4 rounded border-white/20 bg-black/30"
-                          checked={storeCopyChoices.includes("dates")}
-                          onChange={() => toggleStoreCopyChoice("dates")}
+                          checked={
+                            settingsIds.length > 0 &&
+                            settingsSelected.length === settingsIds.length
+                          }
+                          ref={(node) => {
+                            if (!node) return;
+                            node.indeterminate =
+                              settingsSelected.length > 0 &&
+                              settingsSelected.length < settingsIds.length;
+                          }}
+                          onChange={(event) =>
+                            setStoreCopyGroup(settingsIds, event.target.checked)
+                          }
                         />
-                        Dates
+                        Store settings
                       </label>
-                      <label className="flex items-center gap-2 text-sm text-stone-300">
-                        <input
-                          type="checkbox"
-                          className="size-4 rounded border-white/20 bg-black/30"
-                          checked={storeCopyChoices.includes("list")}
-                          onChange={() => toggleStoreCopyChoice("list")}
-                        />
-                        List
+                      <div className="grid shrink-0 grid-cols-2 gap-3 text-right text-[0.65rem] font-semibold uppercase tracking-wider text-stone-500">
+                        <span>Current</span>
+                        <span>New</span>
+                      </div>
+                    </div>
+                    <div className="space-y-1 border-l border-white/10 pl-4">
+                      <label className="flex items-center justify-between gap-2 text-sm text-stone-300">
+                        <span className="inline-flex min-w-0 items-center gap-2">
+                          <input
+                            type="checkbox"
+                            className="size-4 shrink-0 rounded border-white/20 bg-black/30"
+                            checked={storeCopyChoices.includes("dates")}
+                            onChange={() => toggleStoreCopyChoice("dates")}
+                          />
+                          Dates
+                        </span>
+                        <span className="grid shrink-0 grid-cols-2 gap-3 text-right text-xs">
+                          <span
+                            className={cn(
+                              storeCopyChoices.includes("dates") &&
+                                targetDatesLabel !== sourceDatesLabel
+                                ? "text-stone-500 line-through"
+                                : "text-stone-400",
+                            )}
+                          >
+                            {targetDatesLabel}
+                          </span>
+                          <span
+                            className={cn(
+                              storeCopyChoices.includes("dates")
+                                ? "text-sky-300"
+                                : "text-stone-400",
+                            )}
+                          >
+                            {sourceDatesLabel}
+                          </span>
+                        </span>
+                      </label>
+                      <label className="flex items-center justify-between gap-2 text-sm text-stone-300">
+                        <span className="inline-flex min-w-0 items-center gap-2">
+                          <input
+                            type="checkbox"
+                            className="size-4 shrink-0 rounded border-white/20 bg-black/30"
+                            checked={storeCopyChoices.includes("list")}
+                            onChange={() => toggleStoreCopyChoice("list")}
+                          />
+                          List
+                        </span>
+                        <span className="grid shrink-0 grid-cols-2 gap-3 text-right text-xs">
+                          <span
+                            className={cn(
+                              storeCopyChoices.includes("list") &&
+                                targetListLabel !== sourceListLabel
+                                ? "text-stone-500 line-through"
+                                : "text-stone-400",
+                            )}
+                          >
+                            {targetListLabel}
+                          </span>
+                          <span
+                            className={cn(
+                              storeCopyChoices.includes("list")
+                                ? "text-sky-300"
+                                : "text-stone-400",
+                            )}
+                          >
+                            {sourceListLabel}
+                          </span>
+                        </span>
                       </label>
                     </div>
                   </div>
@@ -3688,55 +3775,105 @@ export function ImportChartButton({
                       <div className="space-y-2 border-l border-white/10 pl-4">
                         {copyHidden.length > 0 ? (
                           <div className="space-y-1">
-                            <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">
-                              Hidden
-                            </p>
-                            {copyHidden.map((entry) => {
-                              const id = `hidden:${hiddenEntryKey(entry)}`;
-                              return (
-                                <label
-                                  key={id}
-                                  className="flex items-center gap-2 text-sm text-stone-300"
-                                >
-                                  <input
-                                    type="checkbox"
-                                    className="size-4 rounded border-white/20 bg-black/30"
-                                    checked={storeCopyChoices.includes(id)}
-                                    onChange={() => toggleStoreCopyChoice(id)}
-                                  />
-                                  {formatHiddenLabel(entry)}
-                                </label>
-                              );
-                            })}
+                            <label className="flex items-center gap-2 text-sm font-medium text-stone-200">
+                              <input
+                                type="checkbox"
+                                className="size-4 rounded border-white/20 bg-black/30"
+                                checked={
+                                  hiddenSelected.length === hiddenIds.length
+                                }
+                                ref={(node) => {
+                                  if (!node) return;
+                                  node.indeterminate =
+                                    hiddenSelected.length > 0 &&
+                                    hiddenSelected.length < hiddenIds.length;
+                                }}
+                                onChange={(event) =>
+                                  setStoreCopyGroup(
+                                    hiddenIds,
+                                    event.target.checked,
+                                  )
+                                }
+                              />
+                              All hidden
+                              <span className="text-xs font-normal text-stone-500">
+                                · {copyHidden.length}
+                              </span>
+                            </label>
+                            <div className="space-y-1 border-l border-white/10 pl-4">
+                              {copyHidden.map((entry) => {
+                                const id = `hidden:${hiddenEntryKey(entry)}`;
+                                return (
+                                  <label
+                                    key={id}
+                                    className="flex items-center gap-2 text-sm text-stone-300"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      className="size-4 rounded border-white/20 bg-black/30"
+                                      checked={storeCopyChoices.includes(id)}
+                                      onChange={() => toggleStoreCopyChoice(id)}
+                                    />
+                                    {formatHiddenLabel(entry)}
+                                  </label>
+                                );
+                              })}
+                            </div>
                           </div>
                         ) : null}
                         {copyDefaults.length > 0 ? (
                           <div className="space-y-1">
-                            <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">
-                              Defaults
-                            </p>
-                            {copyDefaults.map((row) => {
-                              const id = `default:${row.name}`;
-                              return (
-                                <label
-                                  key={id}
-                                  className="flex items-center justify-between gap-2 text-sm text-stone-300"
-                                >
-                                  <span className="inline-flex min-w-0 items-center gap-2">
-                                    <input
-                                      type="checkbox"
-                                      className="size-4 shrink-0 rounded border-white/20 bg-black/30"
-                                      checked={storeCopyChoices.includes(id)}
-                                      onChange={() => toggleStoreCopyChoice(id)}
-                                    />
-                                    <span className="truncate">{row.name}</span>
-                                  </span>
-                                  <span className="shrink-0 text-xs text-stone-500">
-                                    {row.storage}
-                                  </span>
-                                </label>
-                              );
-                            })}
+                            <label className="flex items-center gap-2 text-sm font-medium text-stone-200">
+                              <input
+                                type="checkbox"
+                                className="size-4 rounded border-white/20 bg-black/30"
+                                checked={
+                                  defaultSelected.length === defaultIds.length
+                                }
+                                ref={(node) => {
+                                  if (!node) return;
+                                  node.indeterminate =
+                                    defaultSelected.length > 0 &&
+                                    defaultSelected.length < defaultIds.length;
+                                }}
+                                onChange={(event) =>
+                                  setStoreCopyGroup(
+                                    defaultIds,
+                                    event.target.checked,
+                                  )
+                                }
+                              />
+                              All defaults
+                              <span className="text-xs font-normal text-stone-500">
+                                · {copyDefaults.length}
+                              </span>
+                            </label>
+                            <div className="space-y-1 border-l border-white/10 pl-4">
+                              {copyDefaults.map((row) => {
+                                const id = `default:${row.name}`;
+                                return (
+                                  <label
+                                    key={id}
+                                    className="flex items-center justify-between gap-2 text-sm text-stone-300"
+                                  >
+                                    <span className="inline-flex min-w-0 items-center gap-2">
+                                      <input
+                                        type="checkbox"
+                                        className="size-4 shrink-0 rounded border-white/20 bg-black/30"
+                                        checked={storeCopyChoices.includes(id)}
+                                        onChange={() =>
+                                          toggleStoreCopyChoice(id)
+                                        }
+                                      />
+                                      <span className="truncate">{row.name}</span>
+                                    </span>
+                                    <span className="shrink-0 text-xs text-stone-500">
+                                      {row.storage}
+                                    </span>
+                                  </label>
+                                );
+                              })}
+                            </div>
                           </div>
                         ) : null}
                         {copyHidden.length === 0 && copyDefaults.length === 0 ? (
