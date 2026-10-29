@@ -3486,7 +3486,7 @@ export function ImportChartButton({
       >
         <DialogContent
           showCloseButton={false}
-          overlayClassName="z-[70] bg-black/55 backdrop-blur-md supports-backdrop-filter:backdrop-blur-md"
+          overlayClassName="z-[70] isolate-auto bg-black/55 backdrop-blur-md supports-backdrop-filter:backdrop-blur-md"
           className="z-[70] w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] max-h-[min(36rem,calc(100dvh-2rem))] gap-0 overflow-x-hidden overflow-y-auto rounded-2xl p-0 sm:max-w-sm"
         >
           {(() => {
@@ -3769,8 +3769,8 @@ export function ImportChartButton({
                       />
                       Store settings
                     </label>
-                    {settingsCompareHeader}
-                    <div className="space-y-1">
+                    <div className="space-y-1 border-l border-white/10 pl-4">
+                      {settingsCompareHeader}
                       {(
                         [
                           {
@@ -3851,11 +3851,11 @@ export function ImportChartButton({
                       </span>
                     </label>
                     {hiddenRows.length === 0 && defaultRows.length === 0 ? (
-                      <p className="text-xs text-stone-500">
+                      <p className="border-l border-white/10 pl-4 text-xs text-stone-500">
                         No campaign preset to copy from this store.
                       </p>
                     ) : (
-                      <div className="space-y-2">
+                      <div className="space-y-2 border-l border-white/10 pl-4">
                         {hiddenRows.length > 0 ? (
                           <div className="space-y-1">
                             <label className="flex items-center gap-2 text-sm font-medium text-stone-200">
@@ -3885,7 +3885,7 @@ export function ImportChartButton({
                                 · {hiddenIds.length}
                               </span>
                             </label>
-                            <div className="space-y-1">
+                            <div className="space-y-1 border-l border-white/10 pl-4">
                               {hiddenRows.map((row) => {
                                 const selected = storeCopyChoices.includes(
                                   row.id,
@@ -3960,7 +3960,7 @@ export function ImportChartButton({
                                 · {defaultIds.length}
                               </span>
                             </label>
-                            <div className="space-y-1">
+                            <div className="space-y-1 border-l border-white/10 pl-4">
                               {defaultRows.map((row) => {
                                 const selected = storeCopyChoices.includes(
                                   row.id,
