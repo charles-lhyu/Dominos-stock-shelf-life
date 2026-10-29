@@ -3477,7 +3477,6 @@ export function ImportChartButton({
       </DialogContent>
       <Dialog
         open={storeAction != null}
-        modal={false}
         onOpenChange={(next) => {
           if (!next) {
             setStoreAction(null);
@@ -3487,7 +3486,7 @@ export function ImportChartButton({
       >
         <DialogContent
           showCloseButton={false}
-          overlayClassName="z-[70] bg-black/40 backdrop-blur-sm supports-backdrop-filter:backdrop-blur-sm"
+          overlayClassName="z-[70] bg-black/55 backdrop-blur-md supports-backdrop-filter:backdrop-blur-md"
           className="z-[70] w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] max-h-[min(36rem,calc(100dvh-2rem))] gap-0 overflow-x-hidden overflow-y-auto rounded-2xl p-0 sm:max-w-sm"
         >
           {(() => {
@@ -3654,7 +3653,7 @@ export function ImportChartButton({
                 )}
               >
                 <span />
-                <span className="text-right">Now</span>
+                <span className="text-right">Old</span>
                 <span className="text-right">New</span>
                 <span className="sr-only">Change</span>
               </div>
