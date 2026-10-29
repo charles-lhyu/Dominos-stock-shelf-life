@@ -217,6 +217,9 @@ const STORE_LIST_LABELS: Record<StoreListMode, string> = {
   compact: "Compact",
 };
 
+/** Only PDF chart import is shipped; other inputs stay visible but disabled. */
+const CHART_INPUT_PDF_ONLY = true;
+
 function storeDatesMode(compactDates: boolean, showDayCounts: boolean): StoreDatesMode {
   if (showDayCounts) return "days";
   if (compactDates) return "short";
@@ -2282,19 +2285,35 @@ export function ImportChartButton({
               <Button
                 type="button"
                 variant="outline"
-                className="h-12 justify-start rounded-xl border-white/10 text-sm text-white"
-                disabled={busy}
+                className={cn(
+                  "h-12 justify-start rounded-xl border-white/10 text-sm text-white",
+                  CHART_INPUT_PDF_ONLY && "opacity-40",
+                )}
+                disabled={busy || CHART_INPUT_PDF_ONLY}
+                title={
+                  CHART_INPUT_PDF_ONLY
+                    ? "Not available yet — use PDF chart"
+                    : undefined
+                }
                 onClick={() => photoRef.current?.click()}
               >
                 <ImageUp className="size-4" />
                 Camera
               </Button>
-              {!scanning ? (
+              {!scanning || CHART_INPUT_PDF_ONLY ? (
                 <Button
                   type="button"
                   variant="outline"
-                  className="h-12 justify-start rounded-xl border-white/10 text-sm text-white"
-                  disabled={busy}
+                  className={cn(
+                    "h-12 justify-start rounded-xl border-white/10 text-sm text-white",
+                    CHART_INPUT_PDF_ONLY && "opacity-40",
+                  )}
+                  disabled={busy || CHART_INPUT_PDF_ONLY}
+                  title={
+                    CHART_INPUT_PDF_ONLY
+                      ? "Not available yet — use PDF chart"
+                      : undefined
+                  }
                   onClick={startScan}
                 >
                   <QrCode className="size-4" />
@@ -2313,7 +2332,7 @@ export function ImportChartButton({
               )}
             </div>
 
-            {scanning ? (
+            {scanning && !CHART_INPUT_PDF_ONLY ? (
               <div className="overflow-hidden rounded-2xl bg-black">
                 <video
                   ref={videoRef}
@@ -2334,9 +2353,21 @@ export function ImportChartButton({
               <FileText className="size-4" />
               PDF chart
             </Button>
+            <p className="text-xs text-stone-500">
+              PDF is the available chart input for now. Camera, QR, and Drive
+              link stay greyed out until they are ready.
+            </p>
 
-            <div className="space-y-2">
-              <label htmlFor="chart-url" className="text-sm font-medium text-stone-300">
+            <div
+              className={cn(
+                "space-y-2",
+                CHART_INPUT_PDF_ONLY && "opacity-40",
+              )}
+            >
+              <label
+                htmlFor="chart-url"
+                className="text-sm font-medium text-stone-300"
+              >
                 Google Drive link
               </label>
               <div className="flex gap-2">
@@ -2348,13 +2379,21 @@ export function ImportChartButton({
                   autoCorrect="off"
                   placeholder="https://drive.google.com/file/d/…"
                   value={url}
+                  disabled={CHART_INPUT_PDF_ONLY || busy}
                   onChange={(event) => setUrl(event.target.value)}
-                  className="h-12 rounded-xl border-white/10 bg-black/30 text-base text-white placeholder:text-stone-500"
+                  className="h-12 rounded-xl border-white/10 bg-black/30 text-base text-white placeholder:text-stone-500 disabled:cursor-not-allowed"
                 />
                 <Button
                   type="button"
                   className="h-12 shrink-0 rounded-xl px-3"
-                  disabled={busy || !url.trim()}
+                  disabled={
+                    CHART_INPUT_PDF_ONLY || busy || !url.trim()
+                  }
+                  title={
+                    CHART_INPUT_PDF_ONLY
+                      ? "Not available yet — use PDF chart"
+                      : undefined
+                  }
                   onClick={() => importFromUrl(url)}
                 >
                   <Link2 className="size-4" />
@@ -2362,8 +2401,9 @@ export function ImportChartButton({
                 </Button>
               </div>
               <p className="text-xs text-stone-500">
-                Share the PDF as “Anyone with the link”, then paste that link or put it
-                in a QR code.
+                {CHART_INPUT_PDF_ONLY
+                  ? "Drive links and QR import are not available yet."
+                  : "Share the PDF as “Anyone with the link”, then paste that link or put it in a QR code."}
               </p>
             </div>
 
