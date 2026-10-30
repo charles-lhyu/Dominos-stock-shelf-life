@@ -233,10 +233,9 @@ const STORE_LIST_LABELS: Record<StoreListMode, string> = {
   compact: "Compact",
 };
 
-/** Only PDF chart import is shipped; other inputs stay visible but greyed out. */
-const CHART_INPUT_PDF_ONLY = true;
-const CHART_INPUT_UNAVAILABLE_NOTICE =
-  "Not available yet — use PDF chart.";
+/** Camera (photo) stays greyed; Scan QR + Drive link load a shared PDF. */
+const CHART_INPUT_CAMERA_DISABLED = true;
+const CHART_INPUT_CAMERA_NOTICE = "Not available yet — use Scan QR or PDF chart.";
 
 function storeDatesMode(compactDates: boolean, showDayCounts: boolean): StoreDatesMode {
   if (showDayCounts) return "days";
@@ -947,15 +946,24 @@ export function ImportChartButton({
   }
 
   async function importFromUrl(nextUrl: string) {
+    const trimmed = nextUrl.trim();
     setBusy(true);
-    const result = await fetchRemoteChart(nextUrl);
-    setBusy(false);
-    if (!result.ok) {
-      toast.error(result.error);
-      return;
+    const toastId = toast.loading("Downloading chart PDF…");
+    try {
+      const result = await fetchRemoteChart(trimmed);
+      toast.dismiss(toastId);
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      setUrl(trimmed);
+      await commitPack(result.pack, trimmed, result.crops);
+    } catch {
+      toast.dismiss(toastId);
+      toast.error("Could not download that link.");
+    } finally {
+      setBusy(false);
     }
-    setUrl(nextUrl.trim());
-    await commitPack(result.pack, nextUrl.trim(), result.crops);
   }
 
   async function importFromText(raw: string, source: string) {
@@ -1005,7 +1013,7 @@ export function ImportChartButton({
   async function startScan() {
     if (!window.BarcodeDetector) {
       toast.error(
-        "Live QR scanning is not supported here. Use a photo, file, or URL.",
+        "Live QR scanning needs Chrome or Edge on this device. Paste the Drive link or use PDF chart.",
       );
       return;
     }
@@ -1028,6 +1036,7 @@ export function ImportChartButton({
           const value = codes[0]?.rawValue?.trim();
           if (!value) return;
           stopScan();
+          toast.message("QR found.");
           if (/^https?:\/\//i.test(value)) {
             setUrl(value);
             await importFromUrl(value);
@@ -2640,18 +2649,18 @@ export function ImportChartButton({
                 variant="outline"
                 className={cn(
                   "h-12 justify-start rounded-xl border-white/10 text-sm text-white",
-                  CHART_INPUT_PDF_ONLY && "opacity-40",
+                  CHART_INPUT_CAMERA_DISABLED && "opacity-40",
                 )}
                 disabled={busy}
-                aria-disabled={CHART_INPUT_PDF_ONLY || undefined}
+                aria-disabled={CHART_INPUT_CAMERA_DISABLED || undefined}
                 title={
-                  CHART_INPUT_PDF_ONLY
-                    ? CHART_INPUT_UNAVAILABLE_NOTICE
+                  CHART_INPUT_CAMERA_DISABLED
+                    ? CHART_INPUT_CAMERA_NOTICE
                     : undefined
                 }
                 onClick={() => {
-                  if (CHART_INPUT_PDF_ONLY) {
-                    toast.message(CHART_INPUT_UNAVAILABLE_NOTICE);
+                  if (CHART_INPUT_CAMERA_DISABLED) {
+                    toast.message(CHART_INPUT_CAMERA_NOTICE);
                     return;
                   }
                   photoRef.current?.click();
@@ -2660,26 +2669,13 @@ export function ImportChartButton({
                 <ImageUp className="size-4" />
                 Camera
               </Button>
-              {!scanning || CHART_INPUT_PDF_ONLY ? (
+              {!scanning ? (
                 <Button
                   type="button"
                   variant="outline"
-                  className={cn(
-                    "h-12 justify-start rounded-xl border-white/10 text-sm text-white",
-                    CHART_INPUT_PDF_ONLY && "opacity-40",
-                  )}
+                  className="h-12 justify-start rounded-xl border-white/10 text-sm text-white"
                   disabled={busy}
-                  aria-disabled={CHART_INPUT_PDF_ONLY || undefined}
-                  title={
-                    CHART_INPUT_PDF_ONLY
-                      ? CHART_INPUT_UNAVAILABLE_NOTICE
-                      : undefined
-                  }
                   onClick={() => {
-                    if (CHART_INPUT_PDF_ONLY) {
-                      toast.message(CHART_INPUT_UNAVAILABLE_NOTICE);
-                      return;
-                    }
                     void startScan();
                   }}
                 >
@@ -2699,7 +2695,7 @@ export function ImportChartButton({
               )}
             </div>
 
-            {scanning && !CHART_INPUT_PDF_ONLY ? (
+            {scanning ? (
               <div className="overflow-hidden rounded-2xl bg-black">
                 <video
                   ref={videoRef}
@@ -2721,61 +2717,43 @@ export function ImportChartButton({
               PDF chart
             </Button>
             <p className="text-xs text-stone-500">
-              PDF is the available chart input for now. Camera, QR, and Drive
-              link stay greyed out until they are ready.
+              Scan a QR of a Drive PDF link, paste the link, or pick a PDF file.
+              Share the Drive file as “Anyone with the link”.
             </p>
 
-            <div className="relative space-y-2">
-              {CHART_INPUT_PDF_ONLY ? (
-                <button
-                  type="button"
-                  className="absolute inset-0 z-10 cursor-pointer rounded-xl"
-                  aria-label={CHART_INPUT_UNAVAILABLE_NOTICE}
-                  onClick={() => toast.message(CHART_INPUT_UNAVAILABLE_NOTICE)}
-                />
-              ) : null}
-              <div
-                className={cn(
-                  "space-y-2",
-                  CHART_INPUT_PDF_ONLY && "pointer-events-none opacity-40",
-                )}
-                aria-hidden={CHART_INPUT_PDF_ONLY || undefined}
+            <div className="space-y-2">
+              <label
+                htmlFor="chart-url"
+                className="text-sm font-medium text-stone-300"
               >
-                <label
-                  htmlFor="chart-url"
-                  className="text-sm font-medium text-stone-300"
+                Google Drive link
+              </label>
+              <div className="flex gap-2">
+                <Input
+                  id="chart-url"
+                  type="url"
+                  inputMode="url"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  placeholder="https://drive.google.com/file/d/…"
+                  value={url}
+                  disabled={busy}
+                  onChange={(event) => setUrl(event.target.value)}
+                  className="h-12 rounded-xl border-white/10 bg-black/30 text-base text-white placeholder:text-stone-500"
+                />
+                <Button
+                  type="button"
+                  className="h-12 shrink-0 rounded-xl px-3"
+                  disabled={busy || !url.trim()}
+                  onClick={() => void importFromUrl(url)}
                 >
-                  Google Drive link
-                </label>
-                <div className="flex gap-2">
-                  <Input
-                    id="chart-url"
-                    type="url"
-                    inputMode="url"
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    placeholder="https://drive.google.com/file/d/…"
-                    value={url}
-                    disabled={busy}
-                    onChange={(event) => setUrl(event.target.value)}
-                    className="h-12 rounded-xl border-white/10 bg-black/30 text-base text-white placeholder:text-stone-500"
-                  />
-                  <Button
-                    type="button"
-                    className="h-12 shrink-0 rounded-xl px-3"
-                    disabled={busy || !url.trim()}
-                    onClick={() => importFromUrl(url)}
-                  >
-                    <Link2 className="size-4" />
-                    Load
-                  </Button>
-                </div>
-                <p className="text-xs text-stone-500">
-                  {CHART_INPUT_PDF_ONLY
-                    ? "Drive links and QR import are not available yet."
-                    : "Share the PDF as “Anyone with the link”, then paste that link or put it in a QR code."}
-                </p>
+                  <Link2 className="size-4" />
+                  Load
+                </Button>
               </div>
+              <p className="text-xs text-stone-500">
+                Put the same share link in a QR code for Scan QR.
+              </p>
             </div>
 
             {desk.imported ? (

@@ -1,5 +1,12 @@
 [
   {
+    "version": "2.0.4",
+    "notes": [
+      "Scan QR and Google Drive link can load a shared shelf-life PDF",
+      "Camera stays greyed out; use Scan QR, paste the Drive link, or PDF chart"
+    ]
+  },
+  {
     "version": "2.0.3",
     "notes": [
       "Share app in System opens a popup with a QR code, copy link, and share"
