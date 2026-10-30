@@ -1,4 +1,5 @@
 import {
+  driveHtmlFailureMessage,
   fileNameFromContentDisposition,
   googleDriveDownloadUrl,
   googleDriveFileId,
@@ -86,9 +87,12 @@ export async function POST(request: Request) {
   const head = decoder.decode(buffer.subarray(0, Math.min(buffer.byteLength, 200)));
   const magic = decoder.decode(buffer.subarray(0, Math.min(buffer.byteLength, 4)));
   if (/<!DOCTYPE html|<html[\s>]/i.test(head)) {
+    const sample = decoder.decode(
+      buffer.subarray(0, Math.min(buffer.byteLength, 8000)),
+    );
     return badRequest(
       resolved.drive
-        ? "Google Drive did not return the file. Share it as “Anyone with the link”, then try again."
+        ? driveHtmlFailureMessage(sample)
         : "That URL returned a web page, not a chart file.",
     );
   }

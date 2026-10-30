@@ -1,4 +1,5 @@
 import {
+  driveHtmlFailureMessage,
   fileNameFromContentDisposition,
   googleDriveDownloadUrl,
   googleDriveFileId,
@@ -10,7 +11,7 @@ import type { ChartPack } from "./types";
 
 type FetchResult =
   | { ok: true; pack: ChartPack; crops?: Record<string, string> }
-  | { ok: false; error: string };
+  | { ok: false; error: string; openUrl?: string };
 
 const MAX_BYTES = 25 * 1024 * 1024;
 
@@ -43,6 +44,7 @@ async function packFromBytes(
   bytes: Uint8Array,
   contentType: string,
   fileName: string,
+  sourceUrl?: string,
 ): Promise<FetchResult> {
   if (bytes.byteLength === 0) {
     return { ok: false, error: "That Google Drive file was empty." };
@@ -51,10 +53,13 @@ async function packFromBytes(
     return { ok: false, error: "That file is too large (max 25 MB)." };
   }
   if (looksLikeHtml(bytes)) {
+    const sample = new TextDecoder().decode(
+      bytes.subarray(0, Math.min(bytes.byteLength, 8000)),
+    );
     return {
       ok: false,
-      error:
-        "Google Drive did not return the file. Share it as “Anyone with the link”, then try again.",
+      error: driveHtmlFailureMessage(sample),
+      openUrl: sourceUrl,
     };
   }
   if (looksLikePdf(bytes, contentType, fileName)) {
@@ -100,9 +105,14 @@ async function fetchViaApi(url: string): Promise<FetchResult | null> {
       return {
         ok: false,
         error: payload.error ?? `Download failed (${response.status}).`,
+        openUrl: url,
       };
     } catch {
-      return { ok: false, error: `Download failed (${response.status}).` };
+      return {
+        ok: false,
+        error: `Download failed (${response.status}).`,
+        openUrl: url,
+      };
     }
   }
 
@@ -117,7 +127,7 @@ async function fetchViaApi(url: string): Promise<FetchResult | null> {
       fileName = encodedName;
     }
   }
-  return await packFromBytes(bytes, contentType, fileName);
+  return await packFromBytes(bytes, contentType, fileName, url);
 }
 
 async function fetchViaDirectDrive(url: string): Promise<FetchResult> {
@@ -140,14 +150,16 @@ async function fetchViaDirectDrive(url: string): Promise<FetchResult> {
     return {
       ok: false,
       error:
-        "Could not download that Drive file in this browser (blocked or offline). Try PDF chart, or use the app with the local server.",
+        "Could not download that Drive file in this browser (blocked or offline). Open the link, download the PDF, then use PDF chart.",
+      openUrl: url,
     };
   }
 
   if (!response.ok) {
     return {
       ok: false,
-      error: `Google Drive download failed (${response.status}). Make sure the file is shared as “Anyone with the link”.`,
+      error: `Google Drive download failed (${response.status}). Share as “Anyone with the link”, or download the PDF and use PDF chart.`,
+      openUrl: url,
     };
   }
 
@@ -157,7 +169,7 @@ async function fetchViaDirectDrive(url: string): Promise<FetchResult> {
     fileNameFromContentDisposition(
       response.headers.get("content-disposition"),
     ) ?? "chart.pdf";
-  return await packFromBytes(bytes, contentType, fileName);
+  return await packFromBytes(bytes, contentType, fileName, url);
 }
 
 export async function fetchRemoteChart(url: string): Promise<FetchResult> {

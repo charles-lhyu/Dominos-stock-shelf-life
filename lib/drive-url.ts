@@ -53,3 +53,32 @@ export function fileNameFromContentDisposition(header: string | null): string | 
   const plain = header.match(/filename="?([^";]+)"?/i)?.[1];
   return plain?.trim() || null;
 }
+
+/** True when Drive returned a sign-in / accounts page instead of the file. */
+export function driveResponseNeedsGoogleLogin(htmlOrText: string): boolean {
+  const text = htmlOrText.slice(0, 8000).toLowerCase();
+  return (
+    text.includes("accounts.google.com") ||
+    text.includes("signin") ||
+    text.includes("sign in") ||
+    text.includes("service login") ||
+    text.includes("identifier-hidden") ||
+    /name=["']identifier["']/.test(text)
+  );
+}
+
+/**
+ * User-facing error when Drive returns HTML instead of the file bytes.
+ * Login-gated files cannot be fetched by the app without Google OAuth.
+ */
+export function driveHtmlFailureMessage(htmlOrText: string): string {
+  if (driveResponseNeedsGoogleLogin(htmlOrText)) {
+    return (
+      "This Drive file needs a Google sign-in. Share it as “Anyone with the link”, " +
+      "or open Drive, download the PDF, then use PDF chart."
+    );
+  }
+  return (
+    "Google Drive did not return the file. Share it as “Anyone with the link”, then try again."
+  );
+}

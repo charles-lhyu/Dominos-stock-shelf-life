@@ -954,6 +954,15 @@ export function ImportChartButton({
       toast.dismiss(toastId);
       if (!result.ok) {
         toast.error(result.error);
+        // Login-gated Drive files cannot be fetched here — open Drive so the
+        // user can download while signed in, then use PDF chart.
+        if (result.openUrl) {
+          try {
+            window.open(result.openUrl, "_blank", "noopener,noreferrer");
+          } catch {
+            // Ignore popup blockers.
+          }
+        }
         return;
       }
       setUrl(trimmed);
@@ -2728,7 +2737,8 @@ export function ImportChartButton({
             </Button>
             <p className="text-xs text-stone-500">
               Scan a QR of a Drive PDF link, paste the link, or pick a PDF file.
-              Share the Drive file as “Anyone with the link”.
+              Drive must be “Anyone with the link” — if it needs a Google
+              sign-in, download the PDF and use PDF chart.
             </p>
 
             <div className="space-y-2">
