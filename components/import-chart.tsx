@@ -225,6 +225,11 @@ const STORE_LIST_LABELS: Record<StoreListMode, string> = {
   compact: "Compact",
 };
 
+/** Only PDF chart import is shipped; other inputs stay visible but greyed out. */
+const CHART_INPUT_PDF_ONLY = true;
+const CHART_INPUT_UNAVAILABLE_NOTICE =
+  "Not available yet — use PDF chart.";
+
 function storeDatesMode(compactDates: boolean, showDayCounts: boolean): StoreDatesMode {
   if (showDayCounts) return "days";
   if (compactDates) return "short";
@@ -2622,20 +2627,50 @@ export function ImportChartButton({
               <Button
                 type="button"
                 variant="outline"
-                className="h-12 justify-start rounded-xl border-white/10 text-sm text-white"
+                className={cn(
+                  "h-12 justify-start rounded-xl border-white/10 text-sm text-white",
+                  CHART_INPUT_PDF_ONLY && "opacity-40",
+                )}
                 disabled={busy}
-                onClick={() => photoRef.current?.click()}
+                aria-disabled={CHART_INPUT_PDF_ONLY || undefined}
+                title={
+                  CHART_INPUT_PDF_ONLY
+                    ? CHART_INPUT_UNAVAILABLE_NOTICE
+                    : undefined
+                }
+                onClick={() => {
+                  if (CHART_INPUT_PDF_ONLY) {
+                    toast.message(CHART_INPUT_UNAVAILABLE_NOTICE);
+                    return;
+                  }
+                  photoRef.current?.click();
+                }}
               >
                 <ImageUp className="size-4" />
                 Camera
               </Button>
-              {!scanning ? (
+              {!scanning || CHART_INPUT_PDF_ONLY ? (
                 <Button
                   type="button"
                   variant="outline"
-                  className="h-12 justify-start rounded-xl border-white/10 text-sm text-white"
+                  className={cn(
+                    "h-12 justify-start rounded-xl border-white/10 text-sm text-white",
+                    CHART_INPUT_PDF_ONLY && "opacity-40",
+                  )}
                   disabled={busy}
-                  onClick={startScan}
+                  aria-disabled={CHART_INPUT_PDF_ONLY || undefined}
+                  title={
+                    CHART_INPUT_PDF_ONLY
+                      ? CHART_INPUT_UNAVAILABLE_NOTICE
+                      : undefined
+                  }
+                  onClick={() => {
+                    if (CHART_INPUT_PDF_ONLY) {
+                      toast.message(CHART_INPUT_UNAVAILABLE_NOTICE);
+                      return;
+                    }
+                    void startScan();
+                  }}
                 >
                   <QrCode className="size-4" />
                   Scan QR
@@ -2653,7 +2688,7 @@ export function ImportChartButton({
               )}
             </div>
 
-            {scanning ? (
+            {scanning && !CHART_INPUT_PDF_ONLY ? (
               <div className="overflow-hidden rounded-2xl bg-black">
                 <video
                   ref={videoRef}
@@ -2674,37 +2709,62 @@ export function ImportChartButton({
               <FileText className="size-4" />
               PDF chart
             </Button>
+            <p className="text-xs text-stone-500">
+              PDF is the available chart input for now. Camera, QR, and Drive
+              link stay greyed out until they are ready.
+            </p>
 
-            <div className="space-y-2">
-              <label htmlFor="chart-url" className="text-sm font-medium text-stone-300">
-                Google Drive link
-              </label>
-              <div className="flex gap-2">
-                <Input
-                  id="chart-url"
-                  type="url"
-                  inputMode="url"
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  placeholder="https://drive.google.com/file/d/…"
-                  value={url}
-                  onChange={(event) => setUrl(event.target.value)}
-                  className="h-12 rounded-xl border-white/10 bg-black/30 text-base text-white placeholder:text-stone-500"
-                />
-                <Button
+            <div className="relative space-y-2">
+              {CHART_INPUT_PDF_ONLY ? (
+                <button
                   type="button"
-                  className="h-12 shrink-0 rounded-xl px-3"
-                  disabled={busy || !url.trim()}
-                  onClick={() => importFromUrl(url)}
+                  className="absolute inset-0 z-10 cursor-pointer rounded-xl"
+                  aria-label={CHART_INPUT_UNAVAILABLE_NOTICE}
+                  onClick={() => toast.message(CHART_INPUT_UNAVAILABLE_NOTICE)}
+                />
+              ) : null}
+              <div
+                className={cn(
+                  "space-y-2",
+                  CHART_INPUT_PDF_ONLY && "pointer-events-none opacity-40",
+                )}
+                aria-hidden={CHART_INPUT_PDF_ONLY || undefined}
+              >
+                <label
+                  htmlFor="chart-url"
+                  className="text-sm font-medium text-stone-300"
                 >
-                  <Link2 className="size-4" />
-                  Load
-                </Button>
+                  Google Drive link
+                </label>
+                <div className="flex gap-2">
+                  <Input
+                    id="chart-url"
+                    type="url"
+                    inputMode="url"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    placeholder="https://drive.google.com/file/d/…"
+                    value={url}
+                    disabled={busy}
+                    onChange={(event) => setUrl(event.target.value)}
+                    className="h-12 rounded-xl border-white/10 bg-black/30 text-base text-white placeholder:text-stone-500"
+                  />
+                  <Button
+                    type="button"
+                    className="h-12 shrink-0 rounded-xl px-3"
+                    disabled={busy || !url.trim()}
+                    onClick={() => importFromUrl(url)}
+                  >
+                    <Link2 className="size-4" />
+                    Load
+                  </Button>
+                </div>
+                <p className="text-xs text-stone-500">
+                  {CHART_INPUT_PDF_ONLY
+                    ? "Drive links and QR import are not available yet."
+                    : "Share the PDF as “Anyone with the link”, then paste that link or put it in a QR code."}
+                </p>
               </div>
-              <p className="text-xs text-stone-500">
-                Share the PDF as “Anyone with the link”, then paste that link or put it
-                in a QR code.
-              </p>
             </div>
 
             {desk.imported ? (
@@ -3198,53 +3258,73 @@ export function ImportChartButton({
                       <div className="flex h-9 items-center gap-2 pr-1">
                         {previewStore ? (
                           <>
-                            <Select
-                              value={previewStore.storeId}
-                              items={storeSelectItems}
-                              onValueChange={(value) => {
-                                if (typeof value === "string" && value) {
-                                  setAllStoredPreviewId(value);
-                                  setAllStoredPreviewCampaignKey(
-                                    autoPreviewCampaignKey(value),
-                                  );
-                                  setStoreDraft(value);
-                                }
-                              }}
-                            >
-                              <SelectTrigger
-                                id="all-stored-title"
-                                aria-label="Preview store"
-                                className="h-9 min-w-0 flex-1 gap-1.5 rounded-lg border-0 bg-transparent px-0 py-0 text-left text-white shadow-none hover:bg-transparent focus-visible:border-transparent focus-visible:ring-0 dark:bg-transparent [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-stone-400 [&_[data-slot=select-value]]:font-display [&_[data-slot=select-value]]:text-xl [&_[data-slot=select-value]]:font-medium [&_[data-slot=select-value]]:leading-none"
-                              >
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent
-                                align="start"
-                                alignItemWithTrigger={false}
-                                className="z-[120] max-w-[min(24rem,calc(100vw-2.5rem))] rounded-xl border-white/10 bg-popover p-1"
-                              >
-                                {deviceStoreSettings.map((store) => (
-                                  <SelectItem
-                                    key={store.storeId}
-                                    value={store.storeId}
-                                  >
-                                    {storeSelectMenuLabel(store.storeId)}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
                             <button
                               type="button"
+                              className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-white"
                               aria-label="Back to store list"
                               onClick={() => {
                                 setAllStoredPreviewId(null);
                                 setAllStoredPreviewCampaignKey(null);
                               }}
-                              className="inline-flex h-9 shrink-0 items-center gap-1 rounded-lg px-2.5 text-xs font-semibold text-stone-200 ring-1 ring-white/15"
                             >
-                              <X className="size-3.5" aria-hidden />
-                              Clear
+                              <ChevronLeft className="size-5" aria-hidden />
                             </button>
+                            <div className="flex min-w-0 flex-1 items-center gap-2">
+                              <Select
+                                value={previewStore.storeId}
+                                items={storeSelectItems}
+                                onValueChange={(value) => {
+                                  if (typeof value === "string" && value) {
+                                    setAllStoredPreviewId(value);
+                                    setAllStoredPreviewCampaignKey(
+                                      autoPreviewCampaignKey(value),
+                                    );
+                                    setStoreDraft(value);
+                                  }
+                                }}
+                              >
+                                <SelectTrigger
+                                  id="all-stored-title"
+                                  aria-label="Preview store"
+                                  className="h-9 w-auto max-w-full min-w-0 gap-1.5 rounded-lg border-0 bg-transparent px-0 py-0 text-left text-white shadow-none hover:bg-transparent focus-visible:border-transparent focus-visible:ring-0 dark:bg-transparent [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-stone-400 [&_[data-slot=select-value]]:font-display [&_[data-slot=select-value]]:text-xl [&_[data-slot=select-value]]:font-medium [&_[data-slot=select-value]]:leading-none"
+                                >
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent
+                                  side="bottom"
+                                  align="start"
+                                  sideOffset={4}
+                                  alignItemWithTrigger={false}
+                                  className="z-[120] w-max! min-w-(--anchor-width) max-w-[min(24rem,calc(100vw-2.5rem))] rounded-xl border-white/10 bg-popover p-1 [&_[data-slot=select-item-text]]:whitespace-nowrap"
+                                >
+                                  {deviceStoreSettings.map((store) => (
+                                    <SelectItem
+                                      key={store.storeId}
+                                      value={store.storeId}
+                                    >
+                                      {storeSelectMenuLabel(store.storeId)}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <button
+                                type="button"
+                                aria-label={
+                                  previewStore.storeId === storeId
+                                    ? `Store ${previewStore.storeId} is already current`
+                                    : `Select store ${previewStore.storeId} as current`
+                                }
+                                disabled={previewStore.storeId === storeId}
+                                onClick={() =>
+                                  commitStoreIdValue(previewStore.storeId)
+                                }
+                                className="ml-auto inline-flex h-9 w-[4.75rem] shrink-0 items-center justify-center rounded-lg text-xs font-semibold text-stone-200 ring-1 ring-white/15 disabled:opacity-40"
+                              >
+                                {previewStore.storeId === storeId
+                                  ? "Current"
+                                  : "Select"}
+                              </button>
+                            </div>
                           </>
                         ) : (
                           <h2

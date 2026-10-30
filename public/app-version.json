@@ -1,11 +1,8 @@
 {
-  "version": "2.0.1",
+  "version": "2.0.2",
   "notes": [
-    "Show all opens a store preview with an ID title dropdown, Clear, and Edit beside Import/Export",
-    "Campaign presets open into a detail view with a campaign selector; the current chart is selected when available",
-    "Store settings title sits outside the card in Settings and Show all",
-    "Store ID uses a filterable popup list; Days and hours stay debug-only; list mode is labeled Normal",
-    "Stored data on this device shows again after refresh even if nothing was edited",
-    "Item details keep the compact header locked until you leave the item"
+    "Show all store preview: Back returns to the list; Select sets that store as current",
+    "Copy store data from Show all, with import and export store pickers and per-store review",
+    "Only PDF chart import is available; Camera, QR, and Drive link stay greyed out with a short notice"
   ]
 }
