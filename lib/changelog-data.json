@@ -1,5 +1,11 @@
 [
   {
+    "version": "2.0.5",
+    "notes": [
+      "Scan QR shows the live camera preview again"
+    ]
+  },
+  {
     "version": "2.0.4",
     "notes": [
       "Scan QR and Google Drive link can load a shared shelf-life PDF",

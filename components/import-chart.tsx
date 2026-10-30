@@ -1017,6 +1017,7 @@ export function ImportChartButton({
       );
       return;
     }
+    if (scanning) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: false,
@@ -1024,7 +1025,12 @@ export function ImportChartButton({
       });
       streamRef.current = stream;
       const video = videoRef.current;
-      if (!video) return;
+      if (!video) {
+        stream.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+        toast.error("Camera preview is not ready. Try again.");
+        return;
+      }
       video.srcObject = stream;
       await video.play();
       setScanning(true);
@@ -2695,16 +2701,20 @@ export function ImportChartButton({
               )}
             </div>
 
-            {scanning ? (
-              <div className="overflow-hidden rounded-2xl bg-black">
-                <video
-                  ref={videoRef}
-                  className="aspect-[3/4] w-full object-cover"
-                  muted
-                  playsInline
-                />
-              </div>
-            ) : null}
+            <div
+              className={cn(
+                "overflow-hidden rounded-2xl bg-black",
+                !scanning && "hidden",
+              )}
+            >
+              <video
+                ref={videoRef}
+                className="aspect-[3/4] w-full object-cover"
+                muted
+                playsInline
+                autoPlay
+              />
+            </div>
 
             <Button
               type="button"
