@@ -1,6 +1,6 @@
 {
-  "version": "2.0.5",
+  "version": "2.0.6",
   "notes": [
-    "Scan QR shows the live camera preview again"
+    "If a Drive PDF needs a Google sign-in, the app explains and opens the link so you can download it for PDF chart"
   ]
 }

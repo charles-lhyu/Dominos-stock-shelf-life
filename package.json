@@ -1,6 +1,6 @@
 {
   "name": "domino-stock-dates",
-  "version": "2.0.5",
+  "version": "2.0.6",
   "private": true,
   "scripts": {
     "dev": "next dev -p 4721 -H 0.0.0.0",
