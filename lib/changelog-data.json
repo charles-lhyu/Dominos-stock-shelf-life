@@ -1,5 +1,11 @@
 [
   {
+    "version": "2.0.3",
+    "notes": [
+      "Share app in System opens a popup with a QR code, copy link, and share"
+    ]
+  },
+  {
     "version": "2.0.2",
     "notes": [
       "Show all store preview: Back returns to the list; Select sets that store as current",

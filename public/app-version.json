@@ -1,8 +1,6 @@
 {
-  "version": "2.0.2",
+  "version": "2.0.3",
   "notes": [
-    "Show all store preview: Back returns to the list; Select sets that store as current",
-    "Copy store data from Show all, with import and export store pickers and per-store review",
-    "Only PDF chart import is available; Camera, QR, and Drive link stay greyed out with a short notice"
+    "Share app in System opens a popup with a QR code, copy link, and share"
   ]
 }

@@ -11,6 +11,7 @@ import {
 import { createPortal } from "react-dom";
 import {
   Camera,
+  Copy,
   FileText,
   ImageUp,
   Link2,
@@ -22,6 +23,7 @@ import {
   RotateCcw,
   ScrollText,
   Settings,
+  Share2,
   Sun,
   Type,
   Unlock,
@@ -87,9 +89,15 @@ import {
   summarizeStoredLibrary,
   type StoredLibraryPayload,
 } from "@/lib/stored-library-io";
+import { withBasePath } from "@/lib/base-path";
 import { CHANGELOG } from "@/lib/changelog";
 import { parseChartPack } from "@/lib/chart-pack";
 import { formatCompactDate, formatLongDate, formatShortDate } from "@/lib/dates";
+import {
+  APP_SHARE_URL,
+  copyAppShareLink,
+  shareAppLink,
+} from "@/lib/share-app";
 import {
   getCompactDateFormat,
   subscribeDateFormat,
@@ -384,6 +392,7 @@ export function ImportChartButton({
   const [busy, setBusy] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const [changelogOpen, setChangelogOpen] = useState(false);
+  const [shareAppOpen, setShareAppOpen] = useState(false);
   const [updateConfirmOpen, setUpdateConfirmOpen] = useState(false);
   const [pendingUpdate, setPendingUpdate] = useState<{
     localVersion: string;
@@ -641,12 +650,14 @@ export function ImportChartButton({
       setUrl(desk.sourceUrl);
       setConfirmReset(false);
       setChangelogOpen(false);
+      setShareAppOpen(false);
       setUpdateConfirmOpen(false);
       setActiveSettingsSection("settings-app");
     } else {
       stopScan();
       setConfirmReset(false);
       setChangelogOpen(false);
+      setShareAppOpen(false);
       setUpdateConfirmOpen(false);
       if (settingsJumpTimer.current != null) {
         window.clearTimeout(settingsJumpTimer.current);
@@ -3068,6 +3079,15 @@ export function ImportChartButton({
               type="button"
               variant="outline"
               className="h-12 w-full justify-start rounded-xl border-white/10 text-base text-white"
+              onClick={() => setShareAppOpen(true)}
+            >
+              <Share2 className="size-4" />
+              Share app
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-12 w-full justify-start rounded-xl border-white/10 text-base text-white"
               onClick={() => setChangelogOpen(true)}
             >
               <ScrollText className="size-4" />
@@ -5443,6 +5463,80 @@ export function ImportChartButton({
         }}
       />
     ) : null}
+
+    <Dialog open={shareAppOpen} onOpenChange={setShareAppOpen}>
+      <DialogContent
+        showCloseButton={false}
+        overlayClassName="z-[60] bg-black/50"
+        className="z-[60] flex w-[calc(100%-1.25rem)] max-w-sm flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-sm"
+      >
+        <DialogHeader className="shrink-0 space-y-1 border-b border-white/10 px-4 py-3 pr-14">
+          <DialogTitle className="font-display text-xl text-white">
+            Share app
+          </DialogTitle>
+          <DialogDescription className="text-sm text-stone-400">
+            Scan the code or copy the link to open the live desk on another
+            phone.
+          </DialogDescription>
+          <button
+            type="button"
+            className="absolute top-3 right-3 inline-flex size-10 items-center justify-center rounded-full bg-white/10 text-white"
+            aria-label="Close share app"
+            onClick={() => setShareAppOpen(false)}
+          >
+            <X className="size-5" />
+          </button>
+        </DialogHeader>
+        <div className="space-y-3 px-4 py-3">
+          <div className="flex justify-center rounded-xl bg-white p-3">
+            <img
+              src={withBasePath("/share-app-qr.png")}
+              alt="QR code for Domino's Stock Shelf Life"
+              width={192}
+              height={192}
+              className="size-48"
+            />
+          </div>
+          <p className="truncate text-center text-xs text-stone-400">
+            {APP_SHARE_URL}
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 rounded-xl border-white/10 text-sm text-white"
+              onClick={() => {
+                void copyAppShareLink().then((ok) => {
+                  if (ok) toast.success("Link copied.");
+                  else toast.error("Could not copy the link.");
+                });
+              }}
+            >
+              <Copy className="size-4" />
+              Copy link
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 rounded-xl border-white/10 text-sm text-white"
+              onClick={() => {
+                void shareAppLink().then((result) => {
+                  if (result === "shared") return;
+                  if (result === "copied") {
+                    toast.success("Link copied.");
+                    return;
+                  }
+                  toast.error("Could not share the link.");
+                });
+              }}
+            >
+              <Share2 className="size-4" />
+              Share
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
 
     <Dialog open={changelogOpen} onOpenChange={setChangelogOpen}>
       <DialogContent
