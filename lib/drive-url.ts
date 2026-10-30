@@ -40,6 +40,22 @@ export function googleDriveDownloadUrl(fileId: string): string {
   return url.toString();
 }
 
+/** Drive viewer page for a file (lets the signed-in account open it). */
+export function googleDriveViewUrl(fileId: string): string {
+  return `https://drive.google.com/file/d/${encodeURIComponent(fileId)}/view`;
+}
+
+/**
+ * Google sign-in that continues to the file download after login, so the
+ * browser can save the PDF with the user's Drive session.
+ */
+export function googleDriveSignInUrl(fileId: string): string {
+  const url = new URL("https://accounts.google.com/ServiceLogin");
+  url.searchParams.set("continue", googleDriveDownloadUrl(fileId));
+  url.searchParams.set("hl", "en");
+  return url.toString();
+}
+
 export function fileNameFromContentDisposition(header: string | null): string | null {
   if (!header) return null;
   const utf = header.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
@@ -69,13 +85,13 @@ export function driveResponseNeedsGoogleLogin(htmlOrText: string): boolean {
 
 /**
  * User-facing error when Drive returns HTML instead of the file bytes.
- * Login-gated files cannot be fetched by the app without Google OAuth.
+ * Private files need a Google sign-in in the browser before download.
  */
 export function driveHtmlFailureMessage(htmlOrText: string): string {
   if (driveResponseNeedsGoogleLogin(htmlOrText)) {
     return (
-      "This Drive file needs a Google sign-in. Share it as “Anyone with the link”, " +
-      "or open Drive, download the PDF, then use PDF chart."
+      "This Drive file needs a Google sign-in. Sign in first, then download the PDF " +
+      "(or share it as “Anyone with the link”)."
     );
   }
   return (

@@ -1,8 +1,10 @@
 import {
   driveHtmlFailureMessage,
+  driveResponseNeedsGoogleLogin,
   fileNameFromContentDisposition,
   googleDriveDownloadUrl,
   googleDriveFileId,
+  googleDriveSignInUrl,
   isGoogleDriveUrl,
 } from "./drive-url";
 import { parseChartPack } from "./chart-pack";
@@ -11,7 +13,13 @@ import type { ChartPack } from "./types";
 
 type FetchResult =
   | { ok: true; pack: ChartPack; crops?: Record<string, string> }
-  | { ok: false; error: string; openUrl?: string };
+  | {
+      ok: false;
+      error: string;
+      openUrl?: string;
+      needsLogin?: boolean;
+      downloadUrl?: string;
+    };
 
 const MAX_BYTES = 25 * 1024 * 1024;
 
@@ -56,10 +64,18 @@ async function packFromBytes(
     const sample = new TextDecoder().decode(
       bytes.subarray(0, Math.min(bytes.byteLength, 8000)),
     );
+    const needsLogin = driveResponseNeedsGoogleLogin(sample);
+    const fileId = sourceUrl ? googleDriveFileId(sourceUrl) : null;
     return {
       ok: false,
       error: driveHtmlFailureMessage(sample),
-      openUrl: sourceUrl,
+      needsLogin,
+      openUrl: fileId
+        ? needsLogin
+          ? googleDriveSignInUrl(fileId)
+          : sourceUrl
+        : sourceUrl,
+      downloadUrl: fileId ? googleDriveDownloadUrl(fileId) : undefined,
     };
   }
   if (looksLikePdf(bytes, contentType, fileName)) {
@@ -101,11 +117,18 @@ async function fetchViaApi(url: string): Promise<FetchResult | null> {
 
   if (!response.ok) {
     try {
-      const payload = (await response.json()) as { error?: string };
+      const payload = (await response.json()) as {
+        error?: string;
+        needsLogin?: boolean;
+        openUrl?: string;
+        downloadUrl?: string;
+      };
       return {
         ok: false,
         error: payload.error ?? `Download failed (${response.status}).`,
-        openUrl: url,
+        needsLogin: payload.needsLogin,
+        openUrl: payload.openUrl ?? url,
+        downloadUrl: payload.downloadUrl,
       };
     } catch {
       return {
@@ -150,16 +173,23 @@ async function fetchViaDirectDrive(url: string): Promise<FetchResult> {
     return {
       ok: false,
       error:
-        "Could not download that Drive file in this browser (blocked or offline). Open the link, download the PDF, then use PDF chart.",
-      openUrl: url,
+        "Could not download that Drive file in this browser (blocked or offline). Sign in with Google, download the PDF, then choose it here.",
+      needsLogin: true,
+      openUrl: googleDriveSignInUrl(fileId),
+      downloadUrl: downloadUrl,
     };
   }
 
   if (!response.ok) {
+    const needsLogin = response.status === 401 || response.status === 403;
     return {
       ok: false,
-      error: `Google Drive download failed (${response.status}). Share as “Anyone with the link”, or download the PDF and use PDF chart.`,
-      openUrl: url,
+      error: needsLogin
+        ? "This Drive file needs a Google sign-in. Sign in first, then download the PDF."
+        : `Google Drive download failed (${response.status}). Share as “Anyone with the link”, or download the PDF and use PDF chart.`,
+      needsLogin,
+      openUrl: needsLogin ? googleDriveSignInUrl(fileId) : url,
+      downloadUrl: googleDriveDownloadUrl(fileId),
     };
   }
 

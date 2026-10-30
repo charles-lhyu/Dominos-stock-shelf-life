@@ -1,14 +1,20 @@
 import {
   driveHtmlFailureMessage,
+  driveResponseNeedsGoogleLogin,
   fileNameFromContentDisposition,
   googleDriveDownloadUrl,
   googleDriveFileId,
+  googleDriveSignInUrl,
 } from "@/lib/drive-url";
 
 const MAX_BYTES = 25 * 1024 * 1024;
 
-function badRequest(message: string, status = 400) {
-  return Response.json({ ok: false, error: message }, { status });
+function badRequest(
+  message: string,
+  status = 400,
+  extra?: { needsLogin?: boolean; openUrl?: string; downloadUrl?: string },
+) {
+  return Response.json({ ok: false, error: message, ...extra }, { status });
 }
 
 function resolveFetchUrl(raw: string): { ok: true; url: string; drive: boolean } | { ok: false; error: string } {
@@ -90,11 +96,20 @@ export async function POST(request: Request) {
     const sample = decoder.decode(
       buffer.subarray(0, Math.min(buffer.byteLength, 8000)),
     );
-    return badRequest(
-      resolved.drive
-        ? driveHtmlFailureMessage(sample)
-        : "That URL returned a web page, not a chart file.",
-    );
+    if (!resolved.drive) {
+      return badRequest("That URL returned a web page, not a chart file.");
+    }
+    const needsLogin = driveResponseNeedsGoogleLogin(sample);
+    const fileId = googleDriveFileId(rawUrl);
+    return badRequest(driveHtmlFailureMessage(sample), 502, {
+      needsLogin,
+      openUrl: fileId
+        ? needsLogin
+          ? googleDriveSignInUrl(fileId)
+          : rawUrl.trim()
+        : rawUrl.trim(),
+      downloadUrl: fileId ? googleDriveDownloadUrl(fileId) : undefined,
+    });
   }
 
   const contentType =

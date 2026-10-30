@@ -16,6 +16,7 @@ import {
   ImageUp,
   Link2,
   Lock,
+  LogIn,
   QrCode,
   RectangleHorizontal,
   RectangleVertical,
@@ -157,6 +158,11 @@ import {
   reloadAppToLatest,
 } from "@/lib/reload-app";
 import { textConversionTable } from "@/lib/text-conversion";
+import {
+  googleDriveDownloadUrl,
+  googleDriveFileId,
+  googleDriveSignInUrl,
+} from "@/lib/drive-url";
 import { fetchRemoteChart } from "@/lib/remote-chart";
 import type { ChartPack, SectionId, ShelfRule } from "@/lib/types";
 import {
@@ -389,6 +395,11 @@ export function ImportChartButton({
   const setOpen = onOpenChange ?? setUncontrolledOpen;
   const [url, setUrl] = useState(desk.sourceUrl);
   const [busy, setBusy] = useState(false);
+  const [driveAuth, setDriveAuth] = useState<{
+    sourceUrl: string;
+    signInUrl: string;
+    downloadUrl: string;
+  } | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
   const [changelogOpen, setChangelogOpen] = useState(false);
   const [shareAppOpen, setShareAppOpen] = useState(false);
@@ -945,6 +956,27 @@ export function ImportChartButton({
     await commitPack(pack.pack, source);
   }
 
+  function openDriveAuth(sourceUrl: string, signInUrl?: string, downloadUrl?: string) {
+    const fileId = googleDriveFileId(sourceUrl);
+    setDriveAuth({
+      sourceUrl,
+      signInUrl:
+        signInUrl ??
+        (fileId ? googleDriveSignInUrl(fileId) : sourceUrl),
+      downloadUrl:
+        downloadUrl ??
+        (fileId ? googleDriveDownloadUrl(fileId) : sourceUrl),
+    });
+  }
+
+  function openExternal(url: string) {
+    try {
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch {
+      // Ignore popup blockers.
+    }
+  }
+
   async function importFromUrl(nextUrl: string) {
     const trimmed = nextUrl.trim();
     setBusy(true);
@@ -953,16 +985,12 @@ export function ImportChartButton({
       const result = await fetchRemoteChart(trimmed);
       toast.dismiss(toastId);
       if (!result.ok) {
-        toast.error(result.error);
-        // Login-gated Drive files cannot be fetched here — open Drive so the
-        // user can download while signed in, then use PDF chart.
-        if (result.openUrl) {
-          try {
-            window.open(result.openUrl, "_blank", "noopener,noreferrer");
-          } catch {
-            // Ignore popup blockers.
-          }
+        if (result.needsLogin) {
+          openDriveAuth(trimmed, result.openUrl, result.downloadUrl);
+          return;
         }
+        toast.error(result.error);
+        if (result.openUrl) openExternal(result.openUrl);
         return;
       }
       setUrl(trimmed);
@@ -2737,8 +2765,8 @@ export function ImportChartButton({
             </Button>
             <p className="text-xs text-stone-500">
               Scan a QR of a Drive PDF link, paste the link, or pick a PDF file.
-              Drive must be “Anyone with the link” — if it needs a Google
-              sign-in, download the PDF and use PDF chart.
+              Public “Anyone with the link” files load straight away; private
+              files ask you to sign in with Google before downloading.
             </p>
 
             <div className="space-y-2">
@@ -5268,6 +5296,81 @@ export function ImportChartButton({
                 Discard changes
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={driveAuth != null}
+        onOpenChange={(next) => {
+          if (!next) setDriveAuth(null);
+        }}
+      >
+        <DialogContent
+          showCloseButton={false}
+          overlayClassName="z-[60] bg-black/50"
+          className="z-[60] max-h-[min(40rem,calc(100dvh-2rem))] max-w-sm gap-0 overflow-y-auto rounded-2xl p-0"
+        >
+          <DialogHeader className="space-y-2 px-4 pt-4 pr-14 pb-2">
+            <DialogTitle className="font-display text-xl text-white">
+              Google sign-in needed
+            </DialogTitle>
+            <DialogDescription className="text-sm text-stone-400">
+              Sign in with the Google account that can open this Drive file
+              first. After sign-in, download the PDF, then choose it here.
+            </DialogDescription>
+            <button
+              type="button"
+              className="absolute top-3 right-3 inline-flex size-10 items-center justify-center rounded-full bg-white/10 text-white"
+              aria-label="Close Google sign-in"
+              onClick={() => setDriveAuth(null)}
+            >
+              <X className="size-5" />
+            </button>
+          </DialogHeader>
+          <div className="grid gap-2 border-t border-white/10 p-4">
+            <Button
+              type="button"
+              className="h-11 rounded-xl"
+              onClick={() => {
+                if (!driveAuth) return;
+                openExternal(driveAuth.signInUrl);
+              }}
+            >
+              <LogIn className="size-4" />
+              Sign in with Google
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 rounded-xl border-white/15 text-white"
+              onClick={() => {
+                if (!driveAuth) return;
+                openExternal(driveAuth.downloadUrl);
+                toast.message("When the PDF finishes downloading, choose it below.");
+              }}
+            >
+              Download PDF
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 rounded-xl border-white/15 text-white"
+              onClick={() => {
+                setDriveAuth(null);
+                fileRef.current?.click();
+              }}
+            >
+              <FileText className="size-4" />
+              Choose PDF
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 rounded-xl border-white/15 text-stone-300"
+              onClick={() => setDriveAuth(null)}
+            >
+              Cancel
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

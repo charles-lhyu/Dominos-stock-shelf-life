@@ -5,6 +5,8 @@ import {
   driveResponseNeedsGoogleLogin,
   googleDriveDownloadUrl,
   googleDriveFileId,
+  googleDriveSignInUrl,
+  googleDriveViewUrl,
   isGoogleDriveUrl,
 } from "./drive-url";
 
@@ -28,6 +30,19 @@ test("builds the usercontent download URL", () => {
   );
 });
 
+test("builds Drive view and Google sign-in continue URLs", () => {
+  assert.equal(
+    googleDriveViewUrl("abc123XYZ"),
+    "https://drive.google.com/file/d/abc123XYZ/view",
+  );
+  const signIn = new URL(googleDriveSignInUrl("abc123XYZ"));
+  assert.equal(signIn.hostname, "accounts.google.com");
+  assert.equal(
+    signIn.searchParams.get("continue"),
+    googleDriveDownloadUrl("abc123XYZ"),
+  );
+});
+
 test("detects Google sign-in HTML from Drive", () => {
   assert.equal(
     driveResponseNeedsGoogleLogin(
@@ -43,6 +58,6 @@ test("detects Google sign-in HTML from Drive", () => {
     driveHtmlFailureMessage(
       '<html><a href="https://accounts.google.com/ServiceLogin">Sign in</a></html>',
     ),
-    /Google sign-in/,
+    /Sign in first/,
   );
 });
