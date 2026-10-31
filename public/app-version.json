@@ -1,6 +1,6 @@
 {
-  "version": "2.0.7",
+  "version": "2.0.8",
   "notes": [
-    "Private Drive PDFs open a Google sign-in step before download, then let you choose the PDF"
+    "Private Drive PDFs can sign in with Google so the app downloads and loads the chart for you"
   ]
 }

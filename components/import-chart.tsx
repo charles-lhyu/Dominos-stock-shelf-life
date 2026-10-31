@@ -163,7 +163,15 @@ import {
   googleDriveFileId,
   googleDriveSignInUrl,
 } from "@/lib/drive-url";
-import { fetchRemoteChart } from "@/lib/remote-chart";
+import {
+  getCachedGoogleDriveToken,
+  isGoogleDriveApiConfigured,
+  requestGoogleDriveAccessToken,
+} from "@/lib/google-drive-api";
+import {
+  fetchRemoteChart,
+  fetchRemoteChartWithGoogleToken,
+} from "@/lib/remote-chart";
 import type { ChartPack, SectionId, ShelfRule } from "@/lib/types";
 import {
   getKeepAwake,
@@ -977,11 +985,46 @@ export function ImportChartButton({
     }
   }
 
+  async function importDriveWithGoogleAuth(sourceUrl: string) {
+    const toastId = toast.loading("Signing in with Google…");
+    try {
+      const token = await requestGoogleDriveAccessToken();
+      toast.loading("Downloading chart PDF…", { id: toastId });
+      const result = await fetchRemoteChartWithGoogleToken(sourceUrl, token);
+      toast.dismiss(toastId);
+      if (!result.ok) {
+        toast.error(result.error);
+        return false;
+      }
+      setDriveAuth(null);
+      setUrl(sourceUrl);
+      await commitPack(result.pack, sourceUrl, result.crops);
+      return true;
+    } catch (error) {
+      toast.dismiss(toastId);
+      toast.error(
+        error instanceof Error ? error.message : "Google sign-in failed.",
+      );
+      return false;
+    }
+  }
+
   async function importFromUrl(nextUrl: string) {
     const trimmed = nextUrl.trim();
     setBusy(true);
     const toastId = toast.loading("Downloading chart PDF…");
     try {
+      const cached = getCachedGoogleDriveToken();
+      if (cached && isGoogleDriveApiConfigured()) {
+        const authed = await fetchRemoteChartWithGoogleToken(trimmed, cached);
+        if (authed.ok) {
+          toast.dismiss(toastId);
+          setUrl(trimmed);
+          await commitPack(authed.pack, trimmed, authed.crops);
+          return;
+        }
+      }
+
       const result = await fetchRemoteChart(trimmed);
       toast.dismiss(toastId);
       if (!result.ok) {
@@ -2766,7 +2809,7 @@ export function ImportChartButton({
             <p className="text-xs text-stone-500">
               Scan a QR of a Drive PDF link, paste the link, or pick a PDF file.
               Public “Anyone with the link” files load straight away; private
-              files ask you to sign in with Google before downloading.
+              files can sign in with Google so the app loads the PDF for you.
             </p>
 
             <div className="space-y-2">
@@ -5315,8 +5358,9 @@ export function ImportChartButton({
               Google sign-in needed
             </DialogTitle>
             <DialogDescription className="text-sm text-stone-400">
-              Sign in with the Google account that can open this Drive file
-              first. After sign-in, download the PDF, then choose it here.
+              {isGoogleDriveApiConfigured()
+                ? "Sign in with the Google account that can open this Drive file. The app will download and load the PDF."
+                : "Sign in with the Google account that can open this Drive file, download the PDF, then choose it here."}
             </DialogDescription>
             <button
               type="button"
@@ -5328,29 +5372,51 @@ export function ImportChartButton({
             </button>
           </DialogHeader>
           <div className="grid gap-2 border-t border-white/10 p-4">
-            <Button
-              type="button"
-              className="h-11 rounded-xl"
-              onClick={() => {
-                if (!driveAuth) return;
-                openExternal(driveAuth.signInUrl);
-              }}
-            >
-              <LogIn className="size-4" />
-              Sign in with Google
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="h-11 rounded-xl border-white/15 text-white"
-              onClick={() => {
-                if (!driveAuth) return;
-                openExternal(driveAuth.downloadUrl);
-                toast.message("When the PDF finishes downloading, choose it below.");
-              }}
-            >
-              Download PDF
-            </Button>
+            {isGoogleDriveApiConfigured() ? (
+              <Button
+                type="button"
+                className="h-11 rounded-xl"
+                disabled={busy}
+                onClick={() => {
+                  if (!driveAuth) return;
+                  setBusy(true);
+                  void importDriveWithGoogleAuth(driveAuth.sourceUrl).finally(
+                    () => setBusy(false),
+                  );
+                }}
+              >
+                <LogIn className="size-4" />
+                Sign in with Google
+              </Button>
+            ) : (
+              <>
+                <Button
+                  type="button"
+                  className="h-11 rounded-xl"
+                  onClick={() => {
+                    if (!driveAuth) return;
+                    openExternal(driveAuth.signInUrl);
+                  }}
+                >
+                  <LogIn className="size-4" />
+                  Sign in with Google
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-11 rounded-xl border-white/15 text-white"
+                  onClick={() => {
+                    if (!driveAuth) return;
+                    openExternal(driveAuth.downloadUrl);
+                    toast.message(
+                      "When the PDF finishes downloading, choose it below.",
+                    );
+                  }}
+                >
+                  Download PDF
+                </Button>
+              </>
+            )}
             <Button
               type="button"
               variant="outline"

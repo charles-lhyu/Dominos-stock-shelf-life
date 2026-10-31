@@ -7,11 +7,12 @@ import {
   googleDriveSignInUrl,
   isGoogleDriveUrl,
 } from "./drive-url";
+import { downloadGoogleDriveFile } from "./google-drive-api";
 import { parseChartPack } from "./chart-pack";
 import { parsePdfChartBytes } from "./pdf-chart";
 import type { ChartPack } from "./types";
 
-type FetchResult =
+export type FetchRemoteChartResult =
   | { ok: true; pack: ChartPack; crops?: Record<string, string> }
   | {
       ok: false;
@@ -20,6 +21,8 @@ type FetchResult =
       needsLogin?: boolean;
       downloadUrl?: string;
     };
+
+type FetchResult = FetchRemoteChartResult;
 
 const MAX_BYTES = 25 * 1024 * 1024;
 
@@ -221,4 +224,40 @@ export async function fetchRemoteChart(url: string): Promise<FetchResult> {
   const viaApi = await fetchViaApi(trimmed);
   if (viaApi) return viaApi;
   return fetchViaDirectDrive(trimmed);
+}
+
+/** Load a Drive chart using a Google OAuth access token (Drive API). */
+export async function fetchRemoteChartWithGoogleToken(
+  url: string,
+  accessToken: string,
+): Promise<FetchResult> {
+  const trimmed = url.trim();
+  const fileId = googleDriveFileId(trimmed);
+  if (!fileId) {
+    return {
+      ok: false,
+      error: "That QR / link is not a Google Drive file link.",
+    };
+  }
+
+  try {
+    const file = await downloadGoogleDriveFile(fileId, accessToken);
+    return await packFromBytes(
+      file.bytes,
+      file.contentType,
+      file.fileName,
+      trimmed,
+    );
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Could not download that Drive file with Google sign-in.",
+      needsLogin: true,
+      openUrl: googleDriveSignInUrl(fileId),
+      downloadUrl: googleDriveDownloadUrl(fileId),
+    };
+  }
 }
