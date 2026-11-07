@@ -1,4 +1,5 @@
 import { sectionFromPack } from "./chart-pack";
+import { toIsoDate } from "./dates";
 import { clocksFor, projectClock, type Clock } from "./life";
 import type { ChartPack, SectionId, ShelfRule, StockStatus } from "./types";
 
@@ -337,4 +338,85 @@ export function datePreview(
     life,
     kind,
   };
+}
+
+export type SameUseByPeer = {
+  name: string;
+  sectionId: SectionId;
+  short: string;
+  life: string;
+  when: string;
+};
+
+/**
+ * Other chart products that share this item's use-by calendar day for the
+ * current delivery/prep date (early item-details "same date" peers).
+ */
+export function sameUseByPeers(options: {
+  currentName: string;
+  currentAt: Date;
+  rules: ShelfRule[];
+  pack: ChartPack;
+  deliveryDate: string;
+  prepTime?: string;
+  today: Date;
+  preferredLife?: LifeKind | null;
+  preferredSection?: (name: string) => SectionId | null;
+  isHidden?: (name: string, sections: SectionId[]) => boolean;
+  limit?: number;
+}): SameUseByPeer[] {
+  const {
+    currentName,
+    currentAt,
+    rules,
+    pack,
+    deliveryDate,
+    prepTime = "",
+    today,
+    preferredLife = null,
+    preferredSection,
+    isHidden,
+    limit = 12,
+  } = options;
+  if (!deliveryDate) return [];
+
+  const targetDay = toIsoDate(currentAt);
+  const names = uniqueNamesInCategory(rules, "all");
+  const peers: SameUseByPeer[] = [];
+
+  for (const name of names) {
+    if (name === currentName) continue;
+    const variants = variantsForName(name, rules, pack);
+    if (variants.length === 0) continue;
+    const sections = variants.map((item) => item.sectionId);
+    if (isHidden?.(name, sections)) continue;
+
+    const variant = pickVariant(variants, preferredSection?.(name) ?? null);
+    if (!variant) continue;
+
+    const kinds = lifeKindsForRule(variant.rule);
+    const kind = pickLifeKind(
+      kinds,
+      preferredLife ?? calculatedLifeKind(variant.rule),
+    );
+    const preview = datePreview(
+      variant.rule,
+      deliveryDate,
+      kind,
+      today,
+      prepTime,
+    );
+    if (!preview.at || toIsoDate(preview.at) !== targetDay) continue;
+
+    peers.push({
+      name,
+      sectionId: variant.sectionId,
+      short: variant.short,
+      life: preview.life,
+      when: preview.when,
+    });
+    if (peers.length >= limit) break;
+  }
+
+  return peers;
 }

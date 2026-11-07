@@ -39,6 +39,7 @@ import { formatAppVersion } from "@/lib/changelog";
 import {
   daysBetween,
   formatCompactDate,
+  inclusiveDaysRemaining,
   isPastValidUntil,
   parseIsoDate,
   toIsoDate,
@@ -85,6 +86,7 @@ import {
 import {
   calculatedLifeKind,
   categoriesInPack,
+  datePreview,
   isNewCategoryFilter,
   NEW_CATEGORY_FILTER,
   LIFE_KIND_META,
@@ -96,6 +98,7 @@ import {
   SECTION_TAG,
   sectionMatchesFilter,
   sectionNameCounts,
+  sameUseByPeers,
   uniqueNamesInCategory,
   variantsForName,
   type LifeKind,
@@ -699,6 +702,31 @@ export function StockDesk() {
   const itemOpen = Boolean(picked);
   itemDetailsOpenRef.current = itemOpen;
   const browsing = hasChart && !itemOpen && !query.trim();
+  const activePreview =
+    itemOpen && activeVariant && today && deliveryDate
+      ? datePreview(
+          activeVariant.rule,
+          deliveryDate,
+          activeLife,
+          today,
+          prepTime,
+        )
+      : null;
+  const sameDatePeers =
+    itemOpen && expanded && activePreview?.at && today && deliveryDate
+      ? sameUseByPeers({
+          currentName: expanded,
+          currentAt: activePreview.at,
+          rules: visibleRules,
+          pack,
+          deliveryDate,
+          prepTime,
+          today,
+          preferredLife: activeLife,
+          preferredSection: (name) => productDefaults[name]?.section ?? null,
+          isHidden: (name, sections) => isHiddenProduct(name, sections),
+        })
+      : [];
   const chartExpired =
     Boolean(today) &&
     Boolean(chart.validUntil) &&
@@ -1305,7 +1333,41 @@ export function StockDesk() {
               }}
               onPreferredLife={preferLife}
               onHidden={clearSearch}
+              onOpenSame={(name) => choose(name)}
             />
+          </div>
+        ) : null}
+
+        {sameDatePeers.length > 0 && activePreview?.at && today ? (
+          <div className="mt-3 rounded-2xl bg-card p-1.5 ring-1 ring-white/10">
+            <div className="flex items-baseline justify-between gap-2 px-2 py-0.5">
+              <p className="text-xs text-stone-400">Same use-by</p>
+              <p className="shrink-0 text-xs font-medium tabular-nums text-stone-300">
+                {(() => {
+                  const days = inclusiveDaysRemaining(today, activePreview.at);
+                  if (days === 1 || days === -1) return `${days} day`;
+                  return `${days} days`;
+                })()}
+              </p>
+            </div>
+            <ul className="divide-y divide-white/10">
+              {sameDatePeers.map((peer) => (
+                <li key={`${peer.name}:${peer.sectionId}`}>
+                  <button
+                    type="button"
+                    onClick={() => choose(peer.name, peer.sectionId)}
+                    className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left active:bg-white/5"
+                  >
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-white">
+                      {peer.name}
+                    </span>
+                    <span className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide text-stone-300 ring-1 ring-white/15">
+                      {SECTION_TAG[peer.sectionId]}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
           </div>
         ) : null}
 

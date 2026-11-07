@@ -115,6 +115,7 @@ export function LifeCard({
   onPreferredSection,
   onPreferredLife,
   onHidden,
+  onOpenSame,
 }: {
   rule: ShelfRule;
   pack: ChartPack;
@@ -129,6 +130,8 @@ export function LifeCard({
   onPreferredLife?: (life: LifeKind) => void;
   /** Called after the product is hidden from the list. */
   onHidden?: () => void;
+  /** Open another product that shares this chart-row life. */
+  onOpenSame?: (name: string) => void;
 }) {
   const clocks = clocksFor(rule);
   const focusIds = new Set(
@@ -371,7 +374,24 @@ export function LifeCard({
         {debugOn && debugOpen ? <ItemDebugPanel rule={rule} clocks={clocks} /> : null}
         {rule.sameAs.length > 0 ? (
           <p className="mt-2 text-sm text-stone-400">
-            Same life: {rule.sameAs.join(", ")}.
+            Same life:{" "}
+            {rule.sameAs.map((name, index) => (
+              <span key={name}>
+                {index > 0 ? ", " : null}
+                {onOpenSame ? (
+                  <button
+                    type="button"
+                    className="font-medium text-sky-200 underline-offset-2 hover:underline"
+                    onClick={() => onOpenSame(name)}
+                  >
+                    {name}
+                  </button>
+                ) : (
+                  name
+                )}
+              </span>
+            ))}
+            .
           </p>
         ) : null}
         {section.note ? <p className="mt-3 text-sm text-sky-200">{section.note}</p> : null}

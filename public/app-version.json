@@ -1,6 +1,6 @@
 {
-  "version": "2.0.8",
+  "version": "2.0.9",
   "notes": [
-    "Private Drive PDFs can sign in with Google so the app downloads and loads the chart for you"
+    "Item details show other products with the same use-by day, with storage tags and remaining days"
   ]
 }

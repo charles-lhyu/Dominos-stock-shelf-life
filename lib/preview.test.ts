@@ -9,6 +9,7 @@ import {
   lifeKindsForRule,
   NEW_CATEGORY_FILTER,
   pickLifeKind,
+  sameUseByPeers,
   uniqueNamesInCategory,
 } from "./preview";
 import { BUNDLED_PACK } from "./chart-pack";
@@ -87,5 +88,43 @@ describe("list use-by dates", () => {
     const item = rule("Pineapple");
     const preview = datePreview(item, "2026-10-24", "prepped", today);
     assert.equal(preview.asHours, false);
+  });
+});
+
+describe("same use-by peers", () => {
+  it("lists other products that share the use-by calendar day", () => {
+    const pepperoni = RULES.find(
+      (entry) => entry.name === "Pepperoni" && entry.sectionId === "frozen",
+    );
+    assert.ok(pepperoni);
+    const preview = datePreview(pepperoni, "2026-10-01", "stock", today);
+    assert.ok(preview.at);
+    const peers = sameUseByPeers({
+      currentName: "Pepperoni",
+      currentAt: preview.at,
+      rules: RULES,
+      pack: BUNDLED_PACK,
+      deliveryDate: "2026-10-01",
+      today,
+      preferredLife: "stock",
+    });
+    const names = peers.map((peer) => peer.name);
+    assert.ok(names.includes("Chorizo"));
+    assert.ok(names.includes("Nduja Sausage"));
+    assert.equal(names.includes("Pepperoni"), false);
+  });
+
+  it("returns nothing without a delivery date", () => {
+    assert.deepEqual(
+      sameUseByPeers({
+        currentName: "Pepperoni",
+        currentAt: today,
+        rules: RULES,
+        pack: BUNDLED_PACK,
+        deliveryDate: "",
+        today,
+      }),
+      [],
+    );
   });
 });
