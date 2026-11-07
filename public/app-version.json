@@ -1,6 +1,6 @@
 {
-  "version": "2.0.9",
+  "version": "2.0.10",
   "notes": [
-    "Item details show other products with the same use-by day, with storage tags and remaining days"
+    "Settings → Help has a how-to guide (also on the GitHub README), with swipeable topic popups"
   ]
 }

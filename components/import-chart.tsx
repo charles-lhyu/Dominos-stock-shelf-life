@@ -38,6 +38,7 @@ import {
   Plus,
 } from "lucide-react";
 import { ChangelogBrowser } from "@/components/changelog-notes";
+import { HelpGuide } from "@/components/help-guide";
 import { UpdateConfirmDialog } from "@/components/update-confirm";
 import { Button } from "@/components/ui/button";
 import {
@@ -92,6 +93,7 @@ import {
 } from "@/lib/stored-library-io";
 import { withBasePath } from "@/lib/base-path";
 import { CHANGELOG } from "@/lib/changelog";
+import { HELP_GUIDE } from "@/lib/help-guide";
 import { parseChartPack } from "@/lib/chart-pack";
 import { formatCompactDate, formatLongDate, formatShortDate } from "@/lib/dates";
 import {
@@ -212,7 +214,8 @@ type SettingsSectionId =
   | "settings-display"
   | "settings-debug"
   | "settings-app"
-  | "settings-system";
+  | "settings-system"
+  | "settings-help";
 
 const SETTINGS_SECTION_IDS: SettingsSectionId[] = [
   "settings-app",
@@ -220,6 +223,7 @@ const SETTINGS_SECTION_IDS: SettingsSectionId[] = [
   "settings-display",
   "settings-debug",
   "settings-system",
+  "settings-help",
 ];
 
 type StoredCampaignDraft = {
@@ -450,6 +454,7 @@ export function ImportChartButton({
     Record<string, string[]>
   >({});
   const [allStoredOpen, setAllStoredOpen] = useState(false);
+  const [helpTopicOpen, setHelpTopicOpen] = useState(false);
   /** Store id being previewed inside Show all; null = card list. */
   const [allStoredPreviewId, setAllStoredPreviewId] = useState<string | null>(
     null,
@@ -668,6 +673,7 @@ export function ImportChartButton({
       setUrl(desk.sourceUrl);
       setConfirmReset(false);
       setChangelogOpen(false);
+      setHelpTopicOpen(false);
       setShareAppOpen(false);
       setUpdateConfirmOpen(false);
       setActiveSettingsSection("settings-app");
@@ -675,6 +681,7 @@ export function ImportChartButton({
       stopScan();
       setConfirmReset(false);
       setChangelogOpen(false);
+      setHelpTopicOpen(false);
       setShareAppOpen(false);
       setUpdateConfirmOpen(false);
       if (settingsJumpTimer.current != null) {
@@ -1145,6 +1152,7 @@ export function ImportChartButton({
     { id: "settings-display" as const, label: "Display" },
     { id: "settings-debug" as const, label: "Debug" },
     { id: "settings-system" as const, label: "System" },
+    { id: "settings-help" as const, label: "Help" },
   ];
 
   const activeSettingsLabel =
@@ -1948,9 +1956,9 @@ export function ImportChartButton({
   }
 
   function measureSettingsEndPad(body: HTMLElement): number {
-    const last = body.querySelector<HTMLElement>("#settings-system");
+    const last = body.querySelector<HTMLElement>("#settings-help");
     if (!last || body.clientHeight <= 0) return 0;
-    // Pane is a fixed viewport — pad so System's top can sit at the pane top.
+    // Pane is a fixed viewport — pad so Help's top can sit at the pane top.
     return Math.max(0, Math.round(body.clientHeight - last.offsetHeight));
   }
 
@@ -1982,8 +1990,8 @@ export function ImportChartButton({
         onScroll();
       });
       resizeObserver.observe(body);
-      const system = body.querySelector("#settings-system");
-      if (system) resizeObserver.observe(system);
+      const help = body.querySelector("#settings-help");
+      if (help) resizeObserver.observe(help);
       syncEndPad();
       requestAnimationFrame(() => {
         if (!cancelled) syncEndPad();
@@ -2041,11 +2049,11 @@ export function ImportChartButton({
         <div
           className={cn(
             "flex min-h-0 flex-1 flex-col overflow-hidden transition-[filter]",
-            allStoredOpen &&
+            (allStoredOpen || helpTopicOpen) &&
               "pointer-events-none blur-[2.5px] brightness-75 saturate-75",
           )}
-          inert={allStoredOpen ? true : undefined}
-          aria-hidden={allStoredOpen || undefined}
+          inert={allStoredOpen || helpTopicOpen ? true : undefined}
+          aria-hidden={allStoredOpen || helpTopicOpen || undefined}
         >
         <DialogHeader className="shrink-0 border-b border-white/10 px-4 py-3 pr-14">
           <DialogTitle className="font-display text-2xl text-white">Settings</DialogTitle>
@@ -3190,6 +3198,26 @@ export function ImportChartButton({
               <RefreshCw className="size-4" />
               Check for updates
             </Button>
+          </section>
+
+          <section
+            id="settings-help"
+            className={cn(
+              "scroll-mt-2 space-y-3 rounded-2xl border p-3 transition-[border-color,box-shadow] duration-200",
+              activeSettingsSection === "settings-help"
+                ? "border-sky-400/40 bg-card shadow-[0_0_0_1px_rgba(56,189,248,0.18)]"
+                : "border-white/10 bg-card/80",
+            )}
+          >
+            <SettingsSectionTitle>Help</SettingsSectionTitle>
+            <p className="text-xs leading-relaxed text-stone-500">
+              Tap a topic for details. Swipe left or right for the next or
+              previous topic. Same guide is on the GitHub README.
+            </p>
+            <HelpGuide
+              topics={HELP_GUIDE}
+              onTopicOpenChange={setHelpTopicOpen}
+            />
           </section>
           </div>
           <div

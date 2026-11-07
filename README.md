@@ -1,22 +1,48 @@
-# Shelf life
+# Domino's Stock Shelf Life
 
-A checker for the Domino's Campaign 5 shelf life chart (all stores, version 1, issued 7 September 2026, valid to 17 November 2026). Type a product from the chart. The life is shown immediately. Enter the delivery, prep, or pack date and the use-by date is worked out.
+A checker for the Domino's all-stores shelf life chart. Type or browse a product, set the delivery or prep date, and see the use-by date. Chart data and store settings stay in the browser on this device.
 
-The chart is built in. Dates stay in the browser.
+**Live app:** [https://charles-lhyu.github.io/Dominos-stock-shelf-life/](https://charles-lhyu.github.io/Dominos-stock-shelf-life/)
 
-## Run it
+The same guide is in the app under **Settings → Help**.
 
-```bash
-npm install
-npm run dev
-```
+## How to use
 
-Open [http://127.0.0.1:4721](http://127.0.0.1:4721).
+### Get started
 
-```bash
-npm test
-npm run lint
-```
+- Open Settings (gear) and set your Store ID so this device keeps dates, hidden items, and defaults for that store.
+- Import a shelf-life chart under Settings → Import: pick a PDF, paste a Google Drive link, or Scan QR.
+- Public Drive files shared as “Anyone with the link” load straight away. Private files ask you to sign in with Google so the app can download the PDF.
+
+### Delivery date and prep time
+
+- Set the delivery (or prep) date at the top of the list. That date is day 1 of day-based shelf lives.
+- Prep time is used for hour lives (sauces, some sides). Lock a time or leave it live on the store clock.
+- Tap a use-by date on the list or card to switch between long and short date formats.
+
+### Find a product
+
+- Scroll the chart list, filter by category or storage, or type in search.
+- Tap a product to open item details. Use Back to return to the list.
+- Storage and life tags (Delivery / Prepped / Ambient) change which use-by is shown. Multi-storage items can save a default storage for the store.
+
+### Item details
+
+- Each life on the card shows the chart value and the calculated use-by from the date you set.
+- Same life names on the chart row are tappable so you can jump to a sibling product.
+- When a use-by can be calculated, Same use-by lists other products that share that calendar day, with a storage tag and remaining days.
+
+### Store data
+
+- Hide items you do not use; show them again from Settings → App / Store tools.
+- Stored data can copy settings between stores, and import or export a backup file.
+- Changing Store ID may ask whether to keep what is on screen or load what that store already saved.
+
+### Display and system
+
+- Settings → Display controls list layout (compact tags), text size, and keep-awake options.
+- Settings → System shows the app version, Share app (QR and link), Changelog, and Check for updates.
+- Settings → Help (after System) has this guide in the app.
 
 ## How a date is counted
 
@@ -29,3 +55,17 @@ The chart prints a life, not a calendar date. The delivery or prep date you ente
 - Where the row says "Date on pack", that printed date is the unopened use-by. If the prepped life runs past it, follow the pack date. Opened and prepped dates must not go past the date on the original packaging.
 
 Pepperoni, Chorizo, and Nduja share a frozen day life that spans From delivery and In use on the chart (both 12 days). Only Pepperoni also has a chilled row (date on pack + 12 days prepped).
+
+## Run it locally
+
+```bash
+npm install
+npm run dev
+```
+
+Open [http://127.0.0.1:4721](http://127.0.0.1:4721).
+
+```bash
+npm test
+npm run lint
+```
