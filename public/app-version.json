@@ -1,6 +1,6 @@
 {
-  "version": "2.0.11",
+  "version": "2.0.12",
   "notes": [
-    "Settings → System shows who created the app, in a block separate from the loaded chart"
+    "A ? button next to Settings opens Help; topics use one popup with a topic menu and list title"
   ]
 }

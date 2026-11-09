@@ -15,6 +15,7 @@ import {
   FileText,
   ImageUp,
   Link2,
+  List,
   Lock,
   LogIn,
   QrCode,
@@ -38,7 +39,7 @@ import {
   Plus,
 } from "lucide-react";
 import { ChangelogBrowser } from "@/components/changelog-notes";
-import { HelpGuide } from "@/components/help-guide";
+import { HelpGuide, HelpPopup } from "@/components/help-guide";
 import { UpdateConfirmDialog } from "@/components/update-confirm";
 import { Button } from "@/components/ui/button";
 import {
@@ -455,7 +456,7 @@ export function ImportChartButton({
     Record<string, string[]>
   >({});
   const [allStoredOpen, setAllStoredOpen] = useState(false);
-  const [helpTopicOpen, setHelpTopicOpen] = useState(false);
+  const [helpPopupOpen, setHelpPopupOpen] = useState(false);
   /** Store id being previewed inside Show all; null = card list. */
   const [allStoredPreviewId, setAllStoredPreviewId] = useState<string | null>(
     null,
@@ -659,7 +660,11 @@ export function ImportChartButton({
 
   function handleOpenChange(next: boolean) {
     if (!next && storePromptRef.current) return;
-    // Close All stored first; keep Settings open until a second dismiss.
+    // Close nested overlays first; keep Settings open until a second dismiss.
+    if (!next && helpPopupOpen) {
+      setHelpPopupOpen(false);
+      return;
+    }
     if (!next && allStoredOpen) {
       setAllStoredOpen(false);
       setAllStoredPreviewId(null);
@@ -674,7 +679,7 @@ export function ImportChartButton({
       setUrl(desk.sourceUrl);
       setConfirmReset(false);
       setChangelogOpen(false);
-      setHelpTopicOpen(false);
+      setHelpPopupOpen(false);
       setShareAppOpen(false);
       setUpdateConfirmOpen(false);
       setActiveSettingsSection("settings-app");
@@ -682,7 +687,7 @@ export function ImportChartButton({
       stopScan();
       setConfirmReset(false);
       setChangelogOpen(false);
-      setHelpTopicOpen(false);
+      setHelpPopupOpen(false);
       setShareAppOpen(false);
       setUpdateConfirmOpen(false);
       if (settingsJumpTimer.current != null) {
@@ -2050,11 +2055,11 @@ export function ImportChartButton({
         <div
           className={cn(
             "flex min-h-0 flex-1 flex-col overflow-hidden transition-[filter]",
-            (allStoredOpen || helpTopicOpen) &&
+            (allStoredOpen || helpPopupOpen) &&
               "pointer-events-none blur-[2.5px] brightness-75 saturate-75",
           )}
-          inert={allStoredOpen || helpTopicOpen ? true : undefined}
-          aria-hidden={allStoredOpen || helpTopicOpen || undefined}
+          inert={allStoredOpen || helpPopupOpen ? true : undefined}
+          aria-hidden={allStoredOpen || helpPopupOpen || undefined}
         >
         <DialogHeader className="shrink-0 border-b border-white/10 px-4 py-3 pr-14">
           <DialogTitle className="font-display text-2xl text-white">Settings</DialogTitle>
@@ -3226,14 +3231,9 @@ export function ImportChartButton({
                 : "border-white/10 bg-card/80",
             )}
           >
-            <SettingsSectionTitle>Help</SettingsSectionTitle>
-            <p className="text-xs leading-relaxed text-stone-500">
-              Tap a topic for details. Swipe left or right for the next or
-              previous topic. Same guide is on the GitHub README.
-            </p>
-            <HelpGuide
-              topics={HELP_GUIDE}
-              onTopicOpenChange={setHelpTopicOpen}
+            <HelpSettingsBlock
+              popupOpen={helpPopupOpen}
+              onPopupOpenChange={setHelpPopupOpen}
             />
           </section>
           </div>
@@ -6181,6 +6181,52 @@ function productDefaultRows(
     .filter(
       (row): row is { name: string; section: SectionId; storage: string } => row != null,
     );
+}
+
+function HelpSettingsBlock({
+  popupOpen,
+  onPopupOpenChange,
+}: {
+  popupOpen: boolean;
+  onPopupOpenChange: (open: boolean) => void;
+}) {
+  const [topicIndex, setTopicIndex] = useState<number | null>(null);
+
+  return (
+    <>
+      <button
+        type="button"
+        disabled
+        aria-label="Help"
+        className="inline-flex items-center gap-1.5 rounded-lg border border-transparent bg-transparent px-2 py-1 text-xs font-semibold uppercase tracking-wider text-stone-500 disabled:pointer-events-none disabled:opacity-100"
+      >
+        <List className="size-3.5 shrink-0" aria-hidden />
+        Help
+      </button>
+      <p className="text-xs leading-relaxed text-stone-500">
+        Tap a topic for details. Same guide is on the GitHub README.
+      </p>
+      <HelpGuide
+        topics={HELP_GUIDE}
+        index={null}
+        onIndexChange={(next) => {
+          if (next == null) return;
+          setTopicIndex(next);
+          onPopupOpenChange(true);
+        }}
+        showListButton={false}
+      />
+      <HelpPopup
+        open={popupOpen}
+        onOpenChange={(open) => {
+          onPopupOpenChange(open);
+          if (!open) setTopicIndex(null);
+        }}
+        topicIndex={topicIndex}
+        onTopicIndexChange={setTopicIndex}
+      />
+    </>
+  );
 }
 
 function SettingsSectionTitle({ children }: { children: ReactNode }) {

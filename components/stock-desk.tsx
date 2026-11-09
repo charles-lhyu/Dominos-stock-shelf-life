@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, typ
 import {
   ArrowLeft,
   ArrowUp,
+  CircleHelp,
   List,
   RefreshCw,
   Search,
@@ -15,6 +16,7 @@ import {
 import { ChartList } from "@/components/chart-list";
 import { CollapsedDateTime } from "@/components/date-field";
 import { DragScroll } from "@/components/drag-scroll";
+import { HelpPopup } from "@/components/help-guide";
 import { ImportChartButton } from "@/components/import-chart";
 import { LifeCard } from "@/components/life-card";
 import { UpdateConfirmDialog } from "@/components/update-confirm";
@@ -201,6 +203,7 @@ export function StockDesk() {
     else setSessionLife(kind);
   }
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   /** Keep FABs unmounted until Settings finish closing so they don't jump. */
   const [overlayButtonsReady, setOverlayButtonsReady] = useState(true);
   const overlayButtonsTimerRef = useRef(0);
@@ -770,17 +773,29 @@ export function StockDesk() {
               <span className="shrink-0 font-mono text-xs text-stone-400">{storeId}</span>
             ) : null}
           </button>
-          <ImportChartButton
-            desk={desk}
-            open={settingsOpen}
-            onOpenChange={setSettingsOpenSafe}
-            onOpenProduct={(name) => {
-              setSettingsOpenSafe(false);
-              choose(name);
-            }}
-            compact
-          />
+          <div className="flex shrink-0 items-center gap-1.5">
+            <button
+              type="button"
+              className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-white ring-1 ring-white/25"
+              aria-label="Help"
+              title="Help"
+              onClick={() => setHelpOpen(true)}
+            >
+              <CircleHelp className="size-4" aria-hidden />
+            </button>
+            <ImportChartButton
+              desk={desk}
+              open={settingsOpen}
+              onOpenChange={setSettingsOpenSafe}
+              onOpenProduct={(name) => {
+                setSettingsOpenSafe(false);
+                choose(name);
+              }}
+              compact
+            />
+          </div>
         </div>
+        <HelpPopup open={helpOpen} onOpenChange={setHelpOpen} />
         {appUpdateAvailable ? (
           <button
             type="button"
