@@ -6,6 +6,9 @@ A checker for the Domino's all-stores shelf life chart. Type or browse a product
 
 The same guide is in the app under **Settings → Help**.
 
+**Created by:** Charles Yu (Long Hei Yu)  
+**Store:** 28144 Swansea - Marina (UK)
+
 ## How to use
 
 ### Get started

@@ -1,5 +1,11 @@
 [
   {
+    "version": "2.0.11",
+    "notes": [
+      "Settings → System shows who created the app, in a block separate from the loaded chart"
+    ]
+  },
+  {
     "version": "2.0.10",
     "notes": [
       "Settings → Help has a how-to guide (also on the GitHub README), with swipeable topic popups"

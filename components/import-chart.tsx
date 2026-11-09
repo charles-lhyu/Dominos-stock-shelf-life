@@ -93,6 +93,7 @@ import {
 } from "@/lib/stored-library-io";
 import { withBasePath } from "@/lib/base-path";
 import { CHANGELOG } from "@/lib/changelog";
+import { APP_CREATOR } from "@/lib/creator";
 import { HELP_GUIDE } from "@/lib/help-guide";
 import { parseChartPack } from "@/lib/chart-pack";
 import { formatCompactDate, formatLongDate, formatShortDate } from "@/lib/dates";
@@ -3106,6 +3107,22 @@ export function ImportChartButton({
                   {appVersionLabel()}
                 </dd>
               </div>
+              <div className="flex items-baseline justify-between gap-3">
+                <dt className="shrink-0 text-stone-500">Created by</dt>
+                <dd className="max-w-[65%] text-right font-medium text-stone-100 [overflow-wrap:anywhere]">
+                  {APP_CREATOR.name}
+                </dd>
+              </div>
+              <div className="flex items-baseline justify-between gap-3">
+                <dt className="shrink-0 text-stone-500" aria-hidden>
+                  {"\u00a0"}
+                </dt>
+                <dd className="max-w-[65%] text-right text-stone-200 [overflow-wrap:anywhere]">
+                  {APP_CREATOR.store}
+                </dd>
+              </div>
+            </dl>
+            <dl className="space-y-2.5 rounded-xl border border-white/10 bg-black/20 px-3 py-3 text-sm">
               <div className="flex items-baseline justify-between gap-3">
                 <dt className="text-stone-500">Chart</dt>
                 <dd className="text-right text-stone-200">
