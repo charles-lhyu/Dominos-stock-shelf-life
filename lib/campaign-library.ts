@@ -28,7 +28,7 @@ import {
   type StoreCopySelection,
   type StoreSettings,
 } from "./campaign-records";
-import { mergeStoresIntoLibrary } from "./stored-library-io";
+import { mergeStoresIntoLibrary, pickStoresFromLibrary } from "./stored-library-io";
 import {
   getDeskState,
   onPackCleared,
@@ -146,20 +146,57 @@ export function getCampaignLibrary(): CampaignLibrary {
 }
 
 /**
- * Replace the whole Stored data library (import). Re-applies the active
- * store's settings for the chart on screen when possible.
+ * Prefer refreshing the on-screen campaign when it was part of the import
+ * (updated pack for the same dates). Otherwise take the newest imported key.
+ */
+export function pickActivateCampaignKey(
+  importedKeys: Iterable<string>,
+  deskKey: string | null,
+): string | null {
+  const keys = [
+    ...new Set([...importedKeys].map((key) => key.trim()).filter(Boolean)),
+  ];
+  if (keys.length === 0) return null;
+  if (deskKey && keys.includes(deskKey)) return deskKey;
+  keys.sort((a, b) => {
+    const aUntil = a.split("|")[1] ?? "";
+    const bUntil = b.split("|")[1] ?? "";
+    if (aUntil !== bUntil) return aUntil < bUntil ? 1 : -1;
+    return a < b ? 1 : -1;
+  });
+  return keys[0] ?? null;
+}
+
+/**
+ * Put an imported chart pack onto the desk so the main list matches the library.
+ * Without this, Stored data import only updated campaign-library-v1 while
+ * shelf-life-desk-v1 kept showing the previous pack.
+ */
+function activateImportedCampaigns(importedKeys: Iterable<string>) {
+  const desk = getDeskState();
+  const deskKey = desk.imported
+    ? campaignKey(desk.pack.chart.issued, desk.pack.chart.validUntil)
+    : null;
+  const activate = pickActivateCampaignKey(importedKeys, deskKey);
+  if (!activate) return;
+  const [issued, validUntil] = activate.split("|");
+  if (!issued || !validUntil) return;
+  reloadCampaign(issued, validUntil);
+}
+
+/**
+ * Replace the whole Stored data library (import). Activates an imported chart
+ * on the desk so the UI does not keep showing the previous pack.
  */
 export function replaceCampaignLibrary(next: CampaignLibrary) {
   hydrateCampaignLibrary();
   const parsed = parseCampaignLibrary(next);
   commitLibrary(parsed);
   hydrateStoreIdStore();
-  const desk = getDeskState();
-  const storeId = getStoreId();
-  if (!desk.imported || !storeId) return;
-  const { issued, validUntil } = desk.pack.chart;
-  const saved = readStoreSettings(parsed, storeId, issued, validUntil);
-  if (saved) applySettings(saved, desk.pack.rules);
+  const keys = parsed.campaigns
+    .map((item) => campaignKey(item.issued, item.validUntil))
+    .filter((key): key is string => Boolean(key));
+  activateImportedCampaigns(keys);
 }
 
 /** Merge selected stores from an import file into the device library. */
@@ -173,16 +210,11 @@ export function importStoredStores(
   if (next === library) return false;
   commitLibrary(next);
   hydrateStoreIdStore();
-  const desk = getDeskState();
-  const storeId = getStoreId();
-  if (!desk.imported || !storeId) return true;
-  const ids = new Set(
-    [...storeIds].map((id) => id.trim()).filter((id) => /^\d{1,8}$/.test(id)),
-  );
-  if (!ids.has(storeId)) return true;
-  const { issued, validUntil } = desk.pack.chart;
-  const saved = readStoreSettings(next, storeId, issued, validUntil);
-  if (saved) applySettings(saved, desk.pack.rules);
+  const picked = pickStoresFromLibrary(parsed, storeIds);
+  const keys = picked.campaigns
+    .map((item) => campaignKey(item.issued, item.validUntil))
+    .filter((key): key is string => Boolean(key));
+  activateImportedCampaigns(keys);
   return true;
 }
 
@@ -225,9 +257,20 @@ export function importStoredStoreSelections(
       item,
     ]),
   );
+  let chartsChanged = false;
   for (const item of parsed.campaigns) {
     const key = campaignKey(item.issued, item.validUntil);
     if (!key || !neededKeys.has(key)) continue;
+    const existing = library.campaigns.find(
+      (row) => campaignKey(row.issued, row.validUntil) === key,
+    );
+    if (
+      !existing ||
+      existing.sourceUrl !== item.sourceUrl ||
+      JSON.stringify(existing.pack) !== JSON.stringify(item.pack)
+    ) {
+      chartsChanged = true;
+    }
     byKey.set(key, item);
   }
   let next: CampaignLibrary = {
@@ -260,55 +303,60 @@ export function importStoredStoreSelections(
     if (after !== next) touched.add(page.storeId);
     next = after;
   }
-  if (touched.size === 0) return false;
+  // Chart packs may change even when store settings were already identical.
+  if (touched.size === 0 && !chartsChanged) return false;
   commitLibrary(next);
   hydrateStoreIdStore();
   const desk = getDeskState();
   const storeId = getStoreId();
-  if (!desk.imported || !storeId || !touched.has(storeId)) return true;
-  const page = usable.find((item) => item.storeId === storeId);
-  const dest = next.stores[storeId];
-  if (!dest || !page) return true;
-  if (page.selection.dates || page.selection.list) {
-    applying = true;
-    try {
-      if (page.selection.dates) {
-        setCompactDateFormat(dest.settings.compactDates === true);
-        writeDebugDays(dest.settings.showDayCounts === true);
+  if (desk.imported && storeId && touched.has(storeId)) {
+    const page = usable.find((item) => item.storeId === storeId);
+    const dest = next.stores[storeId];
+    if (dest && page) {
+      if (page.selection.dates || page.selection.list) {
+        applying = true;
+        try {
+          if (page.selection.dates) {
+            setCompactDateFormat(dest.settings.compactDates === true);
+            writeDebugDays(dest.settings.showDayCounts === true);
+          }
+          if (page.selection.list) {
+            setCompactList(dest.settings.compactList === true);
+          }
+        } finally {
+          applying = false;
+        }
       }
-      if (page.selection.list) {
-        setCompactList(dest.settings.compactList === true);
+      const key = page.selection.campaignKey?.trim() || "";
+      if (
+        key &&
+        campaignKey(desk.pack.chart.issued, desk.pack.chart.validUntil) === key
+      ) {
+        const preset = dest.campaigns[key];
+        if (preset) {
+          applying = true;
+          try {
+            if (
+              (page.selection.hiddenKeys?.length ?? 0) > 0 ||
+              (page.selection.removeHiddenKeys?.length ?? 0) > 0
+            ) {
+              replaceHiddenNames(preset.hidden);
+            }
+            if (
+              (page.selection.defaultNames?.length ?? 0) > 0 ||
+              (page.selection.removeDefaultNames?.length ?? 0) > 0
+            ) {
+              replaceItemPreset(preset.preset);
+            }
+          } finally {
+            applying = false;
+          }
+        }
       }
-    } finally {
-      applying = false;
     }
   }
-  const key = page.selection.campaignKey?.trim() || "";
-  if (
-    key &&
-    campaignKey(desk.pack.chart.issued, desk.pack.chart.validUntil) === key
-  ) {
-    const preset = dest.campaigns[key];
-    if (preset) {
-      applying = true;
-      try {
-        if (
-          (page.selection.hiddenKeys?.length ?? 0) > 0 ||
-          (page.selection.removeHiddenKeys?.length ?? 0) > 0
-        ) {
-          replaceHiddenNames(preset.hidden);
-        }
-        if (
-          (page.selection.defaultNames?.length ?? 0) > 0 ||
-          (page.selection.removeDefaultNames?.length ?? 0) > 0
-        ) {
-          replaceItemPreset(preset.preset);
-        }
-      } finally {
-        applying = false;
-      }
-    }
-  }
+  // Desk UI reads shelf-life-desk-v1 — refresh it from the imported packs.
+  activateImportedCampaigns(neededKeys);
   return true;
 }
 
