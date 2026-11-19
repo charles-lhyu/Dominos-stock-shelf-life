@@ -76,6 +76,8 @@ function pepperoniLife(chartPack: ChartPack) {
 
 describe("campaign library import activates desk", () => {
   let pickActivateCampaignKey: typeof import("./campaign-library").pickActivateCampaignKey;
+  let pickPresetCopySourceKey: typeof import("./campaign-library").pickPresetCopySourceKey;
+  let copyCampaignPresetOnto: typeof import("./campaign-library").copyCampaignPresetOnto;
   let importStoredStoreSelections: typeof import("./campaign-library").importStoredStoreSelections;
   let replaceCampaignLibrary: typeof import("./campaign-library").replaceCampaignLibrary;
   let importStoredStores: typeof import("./campaign-library").importStoredStores;
@@ -92,6 +94,8 @@ describe("campaign library import activates desk", () => {
     };
     ({
       pickActivateCampaignKey,
+      pickPresetCopySourceKey,
+      copyCampaignPresetOnto,
       importStoredStoreSelections,
       replaceCampaignLibrary,
       importStoredStores,
@@ -326,6 +330,53 @@ describe("campaign library import activates desk", () => {
     assert.equal(
       getCampaignLibrary().stores["12345"]?.campaigns["2026-09-07|2026-11-17"]?.title,
       "Campaign 5 revised",
+    );
+  });
+
+  it("picks a previous campaign preset as the copy source for a new chart", () => {
+    const packA = pack("2026-09-07", "2026-11-17", "Campaign 5", "12 days");
+    const packB = pack("2026-11-18", "2027-01-31", "Campaign 6", "15 days");
+    setStoreId("12345");
+    setImportedPack(packA, "a.pdf");
+    setImportedPack(packB, "b.pdf");
+    replaceCampaignLibrary(
+      writeStoreSettings(
+        getCampaignLibrary(),
+        "12345",
+        "2026-09-07",
+        "2026-11-17",
+        {
+          hidden: [{ name: "Bacon", section: null }],
+          preset,
+          compactDates: true,
+        },
+      ),
+    );
+    assert.equal(
+      pickPresetCopySourceKey(
+        "12345",
+        "2026-11-18|2027-01-31",
+        "2026-09-07|2026-11-17",
+      ),
+      "2026-09-07|2026-11-17",
+    );
+    assert.equal(
+      copyCampaignPresetOnto(
+        "12345",
+        "2026-09-07|2026-11-17",
+        "2026-11-18|2027-01-31",
+        {
+          campaignKey: "2026-11-18|2027-01-31",
+          fromCampaignKey: "2026-09-07|2026-11-17",
+          hiddenKeys: ["Bacon"],
+        },
+      ),
+      true,
+    );
+    assert.deepEqual(
+      getCampaignLibrary().stores["12345"]?.campaigns["2026-11-18|2027-01-31"]
+        ?.hidden,
+      [{ name: "Bacon", section: null }],
     );
   });
 

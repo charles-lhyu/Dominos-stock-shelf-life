@@ -83,7 +83,9 @@ import {
   subscribeStoredStore,
   writeSavedDefault,
   writeStoreDisplaySettings,
+  copyCampaignPresetOnto,
   copyStoredStoreData,
+  pickPresetCopySourceKey,
 } from "@/lib/campaign-library";
 import { canonicalProductName } from "@/lib/chart-name-migrate";
 import {
@@ -150,13 +152,20 @@ import {
   getItemPreset,
   getItemPresetServer,
   hydrateItemPresetStore,
+  productHasMultipleStorages,
   removeProductDefault,
   setProductDefault,
   subscribeItemPreset,
   type ItemPreset,
   type ProductDefault,
 } from "@/lib/item-preset-store";
-import { prepClockTime, SECTION_ORDER, SECTION_TAG } from "@/lib/preview";
+import {
+  compareChartProductNames,
+  prepClockTime,
+  SECTION_ORDER,
+  SECTION_TAG,
+  uniqueNamesInCategory,
+} from "@/lib/preview";
 import {
   appVersionLabel,
   getAppUpdateInfo,
@@ -471,6 +480,20 @@ export function ImportChartButton({
     step: "menu" | "copy";
   } | null>(null);
   const [storeCopyChoices, setStoreCopyChoices] = useState<string[]>([]);
+  /** After loading a new chart, offer to copy an existing campaign preset. */
+  const [presetCopy, setPresetCopy] = useState<{
+    step: "ask" | "copy";
+    storeId: string;
+    fromKey: string;
+    toKey: string;
+    fromTitle: string;
+    toTitle: string;
+  } | null>(null);
+  const [presetCopyChoices, setPresetCopyChoices] = useState<string[]>([]);
+  /** Storage picks for defaults set/copied in the preset-copy review. */
+  const [presetDefaultPicks, setPresetDefaultPicks] = useState<
+    Record<string, SectionId>
+  >({});
   /** Blocks clicks under the copy popup for a beat after dismiss (ghost taps). */
   const [storeActionClickGuard, setStoreActionClickGuard] = useState(false);
   const storeActionGuardTimer = useRef<number | null>(null);
@@ -712,6 +735,9 @@ export function ImportChartButton({
       setAllStoredPreviewId(null);
       setStoreMenuOpen(false);
       setStoreMenuAll(false);
+      setPresetCopy(null);
+      setPresetCopyChoices([]);
+      setPresetDefaultPicks({});
     }
     setOpen(next);
   }
@@ -951,6 +977,48 @@ export function ImportChartButton({
     setScanning(false);
   }
 
+  function offerPresetCopyAfterNewChart(
+    pack: ChartPack,
+    previousKey: string | null,
+  ) {
+    hydrateStoreIdStore();
+    const currentStoreId = getStoreId();
+    const toKey = campaignKey(pack.chart.issued, pack.chart.validUntil);
+    if (!currentStoreId || !toKey) return false;
+    const fromKey = pickPresetCopySourceKey(
+      currentStoreId,
+      toKey,
+      previousKey,
+    );
+    if (!fromKey) return false;
+    const fromParts = fromKey.split("|");
+    const fromIssued = fromParts[0] ?? "";
+    const fromUntil = fromParts[1] ?? "";
+    const fromRow = listStoredForStore(currentStoreId).find(
+      (item) =>
+        campaignKey(item.issued, item.validUntil) === fromKey,
+    );
+    setPresetCopyChoices([]);
+    setPresetDefaultPicks({});
+    setPresetCopy({
+      step: "ask",
+      storeId: currentStoreId,
+      fromKey,
+      toKey,
+      fromTitle:
+        fromRow?.title ||
+        listCampaigns().find(
+          (item) =>
+            campaignKey(item.issued, item.validUntil) === fromKey,
+        )?.title ||
+        (fromIssued && fromUntil
+          ? `Chart · ${formatShortDate(fromUntil)}`
+          : "Previous campaign"),
+      toTitle: pack.chart.title || "New campaign",
+    });
+    return true;
+  }
+
   async function commitPack(
     pack: ChartPack,
     source: string,
@@ -961,13 +1029,176 @@ export function ImportChartButton({
     } else {
       await clearPdfCrops();
     }
+    hydrateStoreIdStore();
+    const previousKey = desk.imported
+      ? campaignKey(desk.pack.chart.issued, desk.pack.chart.validUntil)
+      : null;
+    const toKey = campaignKey(pack.chart.issued, pack.chart.validUntil);
+    const currentStoreId = getStoreId();
+    const hadSavedForNew =
+      Boolean(currentStoreId) &&
+      Boolean(toKey) &&
+      Boolean(
+        readSavedCampaignSettings(
+          currentStoreId,
+          pack.chart.issued,
+          pack.chart.validUntil,
+        ),
+      );
     setImportedPack(pack, source);
     stopScan();
     const count = pack.rules.length;
     toast.success(
       count === 1 ? "Imported 1 item" : `Imported ${count} items`,
     );
+    // New campaign for this store: create preset (via import handlers) and
+    // offer to copy an existing one with the same review UI.
+    if (!hadSavedForNew && offerPresetCopyAfterNewChart(pack, previousKey)) {
+      setOpen(true);
+      return;
+    }
     setOpen(false);
+  }
+
+  function loadCampaignWithPresetOffer(issued: string, validUntil: string) {
+    hydrateStoreIdStore();
+    const previousKey = desk.imported
+      ? campaignKey(desk.pack.chart.issued, desk.pack.chart.validUntil)
+      : null;
+    const currentStoreId = getStoreId();
+    const hadSaved = Boolean(
+      currentStoreId &&
+        readSavedCampaignSettings(currentStoreId, issued, validUntil),
+    );
+    reloadCampaign(issued, validUntil);
+    if (hadSaved) return;
+    const record = listCampaigns().find(
+      (item) => item.issued === issued && item.validUntil === validUntil,
+    );
+    if (!record) return;
+    const pack: ChartPack = {
+      chart: {
+        title: record.title,
+        audience: "",
+        version: record.version,
+        issued: record.issued,
+        validUntil: record.validUntil,
+      },
+      sections: [],
+      footnotes: [],
+      rules: [],
+    };
+    // Prefer full pack from desk after reload.
+    const loaded = getDeskState();
+    if (
+      loaded.imported &&
+      loaded.pack.chart.issued === issued &&
+      loaded.pack.chart.validUntil === validUntil
+    ) {
+      offerPresetCopyAfterNewChart(loaded.pack, previousKey);
+      return;
+    }
+    offerPresetCopyAfterNewChart(pack, previousKey);
+  }
+
+  function dismissPresetCopy() {
+    setPresetCopy(null);
+    setPresetCopyChoices([]);
+    setPresetDefaultPicks({});
+  }
+
+  function confirmPresetCopy() {
+    if (!presetCopy || presetCopy.step !== "copy") return;
+    const selected = [...presetCopyChoices];
+    if (selected.length === 0) {
+      toast.error("Select something to copy.");
+      return;
+    }
+    const fromRow = listStoredForStore(presetCopy.storeId).find(
+      (item) =>
+        campaignKey(item.issued, item.validUntil) === presetCopy.fromKey,
+    );
+    const sourceHiddenKeys = new Set(
+      (fromRow?.hidden ?? []).map((entry) => hiddenEntryKey(entry)),
+    );
+    const sourceDefaults = fromRow?.preset.defaults ?? {};
+    const sourceDefaultNames = new Set(
+      Object.entries(sourceDefaults)
+        .filter(([, value]) => value.section)
+        .map(([name]) => name),
+    );
+    const [toIssued, toValidUntil] = presetCopy.toKey.split("|");
+    const newRules = desk.pack.rules;
+    const hiddenKeys: string[] = [];
+    const removeHiddenKeys: string[] = [];
+    for (const id of selected) {
+      if (!id.startsWith("hidden:")) continue;
+      const key = id.slice("hidden:".length);
+      if (sourceHiddenKeys.has(key)) hiddenKeys.push(key);
+      else removeHiddenKeys.push(key);
+    }
+    const defaultNames: string[] = [];
+    const setDefaultNames: string[] = [];
+    for (const id of selected) {
+      if (!id.startsWith("default:")) continue;
+      const name = id.slice("default:".length);
+      if (sourceDefaultNames.has(name)) defaultNames.push(name);
+      else setDefaultNames.push(name);
+    }
+    const copied = copyCampaignPresetOnto(
+      presetCopy.storeId,
+      presetCopy.fromKey,
+      presetCopy.toKey,
+      {
+        dates: selected.includes("dates"),
+        list: selected.includes("list"),
+        campaignKey: presetCopy.toKey,
+        fromCampaignKey: presetCopy.fromKey,
+        hiddenKeys,
+        defaultNames,
+        removeHiddenKeys,
+        removeDefaultNames: [],
+      },
+    );
+    let wroteDefaults = false;
+    for (const name of [...defaultNames, ...setDefaultNames]) {
+      const pick = presetDefaultPicks[name];
+      const sourceSection = sourceDefaults[name]?.section ?? null;
+      const options = sectionsForStoredDefault(name, newRules);
+      const section =
+        (pick && options.includes(pick) ? pick : null) ??
+        (sourceSection && options.includes(sourceSection)
+          ? sourceSection
+          : null) ??
+        options[0] ??
+        null;
+      if (!section) continue;
+      if (
+        sourceDefaultNames.has(name) &&
+        sourceSection === section &&
+        defaultNames.includes(name)
+      ) {
+        // Already applied by copyCampaignPresetOnto.
+        continue;
+      }
+      setProductDefault(name, { section }, newRules);
+      if (toIssued && toValidUntil) {
+        writeSavedDefault(
+          presetCopy.storeId,
+          toIssued,
+          toValidUntil,
+          name,
+          section,
+        );
+      }
+      wroteDefaults = true;
+    }
+    dismissPresetCopy();
+    if (!copied && !wroteDefaults) {
+      toast.error("Nothing was copied.");
+      return;
+    }
+    toast.success(`Copied into ${presetCopy.toTitle}.`);
   }
 
   async function applyPack(pack: Awaited<ReturnType<typeof parseChartPack>>, source: string) {
@@ -2685,7 +2916,9 @@ export function ImportChartButton({
                         aria-pressed={loaded}
                         aria-label={`${item.title || "Shelf life chart"}, issued ${issuedLabel}, valid until ${validLabel}${loaded ? ", loaded" : ""}`}
                         disabled={busy}
-                        onClick={() => reloadCampaign(item.issued, item.validUntil)}
+                        onClick={() =>
+                          loadCampaignWithPresetOffer(item.issued, item.validUntil)
+                        }
                         className={cn(
                           "w-full rounded-xl border px-3 py-2.5 text-left",
                           loaded
@@ -5493,6 +5726,120 @@ export function ImportChartButton({
         </DialogContent>
       </Dialog>
       <Dialog
+        open={presetCopy != null}
+        onOpenChange={(next) => {
+          if (!next) dismissPresetCopy();
+        }}
+      >
+        <DialogContent
+          showCloseButton={false}
+          overlayClassName="z-[60] bg-black/50"
+          className="z-[60] max-h-[min(40rem,calc(100dvh-2rem))] max-w-sm gap-0 overflow-y-auto rounded-2xl p-0"
+        >
+          {presetCopy?.step === "ask" ? (
+            <>
+              <DialogHeader className="space-y-2 px-4 pt-4 pr-14 pb-2">
+                <DialogTitle className="font-display text-xl text-white">
+                  Copy previous preset?
+                </DialogTitle>
+                <DialogDescription className="text-sm text-stone-400">
+                  A new campaign preset was created for{" "}
+                  <span className="text-stone-200">{presetCopy.toTitle}</span>.
+                  Copy hidden items, item types, and display settings from{" "}
+                  <span className="text-stone-200">{presetCopy.fromTitle}</span>?
+                </DialogDescription>
+                <button
+                  type="button"
+                  className="absolute top-3 right-3 inline-flex size-10 items-center justify-center rounded-full bg-white/10 text-white"
+                  aria-label="Close copy preset"
+                  onClick={dismissPresetCopy}
+                >
+                  <X className="size-5" />
+                </button>
+              </DialogHeader>
+              <div className="grid gap-2 border-t border-white/10 p-4">
+                <Button
+                  type="button"
+                  className="h-11 rounded-xl"
+                  onClick={() => {
+                    setPresetCopyChoices([]);
+                    const fromRow = listStoredForStore(presetCopy.storeId).find(
+                      (item) =>
+                        campaignKey(item.issued, item.validUntil) ===
+                        presetCopy.fromKey,
+                    );
+                    const picks: Record<string, SectionId> = {};
+                    for (const [name, value] of Object.entries(
+                      fromRow?.preset.defaults ?? {},
+                    )) {
+                      if (!value.section) continue;
+                      const options = sectionsForStoredDefault(
+                        name,
+                        desk.pack.rules,
+                      );
+                      if (options.includes(value.section)) {
+                        picks[name] = value.section;
+                      } else if (options[0]) {
+                        picks[name] = options[0];
+                      }
+                    }
+                    setPresetDefaultPicks(picks);
+                    setPresetCopy({ ...presetCopy, step: "copy" });
+                  }}
+                >
+                  Choose what to copy
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-11 rounded-xl border-white/15 text-white"
+                  onClick={dismissPresetCopy}
+                >
+                  Start fresh
+                </Button>
+              </div>
+            </>
+          ) : presetCopy ? (
+            <PresetCopyReview
+              presetCopy={presetCopy}
+              choices={presetCopyChoices}
+              defaultPicks={presetDefaultPicks}
+              onToggle={(id) =>
+                setPresetCopyChoices((current) =>
+                  current.includes(id)
+                    ? current.filter((item) => item !== id)
+                    : [...current, id],
+                )
+              }
+              onSetGroup={(ids, on) =>
+                setPresetCopyChoices((current) => {
+                  const without = current.filter((item) => !ids.includes(item));
+                  return on ? [...without, ...ids] : without;
+                })
+              }
+              onPickDefault={(name, section) =>
+                setPresetDefaultPicks((current) => ({
+                  ...current,
+                  [name]: section,
+                }))
+              }
+              onBack={() =>
+                setPresetCopy({ ...presetCopy, step: "ask" })
+              }
+              onConfirm={confirmPresetCopy}
+              onDismiss={dismissPresetCopy}
+              deviceStored={deviceStored}
+              hiddenEntries={hiddenEntries}
+              itemPreset={itemPreset}
+              desk={desk}
+              compactDates={compactDates}
+              debugDays={debugDays}
+              compactList={compactList}
+            />
+          ) : null}
+        </DialogContent>
+      </Dialog>
+      <Dialog
         open={storePrompt != null}
         onOpenChange={(next) => {
           if (!next) cancelStorePrompt();
@@ -5788,6 +6135,460 @@ export function ImportChartButton({
   );
 }
 
+function PresetCopyReview({
+  presetCopy,
+  choices,
+  defaultPicks,
+  onToggle,
+  onSetGroup,
+  onPickDefault,
+  onBack,
+  onConfirm,
+  onDismiss,
+  deviceStored,
+  desk,
+  compactDates,
+  debugDays,
+  compactList,
+}: {
+  presetCopy: {
+    storeId: string;
+    fromKey: string;
+    toKey: string;
+    fromTitle: string;
+    toTitle: string;
+  };
+  choices: string[];
+  defaultPicks: Record<string, SectionId>;
+  onToggle: (id: string) => void;
+  onSetGroup: (ids: string[], on: boolean) => void;
+  onPickDefault: (name: string, section: SectionId) => void;
+  onBack: () => void;
+  onConfirm: () => void;
+  onDismiss: () => void;
+  deviceStored: ReturnType<typeof listStoredOnDevice>;
+  hiddenEntries: HiddenEntry[];
+  itemPreset: ItemPreset;
+  desk: DeskState;
+  compactDates: boolean;
+  debugDays: boolean;
+  compactList: boolean;
+}) {
+  const fromRow = deviceStored.find(
+    (item) =>
+      item.storeId === presetCopy.storeId &&
+      campaignKey(item.issued, item.validUntil) === presetCopy.fromKey,
+  );
+  const toOnScreen =
+    desk.imported &&
+    campaignKey(desk.pack.chart.issued, desk.pack.chart.validUntil) ===
+      presetCopy.toKey;
+  const oldRules = fromRow?.rules ?? [];
+  const newRules = toOnScreen ? desk.pack.rules : [];
+  const { newNames: chartNewNames, missingNames: chartMissingNames } =
+    compareChartProductNames(oldRules, newRules);
+  const newNameSet = new Set(uniqueNamesInCategory(newRules, "all"));
+  const sourceHidden = fromRow?.hidden ?? [];
+  const sourceDefaults = fromRow ? productDefaultRows(fromRow.preset) : [];
+  const sourceDefaultByName = new Map(
+    sourceDefaults.map((row) => [row.name, row]),
+  );
+  const productOnNewChart = (name: string) => newNameSet.has(name.trim());
+  const copyableHidden = sourceHidden.filter((entry) =>
+    productOnNewChart(entry.name),
+  );
+  const missingHidden = sourceHidden.filter(
+    (entry) => !productOnNewChart(entry.name),
+  );
+  const hiddenRows = copyableHidden.map((entry) => {
+    const key = hiddenEntryKey(entry);
+    return {
+      id: `hidden:${key}`,
+      label: formatHiddenLabel(entry),
+      change: "add" as StoreCopyChangeKind,
+    };
+  });
+  const missingHiddenRows = missingHidden.map((entry) => ({
+    key: hiddenEntryKey(entry),
+    label: formatHiddenLabel(entry),
+  }));
+  const multiStorageOnNew = uniqueNamesInCategory(newRules, "all").filter(
+    (name) => productHasMultipleStorages(name, newRules),
+  );
+  const defaultRows: {
+    id: string;
+    name: string;
+    options: SectionId[];
+    section: SectionId;
+    sourceStorage: string | null;
+    change: "add" | "new";
+  }[] = [];
+  for (const name of multiStorageOnNew) {
+    const sourceRow = sourceDefaultByName.get(name);
+    const options = sectionsForStoredDefault(name, newRules);
+    if (options.length < 2) continue;
+    const preferred =
+      defaultPicks[name] ??
+      (sourceRow && options.includes(sourceRow.section)
+        ? sourceRow.section
+        : options[0]!);
+    defaultRows.push({
+      id: `default:${name}`,
+      name,
+      options,
+      section: preferred,
+      sourceStorage: sourceRow?.storage ?? null,
+      change: sourceRow ? "add" : "new",
+    });
+  }
+  const missingDefaultRows = sourceDefaults
+    .filter((row) => !productOnNewChart(row.name))
+    .map((row) => ({
+      name: row.name,
+      storage: row.storage,
+    }));
+  const sourceDatesLabel = fromRow
+    ? fromRow.showDayCounts
+      ? "Days and hours"
+      : fromRow.compactDates
+        ? "Short"
+        : "Full"
+    : "—";
+  const sourceListLabel = fromRow
+    ? fromRow.compactList
+      ? "Compact"
+      : "Normal"
+    : "—";
+  const targetDatesLabel = debugDays
+    ? "Days and hours"
+    : compactDates
+      ? "Short"
+      : "Full";
+  const targetListLabel = compactList ? "Compact" : "Normal";
+  const settingsIds = ["dates", "list"];
+  const hiddenIds = hiddenRows.map((row) => row.id);
+  const defaultIds = defaultRows.map((row) => row.id);
+  const campaignIds = [...hiddenIds, ...defaultIds];
+  const settingsSelected = settingsIds.filter((id) => choices.includes(id));
+  const campaignSelected = campaignIds.filter((id) => choices.includes(id));
+  const settingsRowClass =
+    "grid w-full min-w-0 grid-cols-[minmax(0,1fr)_3.25rem_3.25rem_1.5rem] items-center gap-1.5 text-sm text-stone-300";
+  const itemRowClass =
+    "grid w-full min-w-0 grid-cols-[minmax(0,1fr)_1.5rem] items-center gap-1.5 text-sm text-stone-300";
+  const defaultRowClass =
+    "grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto_1.5rem] items-center gap-1.5 text-sm text-stone-300";
+
+  return (
+    <>
+      <DialogHeader className="space-y-2 px-4 pt-4 pr-14 pb-2">
+        <DialogTitle className="font-display text-xl text-white">
+          Copy into new preset
+        </DialogTitle>
+        <DialogDescription className="text-sm text-stone-400">
+          From {presetCopy.fromTitle} into {presetCopy.toTitle}. New and missing
+          chart products are listed; pick any storage defaults you need.
+        </DialogDescription>
+        <button
+          type="button"
+          className="absolute top-3 right-3 inline-flex size-10 items-center justify-center rounded-full bg-white/10 text-white"
+          aria-label="Close copy preset"
+          onClick={onDismiss}
+        >
+          <X className="size-5" />
+        </button>
+      </DialogHeader>
+      <div className="space-y-3 border-t border-white/10 p-4">
+        {chartNewNames.length > 0 || chartMissingNames.length > 0 ? (
+          <div className="space-y-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2.5">
+            <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">
+              Chart products
+            </p>
+            {chartNewNames.length > 0 ? (
+              <div className="space-y-1">
+                <p className="text-xs text-emerald-400/90">
+                  New on this chart · {chartNewNames.length}
+                </p>
+                <ul className="max-h-24 space-y-0.5 overflow-y-auto text-sm text-stone-300">
+                  {chartNewNames.map((name) => (
+                    <li
+                      key={`new:${name}`}
+                      className="flex items-center justify-between gap-2"
+                    >
+                      <span className="min-w-0 truncate">{name}</span>
+                      <StoreCopyChangeTag change="new" />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {chartMissingNames.length > 0 ? (
+              <div className="space-y-1">
+                <p className="text-xs text-red-400/90">
+                  Missing from this chart · {chartMissingNames.length}
+                </p>
+                <ul className="max-h-24 space-y-0.5 overflow-y-auto text-sm text-stone-300">
+                  {chartMissingNames.map((name) => (
+                    <li
+                      key={`missing:${name}`}
+                      className="flex items-center justify-between gap-2"
+                    >
+                      <span className="min-w-0 truncate">{name}</span>
+                      <StoreCopyChangeTag change="missing" />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+        <div className="space-y-1.5">
+          <label className="flex min-w-0 items-center gap-2 text-sm font-medium text-stone-200">
+            <input
+              type="checkbox"
+              className="size-4 rounded border-white/20 bg-black/30"
+              checked={settingsSelected.length === settingsIds.length}
+              ref={(node) => {
+                if (!node) return;
+                node.indeterminate =
+                  settingsSelected.length > 0 &&
+                  settingsSelected.length < settingsIds.length;
+              }}
+              onChange={(event) => onSetGroup(settingsIds, event.target.checked)}
+            />
+            Store settings
+          </label>
+          <div className="space-y-1 border-l border-white/10 pl-4">
+            <div
+              className={cn(
+                settingsRowClass,
+                "text-[0.65rem] font-semibold uppercase tracking-wider text-stone-500",
+              )}
+            >
+              <span />
+              <span className="text-right">Old</span>
+              <span className="text-right">New</span>
+              <span className="sr-only">Change</span>
+            </div>
+            {(
+              [
+                {
+                  id: "dates",
+                  label: "Dates",
+                  current: targetDatesLabel,
+                  next: sourceDatesLabel,
+                },
+                {
+                  id: "list",
+                  label: "List",
+                  current: targetListLabel,
+                  next: sourceListLabel,
+                },
+              ] as const
+            ).map((row) => {
+              const change: StoreCopyChangeKind =
+                row.current === row.next ? "unchanged" : "add";
+              const selected = choices.includes(row.id);
+              return (
+                <label key={row.id} className={settingsRowClass}>
+                  <span className="inline-flex min-w-0 items-center gap-2">
+                    <input
+                      type="checkbox"
+                      className="size-4 shrink-0 rounded border-white/20 bg-black/30"
+                      checked={selected}
+                      onChange={() => onToggle(row.id)}
+                    />
+                    <span className="truncate">{row.label}</span>
+                  </span>
+                  <span
+                    className={cn(
+                      "truncate text-right text-xs",
+                      selected && change === "add"
+                        ? "text-stone-500 line-through"
+                        : "text-stone-400",
+                    )}
+                  >
+                    {row.current}
+                  </span>
+                  <span
+                    className={cn(
+                      "truncate text-right text-xs",
+                      selected ? "text-sky-300" : "text-stone-400",
+                    )}
+                  >
+                    {row.next}
+                  </span>
+                  <StoreCopyChangeTag change={change} />
+                </label>
+              );
+            })}
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <label className="flex min-w-0 items-center gap-2 text-sm font-medium text-stone-200">
+            <input
+              type="checkbox"
+              className="size-4 rounded border-white/20 bg-black/30"
+              disabled={campaignIds.length === 0}
+              checked={
+                campaignIds.length > 0 &&
+                campaignSelected.length === campaignIds.length
+              }
+              ref={(node) => {
+                if (!node) return;
+                node.indeterminate =
+                  campaignSelected.length > 0 &&
+                  campaignSelected.length < campaignIds.length;
+              }}
+              onChange={(event) =>
+                onSetGroup(campaignIds, event.target.checked)
+              }
+            />
+            Campaign items
+          </label>
+          <div className="max-h-64 space-y-2 overflow-y-auto border-l border-white/10 pl-4">
+            {hiddenRows.length > 0 ? (
+              <div className="space-y-1">
+                <p className="text-xs text-stone-500">Hidden to copy</p>
+                {hiddenRows.map((row) => (
+                  <label key={row.id} className={itemRowClass}>
+                    <span className="inline-flex min-w-0 items-center gap-2">
+                      <input
+                        type="checkbox"
+                        className="size-4 shrink-0 rounded border-white/20 bg-black/30"
+                        checked={choices.includes(row.id)}
+                        onChange={() => onToggle(row.id)}
+                      />
+                      <span className="truncate">{row.label}</span>
+                    </span>
+                    <StoreCopyChangeTag change={row.change} />
+                  </label>
+                ))}
+              </div>
+            ) : null}
+            {defaultRows.length > 0 ? (
+              <div className="space-y-1">
+                <p className="text-xs text-stone-500">
+                  Storage defaults (pick any)
+                </p>
+                {defaultRows.map((row) => {
+                  const selected = choices.includes(row.id);
+                  return (
+                    <div key={row.id} className={defaultRowClass}>
+                      <span className="inline-flex min-w-0 items-center gap-2">
+                        <input
+                          type="checkbox"
+                          className="size-4 shrink-0 rounded border-white/20 bg-black/30"
+                          checked={selected}
+                          onChange={() => {
+                            if (
+                              !selected &&
+                              defaultPicks[row.name] == null
+                            ) {
+                              onPickDefault(row.name, row.section);
+                            }
+                            onToggle(row.id);
+                          }}
+                        />
+                        <span className="min-w-0 truncate">
+                          {row.name}
+                          {row.sourceStorage ? (
+                            <span className="text-stone-500">
+                              {" "}
+                              · was {row.sourceStorage}
+                            </span>
+                          ) : null}
+                        </span>
+                      </span>
+                      <div
+                        role="group"
+                        aria-label={`${row.name} storage default`}
+                        className="flex flex-wrap items-center justify-end gap-1"
+                      >
+                        {row.options.map((section) => {
+                          const active = row.section === section;
+                          return (
+                            <button
+                              key={section}
+                              type="button"
+                              aria-pressed={active}
+                              onClick={() => {
+                                onPickDefault(row.name, section);
+                                if (!selected) onToggle(row.id);
+                              }}
+                              className={cn(
+                                "rounded-md px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide ring-1",
+                                active
+                                  ? STORED_SECTION_ACTIVE[section]
+                                  : "bg-transparent text-stone-400 ring-white/15",
+                              )}
+                            >
+                              {SECTION_TAG[section]}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <StoreCopyChangeTag change={row.change} />
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
+            {missingHiddenRows.length > 0 || missingDefaultRows.length > 0 ? (
+              <div className="space-y-1">
+                <p className="text-xs text-red-400/90">
+                  Missing on this chart (not copied)
+                </p>
+                {missingHiddenRows.map((row) => (
+                  <div key={`miss-h:${row.key}`} className={itemRowClass}>
+                    <span className="min-w-0 truncate text-stone-400">
+                      Hidden · {row.label}
+                    </span>
+                    <StoreCopyChangeTag change="missing" />
+                  </div>
+                ))}
+                {missingDefaultRows.map((row) => (
+                  <div key={`miss-d:${row.name}`} className={itemRowClass}>
+                    <span className="min-w-0 truncate text-stone-400">
+                      {row.name}
+                      <span className="text-stone-500"> · {row.storage}</span>
+                    </span>
+                    <StoreCopyChangeTag change="missing" />
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            {campaignIds.length === 0 &&
+            missingHiddenRows.length === 0 &&
+            missingDefaultRows.length === 0 ? (
+              <p className="text-xs text-stone-500">
+                No hidden items or multi-storage defaults to set.
+              </p>
+            ) : null}
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-2 pt-1">
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 rounded-xl border-white/15 text-white"
+            onClick={onBack}
+          >
+            Back
+          </Button>
+          <Button
+            type="button"
+            className="h-11 rounded-xl"
+            disabled={choices.length === 0}
+            onClick={onConfirm}
+          >
+            Copy selected
+          </Button>
+        </div>
+      </div>
+    </>
+  );
+}
+
 function StoreNameField({
   value,
   onChange,
@@ -5832,18 +6633,38 @@ function StoredEditButton({
   );
 }
 
-type StoreCopyChangeKind = "add" | "removed" | "unchanged";
+type StoreCopyChangeKind =
+  | "add"
+  | "removed"
+  | "unchanged"
+  | "new"
+  | "missing";
 
 function StoreCopyChangeTag({ change }: { change: StoreCopyChangeKind }) {
-  const Icon = change === "add" ? Plus : change === "removed" ? Minus : Equal;
+  const Icon =
+    change === "add" || change === "new"
+      ? Plus
+      : change === "removed" || change === "missing"
+        ? Minus
+        : Equal;
   const label =
-    change === "add" ? "Add" : change === "removed" ? "Removed" : "Unchanged";
+    change === "add"
+      ? "Add"
+      : change === "removed"
+        ? "Removed"
+        : change === "new"
+          ? "New"
+          : change === "missing"
+            ? "Missing"
+            : "Unchanged";
   return (
     <span
       className={cn(
         "inline-flex size-6 shrink-0 items-center justify-center justify-self-end rounded-md",
-        change === "add" && "bg-emerald-500/20 text-emerald-400",
-        change === "removed" && "bg-red-500/20 text-red-400",
+        (change === "add" || change === "new") &&
+          "bg-emerald-500/20 text-emerald-400",
+        (change === "removed" || change === "missing") &&
+          "bg-red-500/20 text-red-400",
         change === "unchanged" && "bg-stone-500/15 text-stone-500",
       )}
       title={label}

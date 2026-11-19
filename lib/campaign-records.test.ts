@@ -858,6 +858,43 @@ describe("campaign library records", () => {
     assert.deepEqual(rows[1]?.hidden, parseHiddenEntries(["Bacon"]));
   });
 
+  it("copies hidden items from one campaign preset onto another key", () => {
+    let library = upsertCampaign(
+      emptyCampaignLibrary(),
+      pack("2026-09-07", "2026-11-17", "Campaign 5"),
+      "a.pdf",
+      "t1",
+    );
+    library = upsertCampaign(
+      library,
+      pack("2026-11-18", "2027-01-31", "Campaign 6"),
+      "b.pdf",
+      "t2",
+    );
+    library = writeStoreSettings(library, "12345", "2026-09-07", "2026-11-17", {
+      hidden: parseHiddenEntries(["Bacon"]),
+      preset: {
+        ...preset,
+        defaults: { Pepperoni: { section: "chilled", life: null } },
+      },
+      compactDates: true,
+    });
+    library = writeStoreSettings(library, "12345", "2026-11-18", "2027-01-31", {
+      hidden: [],
+      preset,
+    });
+    const next = copyStoreData(library, "12345", "12345", {
+      campaignKey: "2026-11-18|2027-01-31",
+      fromCampaignKey: "2026-09-07|2026-11-17",
+      hiddenKeys: ["Bacon"],
+      defaultNames: ["Pepperoni"],
+    });
+    const dest = next.stores["12345"]?.campaigns["2026-11-18|2027-01-31"];
+    assert.equal(dest?.title, "Campaign 6");
+    assert.deepEqual(dest?.hidden, parseHiddenEntries(["Bacon"]));
+    assert.equal(dest?.preset.defaults.Pepperoni?.section, "chilled");
+  });
+
   it("refreshes store campaign titles from a re-imported chart pack", () => {
     let library = upsertCampaign(
       emptyCampaignLibrary(),

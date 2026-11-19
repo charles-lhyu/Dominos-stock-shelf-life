@@ -5,6 +5,7 @@ import { addHoursToLocal, formatDateTime } from "./dates";
 import {
   calculatedLifeKind,
   categoriesInPack,
+  compareChartProductNames,
   datePreview,
   lifeKindsForRule,
   NEW_CATEGORY_FILTER,
@@ -13,6 +14,7 @@ import {
   uniqueNamesInCategory,
 } from "./preview";
 import { BUNDLED_PACK } from "./chart-pack";
+import type { ShelfRule } from "./types";
 
 const today = new Date(2026, 9, 24);
 
@@ -28,6 +30,23 @@ describe("new category filter", () => {
     assert.ok(names.includes("Chinese Style Chicken"));
     assert.equal(categoriesInPack(BUNDLED_PACK).includes("New"), false);
     assert.equal(categoriesInPack(BUNDLED_PACK).includes("new"), false);
+  });
+});
+
+describe("compareChartProductNames", () => {
+  it("flags products only on the new or old chart", () => {
+    const pepperoni = RULES.filter((item) => item.name === "Pepperoni");
+    const chorizo = RULES.filter((item) => item.name === "Chorizo");
+    assert.ok(pepperoni.length > 0);
+    assert.ok(chorizo.length > 0);
+    const oldRules: ShelfRule[] = [...pepperoni];
+    const newRules: ShelfRule[] = [...chorizo, ...pepperoni.slice(0, 1)];
+    const diff = compareChartProductNames(oldRules, newRules);
+    assert.deepEqual(diff.newNames, ["Chorizo"]);
+    assert.deepEqual(diff.missingNames, []);
+    const reverse = compareChartProductNames(newRules, oldRules);
+    assert.deepEqual(reverse.newNames, []);
+    assert.deepEqual(reverse.missingNames, ["Chorizo"]);
   });
 });
 

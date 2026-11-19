@@ -227,6 +227,23 @@ export function uniqueNamesInCategory(rules: ShelfRule[], category: string | "al
   return names;
 }
 
+/** Products only on the new chart vs only on the previous chart. */
+export function compareChartProductNames(
+  oldRules: ShelfRule[],
+  newRules: ShelfRule[],
+): { newNames: string[]; missingNames: string[] } {
+  const oldNames = new Set(uniqueNamesInCategory(oldRules, "all"));
+  const newNames = new Set(uniqueNamesInCategory(newRules, "all"));
+  return {
+    newNames: [...newNames]
+      .filter((name) => !oldNames.has(name))
+      .sort((a, b) => a.localeCompare(b)),
+    missingNames: [...oldNames]
+      .filter((name) => !newNames.has(name))
+      .sort((a, b) => a.localeCompare(b)),
+  };
+}
+
 export function pickVariant(
   variants: ItemVariant[],
   preferred: SectionId | null,
