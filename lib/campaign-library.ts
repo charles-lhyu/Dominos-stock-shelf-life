@@ -436,6 +436,53 @@ export function writeStoreDisplaySettings(
   }
 }
 
+/**
+ * Prefer the previously on-screen campaign when copying onto a newly loaded
+ * chart; otherwise the newest other preset on this store.
+ */
+export function pickPresetCopySourceKey(
+  storeId: string,
+  toKey: string,
+  preferredFromKey: string | null = null,
+): string | null {
+  hydrateCampaignLibrary();
+  if (!/^\d{1,8}$/.test(storeId) || !toKey) return null;
+  const others = listStoreCampaigns(library, storeId)
+    .map((row) => campaignKey(row.issued, row.validUntil))
+    .filter((key): key is string => Boolean(key) && key !== toKey);
+  if (others.length === 0) return null;
+  if (preferredFromKey && others.includes(preferredFromKey)) {
+    return preferredFromKey;
+  }
+  others.sort((a, b) => {
+    const aUntil = a.split("|")[1] ?? "";
+    const bUntil = b.split("|")[1] ?? "";
+    if (aUntil !== bUntil) return aUntil < bUntil ? 1 : -1;
+    return a < b ? 1 : -1;
+  });
+  return others[0] ?? null;
+}
+
+/**
+ * Copy selected items from one campaign preset onto another on the same store.
+ * Uses the same selection shape as store-to-store / Stored import copy.
+ */
+export function copyCampaignPresetOnto(
+  storeId: string,
+  fromKey: string,
+  toKey: string,
+  selection: StoreCopySelection,
+) {
+  if (!/^\d{1,8}$/.test(storeId) || !fromKey || !toKey || fromKey === toKey) {
+    return false;
+  }
+  return copyStoredStoreData(storeId, storeId, {
+    ...selection,
+    campaignKey: toKey,
+    fromCampaignKey: fromKey,
+  });
+}
+
 /** Copy selected settings / campaign items from one stored store onto another. */
 export function copyStoredStoreData(
   fromStoreId: string,

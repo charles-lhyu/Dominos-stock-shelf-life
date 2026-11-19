@@ -828,8 +828,13 @@ export function listDeviceStored(library: CampaignLibrary): DeviceStoredRecord[]
 export type StoreCopySelection = {
   dates?: boolean;
   list?: boolean;
-  /** Campaign key `issued|validUntil` when copying / removing hidden / defaults. */
+  /** Campaign key `issued|validUntil` written on the target store. */
   campaignKey?: string | null;
+  /**
+   * When set, read hidden/defaults from this key on the source store instead of
+   * `campaignKey`. Used to copy an older campaign preset onto a newly loaded chart.
+   */
+  fromCampaignKey?: string | null;
   /** Hidden entry keys to copy from the source; omit or empty = none. */
   hiddenKeys?: string[];
   /** Product default names to copy from the source; omit or empty = none. */
@@ -881,6 +886,7 @@ export function applyStoreCopyFrom(
   }
 
   const key = selection.campaignKey?.trim() || "";
+  const fromKey = selection.fromCampaignKey?.trim() || key;
   const hiddenKeys = new Set(
     (selection.hiddenKeys ?? []).map((item) => item.trim()).filter(Boolean),
   );
@@ -905,44 +911,30 @@ export function applyStoreCopyFrom(
     return next;
   }
 
-  const sourcePreset = source.campaigns[key];
+  const sourcePreset = source.campaigns[fromKey];
   const dest = next.stores[toStoreId] ?? emptyStoreRecord();
   const prevPreset = dest.campaigns[key];
   const hasBase =
     selection.baseHidden !== undefined || selection.basePreset !== undefined;
-  if (
-    (!sourcePreset ||
-      campaignKey(sourcePreset.issued, sourcePreset.validUntil) !== key) &&
-    !prevPreset &&
-    !hasBase
-  ) {
+  const sourceMatches =
+    Boolean(sourcePreset) &&
+    campaignKey(sourcePreset!.issued, sourcePreset!.validUntil) === fromKey;
+  if (!sourceMatches && !prevPreset && !hasBase) {
     return next;
   }
-  if (
-    hiddenKeys.size > 0 &&
-    (!sourcePreset ||
-      campaignKey(sourcePreset.issued, sourcePreset.validUntil) !== key)
-  ) {
+  if (hiddenKeys.size > 0 && !sourceMatches) {
     return next;
   }
-  if (
-    defaultNames.size > 0 &&
-    (!sourcePreset ||
-      campaignKey(sourcePreset.issued, sourcePreset.validUntil) !== key)
-  ) {
+  if (defaultNames.size > 0 && !sourceMatches) {
     return next;
   }
 
   const chart = next.campaigns.find(
     (item) => campaignKey(item.issued, item.validUntil) === key,
   );
-  const issued =
-    sourcePreset?.issued || prevPreset?.issued || key.split("|")[0] || "";
-  const validUntil =
-    sourcePreset?.validUntil ||
-    prevPreset?.validUntil ||
-    key.split("|")[1] ||
-    "";
+  // Destination campaign dates come from the target key, not the source preset.
+  const issued = prevPreset?.issued || key.split("|")[0] || "";
+  const validUntil = prevPreset?.validUntil || key.split("|")[1] || "";
   if (!issued || !validUntil) return next;
 
   const hiddenBase =
@@ -978,15 +970,11 @@ export function applyStoreCopyFrom(
   }
 
   const nextPreset: CampaignPreset = {
-    title:
-      prevPreset?.title ||
-      sourcePreset?.title ||
-      chart?.title ||
-      "Shelf life chart",
+    // Keep the destination chart's title — never overwrite with the source campaign name.
+    title: chart?.title || prevPreset?.title || "Shelf life chart",
     issued,
     validUntil,
-    version:
-      prevPreset?.version || sourcePreset?.version || chart?.version || "",
+    version: chart?.version || prevPreset?.version || "",
     hidden: parseHiddenEntries([...nextHiddenMap.values()]),
     // Never seed from the source preset — that would insert unselected items
     // via filter/default fields. Only explicit keys above are merged in.
@@ -1022,11 +1010,13 @@ export function copyStoreData(
   toStoreId: string,
   selection: StoreCopySelection,
 ): CampaignLibrary {
-  if (
-    !/^\d{1,8}$/.test(fromStoreId) ||
-    !/^\d{1,8}$/.test(toStoreId) ||
-    fromStoreId === toStoreId
-  ) {
+  if (!/^\d{1,8}$/.test(fromStoreId) || !/^\d{1,8}$/.test(toStoreId)) {
+    return library;
+  }
+  const destKey = selection.campaignKey?.trim() || "";
+  const fromKey = selection.fromCampaignKey?.trim() || destKey;
+  // Same store is allowed when copying one campaign preset onto another.
+  if (fromStoreId === toStoreId && (!destKey || fromKey === destKey)) {
     return library;
   }
   const source = library.stores[fromStoreId];
