@@ -857,4 +857,35 @@ describe("campaign library records", () => {
     assert.equal(rows[1]?.title, "Campaign 5");
     assert.deepEqual(rows[1]?.hidden, parseHiddenEntries(["Bacon"]));
   });
+
+  it("refreshes store campaign titles from a re-imported chart pack", () => {
+    let library = upsertCampaign(
+      emptyCampaignLibrary(),
+      pack("2026-09-07", "2026-11-17", "Campaign 5"),
+      "old.pdf",
+      "t1",
+    );
+    library = writeStoreSettings(library, "12345", "2026-09-07", "2026-11-17", {
+      hidden: [],
+      preset,
+    });
+    assert.equal(listStoreCampaigns(library, "12345")[0]?.title, "Campaign 5");
+
+    library = upsertCampaign(
+      library,
+      pack("2026-09-07", "2026-11-17", "Campaign 5 revised"),
+      "new.pdf",
+      "t2",
+    );
+    assert.equal(listStoreCampaigns(library, "12345")[0]?.title, "Campaign 5 revised");
+
+    library = writeStoreSettings(library, "12345", "2026-09-07", "2026-11-17", {
+      hidden: parseHiddenEntries(["Bacon"]),
+      preset,
+    });
+    assert.equal(
+      library.stores["12345"]?.campaigns["2026-09-07|2026-11-17"]?.title,
+      "Campaign 5 revised",
+    );
+  });
 });

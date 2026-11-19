@@ -146,18 +146,18 @@ export function getCampaignLibrary(): CampaignLibrary {
 }
 
 /**
- * Prefer refreshing the on-screen campaign when it was part of the import
- * (updated pack for the same dates). Otherwise take the newest imported key.
+ * Activate the newest imported campaign (by validUntil). Preferring the desk
+ * key when the file also had a newer campaign left Settings/desk on the old
+ * chart after import.
  */
 export function pickActivateCampaignKey(
   importedKeys: Iterable<string>,
-  deskKey: string | null,
+  _deskKey?: string | null,
 ): string | null {
   const keys = [
     ...new Set([...importedKeys].map((key) => key.trim()).filter(Boolean)),
   ];
   if (keys.length === 0) return null;
-  if (deskKey && keys.includes(deskKey)) return deskKey;
   keys.sort((a, b) => {
     const aUntil = a.split("|")[1] ?? "";
     const bUntil = b.split("|")[1] ?? "";
@@ -683,7 +683,8 @@ function handleImportedPack(pack: ChartPack, sourceUrl: string) {
   } finally {
     applying = false;
   }
-  if (storeId && !saved) saveCurrent(storeId);
+  // Always rewrite the store preset so title/version track the imported pack.
+  if (storeId && campaignKey(issued, validUntil)) saveCurrent(storeId);
 }
 
 function handlePackCleared() {

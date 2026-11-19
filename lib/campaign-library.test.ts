@@ -108,13 +108,13 @@ describe("campaign library import activates desk", () => {
     replaceCampaignLibrary(emptyCampaignLibrary());
   });
 
-  it("picks the desk key when it was imported, otherwise the newest validUntil", () => {
+  it("picks the newest validUntil even when the desk key is also imported", () => {
     assert.equal(
       pickActivateCampaignKey(
         ["2026-09-07|2026-11-17", "2026-11-18|2027-01-31"],
         "2026-09-07|2026-11-17",
       ),
-      "2026-09-07|2026-11-17",
+      "2026-11-18|2027-01-31",
     );
     assert.equal(
       pickActivateCampaignKey(
@@ -279,5 +279,113 @@ describe("campaign library import activates desk", () => {
     setImportedPack(packB, "b.pdf");
     assert.equal(getDeskState().pack.chart.title, "Campaign 6");
     assert.equal(pepperoniLife(getDeskState().pack), "15 days");
+  });
+
+  it("refreshes Settings store campaign title after a same-key pack import", () => {
+    const packA = pack("2026-09-07", "2026-11-17", "Campaign 5", "12 days");
+    const packB = pack("2026-09-07", "2026-11-17", "Campaign 5 revised", "14 days");
+    setStoreId("12345");
+    setImportedPack(packA, "old.pdf");
+    assert.equal(
+      getCampaignLibrary().stores["12345"]?.campaigns["2026-09-07|2026-11-17"]?.title,
+      "Campaign 5",
+    );
+
+    let incoming: CampaignLibrary = {
+      campaigns: [
+        {
+          issued: packB.chart.issued,
+          validUntil: packB.chart.validUntil,
+          title: packB.chart.title,
+          version: packB.chart.version,
+          sourceUrl: "new.pdf",
+          savedAt: "t6",
+          pack: packB,
+        },
+      ],
+      stores: {},
+    };
+    incoming = writeStoreSettings(incoming, "12345", packB.chart.issued, packB.chart.validUntil, {
+      hidden: [],
+      preset,
+      compactDates: true,
+    });
+    assert.equal(
+      importStoredStoreSelections(incoming, [
+        {
+          storeId: "12345",
+          selection: {
+            dates: true,
+            campaignKey: "2026-09-07|2026-11-17",
+          },
+        },
+      ]),
+      true,
+    );
+    assert.equal(getDeskState().pack.chart.title, "Campaign 5 revised");
+    assert.equal(
+      getCampaignLibrary().stores["12345"]?.campaigns["2026-09-07|2026-11-17"]?.title,
+      "Campaign 5 revised",
+    );
+  });
+
+  it("activates the newer campaign when the import includes both old and new keys", () => {
+    const packA = pack("2026-09-07", "2026-11-17", "Campaign 5", "12 days");
+    const packB = pack("2026-11-18", "2027-01-31", "Campaign 6", "15 days");
+    setStoreId("12345");
+    setImportedPack(packA, "old.pdf");
+
+    let incoming: CampaignLibrary = {
+      campaigns: [
+        {
+          issued: packA.chart.issued,
+          validUntil: packA.chart.validUntil,
+          title: packA.chart.title,
+          version: packA.chart.version,
+          sourceUrl: "old.pdf",
+          savedAt: "t7",
+          pack: packA,
+        },
+        {
+          issued: packB.chart.issued,
+          validUntil: packB.chart.validUntil,
+          title: packB.chart.title,
+          version: packB.chart.version,
+          sourceUrl: "new.pdf",
+          savedAt: "t8",
+          pack: packB,
+        },
+      ],
+      stores: {},
+    };
+    incoming = writeStoreSettings(incoming, "12345", packA.chart.issued, packA.chart.validUntil, {
+      hidden: [],
+      preset,
+    });
+    incoming = writeStoreSettings(incoming, "12345", packB.chart.issued, packB.chart.validUntil, {
+      hidden: [],
+      preset,
+    });
+    assert.equal(
+      importStoredStoreSelections(incoming, [
+        {
+          storeId: "12345",
+          selection: {
+            dates: true,
+            campaignKey: "2026-09-07|2026-11-17",
+          },
+        },
+        {
+          storeId: "12345",
+          selection: {
+            dates: true,
+            campaignKey: "2026-11-18|2027-01-31",
+          },
+        },
+      ]),
+      true,
+    );
+    assert.equal(getDeskState().pack.chart.title, "Campaign 6");
+    assert.equal(getDeskState().pack.chart.issued, "2026-11-18");
   });
 });
