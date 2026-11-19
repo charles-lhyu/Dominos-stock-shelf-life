@@ -1629,22 +1629,15 @@ export function ImportChartButton({
           return a < b ? 1 : -1;
         })
       : [];
+    // Only keep the on-screen campaign when the file actually includes it.
+    // Preferring a device-only key left imports bound to the old chart while
+    // the backup's newer campaign was ignored.
     if (desk.imported) {
       const current = campaignKey(
         desk.pack.chart.issued,
         desk.pack.chart.validUntil,
       );
-      if (
-        current &&
-        (fileKeys.includes(current) ||
-          deviceStored.some(
-            (item) =>
-              item.storeId === forStoreId &&
-              campaignKey(item.issued, item.validUntil) === current,
-          ))
-      ) {
-        return current;
-      }
+      if (current && fileKeys.includes(current)) return current;
     }
     if (fileKeys[0]) return fileKeys[0];
     return autoPreviewCampaignKey(forStoreId);
@@ -1675,13 +1668,9 @@ export function ImportChartButton({
     return {
       dates: choices.includes("dates"),
       list: choices.includes("list"),
-      campaignKey:
-        hiddenKeys.length > 0 ||
-        defaultNames.length > 0 ||
-        removeHiddenKeys.length > 0 ||
-        removeDefaultNames.length > 0
-          ? campaignKeyValue
-          : null,
+      // Always pass the review campaign key so its chart pack is upserted and
+      // can replace the desk, even when only Dates / List were selected.
+      campaignKey: campaignKeyValue,
       hiddenKeys,
       defaultNames,
       removeHiddenKeys,

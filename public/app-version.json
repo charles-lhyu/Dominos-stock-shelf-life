@@ -1,6 +1,6 @@
 {
-  "version": "2.0.12",
+  "version": "2.0.13",
   "notes": [
-    "A ? button next to Settings opens Help; topics use one popup with a topic menu and list title"
+    "Importing Stored data now replaces the chart on screen, so the list no longer keeps the previous campaign"
   ]
 }
