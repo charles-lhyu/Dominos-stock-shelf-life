@@ -134,6 +134,7 @@ import {
 import type { HiddenEntry } from "@/lib/hidden-entries";
 import {
   clearImportedPack,
+  getDeskState,
   setImportedPack,
   type DeskState,
 } from "@/lib/desk-store";
@@ -1264,7 +1265,13 @@ export function ImportChartButton({
   }
 
   function withLiveSettings<
-    T extends { hidden: HiddenEntry[]; preset: ItemPreset; rules?: ShelfRule[] },
+    T extends {
+      hidden: HiddenEntry[];
+      preset: ItemPreset;
+      rules?: ShelfRule[];
+      title?: string;
+      version?: string;
+    },
   >(
     item: T,
   ): T & {
@@ -1275,6 +1282,13 @@ export function ImportChartButton({
   } {
     return {
       ...item,
+      // Desk pack meta wins so Campaign presets "On screen" matches the list.
+      title: desk.imported
+        ? desk.pack.chart.title || item.title || "Shelf life chart"
+        : item.title,
+      version: desk.imported
+        ? desk.pack.chart.version || item.version || ""
+        : item.version,
       hidden: hiddenEntries,
       compactDates,
       showDayCounts: debugDays,
@@ -1629,16 +1643,8 @@ export function ImportChartButton({
           return a < b ? 1 : -1;
         })
       : [];
-    // Only keep the on-screen campaign when the file actually includes it.
-    // Preferring a device-only key left imports bound to the old chart while
-    // the backup's newer campaign was ignored.
-    if (desk.imported) {
-      const current = campaignKey(
-        desk.pack.chart.issued,
-        desk.pack.chart.validUntil,
-      );
-      if (current && fileKeys.includes(current)) return current;
-    }
+    // Prefer the newest campaign in the file so import review and activation
+    // move off an older on-screen chart when the backup has a newer one.
     if (fileKeys[0]) return fileKeys[0];
     return autoPreviewCampaignKey(forStoreId);
   }
@@ -1724,6 +1730,18 @@ export function ImportChartButton({
     if (!ok) {
       toast.error("Nothing was imported.");
       return;
+    }
+    // Desk may have switched campaigns — sync Import URL and Show all preview.
+    const nextDesk = getDeskState();
+    setUrl(nextDesk.sourceUrl);
+    if (nextDesk.imported) {
+      const nextKey = campaignKey(
+        nextDesk.pack.chart.issued,
+        nextDesk.pack.chart.validUntil,
+      );
+      setAllStoredPreviewCampaignKey(nextKey);
+    } else {
+      setAllStoredPreviewCampaignKey(null);
     }
     toast.success(
       pages.length === 1

@@ -466,10 +466,11 @@ export function writeStoreSettings(
   const store = library.stores[storeId] ?? emptyStoreRecord();
   const prevPreset = store.campaigns[key];
   const nextPreset: CampaignPreset = {
-    title: prevPreset?.title || chart?.title || "Shelf life chart",
+    // Prefer the library chart so a re-imported pack refreshes Settings titles.
+    title: chart?.title || prevPreset?.title || "Shelf life chart",
     issued,
     validUntil,
-    version: prevPreset?.version || chart?.version || "",
+    version: chart?.version || prevPreset?.version || "",
     hidden: parseHiddenEntries(settings.hidden),
     preset: normalizeItemPreset(settings.preset),
   };
@@ -790,8 +791,9 @@ export function listStoreCampaigns(library: CampaignLibrary, storeId: string): S
     rows.push({
       issued: preset.issued,
       validUntil: preset.validUntil,
-      title: preset.title || chart?.title || "Shelf life chart",
-      version: preset.version || chart?.version || "",
+      // Chart pack meta wins so Settings "On screen" matches the desk after import.
+      title: chart?.title || preset.title || "Shelf life chart",
+      version: chart?.version || preset.version || "",
       hidden: preset.hidden,
       compactDates: store.settings.compactDates,
       showDayCounts: store.settings.showDayCounts,
