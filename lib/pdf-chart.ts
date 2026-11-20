@@ -305,9 +305,12 @@ function takeSpanForRule(
   return best.index;
 }
 
-/** One calendar date as scraped from chart PDF text. */
+/**
+ * One calendar date as scraped from chart PDF text.
+ * Allows optional comma after the month ("16th November, 2026").
+ */
 const LOOSE_DATE =
-  String.raw`(?:\d{4}-\d{2}-\d{2}|\d{1,2}(?:\s*(?:st|nd|rd|th))?\s+[A-Za-z]+\.?\s+\d{4}|\d{1,2}[./-]\d{1,2}[./-]\d{2,4})`;
+  String.raw`(?:\d{4}-\d{2}-\d{2}|\d{1,2}(?:\s*(?:st|nd|rd|th))?\s*[A-Za-z]+\.?\,?\s*\d{4}|\d{1,2}[./-]\d{1,2}[./-]\d{2,4})`;
 
 function expandYear(yearRaw: string): string {
   if (yearRaw.length === 4) return yearRaw;
@@ -348,9 +351,9 @@ function isoFromLooseDate(raw: string): string {
     dec: "12",
     december: "12",
   };
-  // "7 September 2026" / "7th Sep. 2026" / "16 th November 2026"
+  // "7 September 2026" / "7th Sep. 2026" / "16 th November, 2026" / "16thNovember2026"
   const named = trimmed.match(
-    /^(\d{1,2})(?:\s*(?:st|nd|rd|th))?\s+([A-Za-z]+)\.?\s+(\d{4})$/i,
+    /^(\d{1,2})(?:\s*(?:st|nd|rd|th))?\s*([A-Za-z]+)\.?,?\s*(\d{4})$/i,
   );
   if (named) {
     const month = months[named[2].toLowerCase()];
@@ -372,7 +375,7 @@ function isoFromLooseDate(raw: string): string {
   return "";
 }
 
-const DATE_RANGE_JOIN = String.raw`(?:to|-|–|—)`;
+const DATE_RANGE_JOIN = String.raw`(?:to|and|-|–|—)`;
 /** End-date wording on charts: Valid until / Valid to / Valid till / … */
 const VALID_END = String.raw`(?:until|till|to|thru|through)`;
 /** Start-date wording: Issued on / Issue date / Date of issue */
@@ -390,20 +393,60 @@ function datesFromPair(fromRaw: string, untilRaw: string): {
   return { issued, validUntil };
 }
 
+/** Prefer chronological order when PDF reading order swaps the two dates. */
+function datesFromPairOrSwapped(a: string, b: string): {
+  issued: string;
+  validUntil: string;
+} | null {
+  return datesFromPair(a, b) ?? datesFromPair(b, a);
+}
+
+function collectLooseDates(text: string): string[] {
+  const pattern = new RegExp(LOOSE_DATE, "gi");
+  const found: string[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(text))) {
+    if (isoFromLooseDate(match[0])) found.push(match[0]);
+  }
+  return found;
+}
+
 /** Next two parseable dates after `fromIndex` (PDF headers often put junk between labels and dates). */
 function nextTwoDatesAfter(
   text: string,
   fromIndex: number,
 ): { issued: string; validUntil: string } | null {
-  const slice = text.slice(Math.max(0, fromIndex));
-  const pattern = new RegExp(LOOSE_DATE, "gi");
-  const found: string[] = [];
-  let match: RegExpExecArray | null;
-  while ((match = pattern.exec(slice)) && found.length < 2) {
-    if (isoFromLooseDate(match[0])) found.push(match[0]);
-  }
+  const found = collectLooseDates(text.slice(Math.max(0, fromIndex)));
   if (found.length < 2) return null;
-  return datesFromPair(found[0]!, found[1]!);
+  return datesFromPairOrSwapped(found[0]!, found[1]!);
+}
+
+/**
+ * Campaign charts print two header dates (issued → valid). Prefer the first
+ * pair in the header band that spans about a campaign length.
+ */
+function firstCampaignDatePair(
+  text: string,
+): { issued: string; validUntil: string } | null {
+  const found = collectLooseDates(text);
+  for (let index = 0; index < found.length - 1; index += 1) {
+    const pair = datesFromPairOrSwapped(found[index]!, found[index + 1]!);
+    if (!pair) continue;
+    const days =
+      (Date.parse(pair.validUntil) - Date.parse(pair.issued)) / 86_400_000;
+    if (days >= 7 && days <= 400) return pair;
+  }
+  return null;
+}
+
+function normalizePdfDateText(flat: string): string {
+  return flat
+    .replace(/[\u00a0\u202f\u2007]/g, " ")
+    .replace(/[\u200b\u200c\u200d\ufeff]/g, "")
+    // "November, 2026" → "November 2026"
+    .replace(/([A-Za-z]+)\s*,\s*(\d{4})\b/g, "$1 $2")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 /** Pull Issued + Valid until from flattened PDF text (labels vary a lot). */
@@ -411,7 +454,7 @@ export function scrapeCampaignDates(flat: string): {
   issued: string;
   validUntil: string;
 } {
-  const text = flat.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+  const text = normalizePdfDateText(flat);
 
   // Stacked labels, then dates — often with "All stores Version 1" in between:
   // "Issued on Valid to All stores Version 1 16th November 2026 4th January 2027"
@@ -451,7 +494,7 @@ export function scrapeCampaignDates(flat: string): {
     ),
   );
   if (datesThenLabels?.[1] && datesThenLabels[2]) {
-    const pair = datesFromPair(datesThenLabels[1], datesThenLabels[2]);
+    const pair = datesFromPairOrSwapped(datesThenLabels[1], datesThenLabels[2]);
     if (pair) return pair;
   }
 
@@ -469,7 +512,10 @@ export function scrapeCampaignDates(flat: string): {
     issued: issuedMatch?.[1] ? isoFromLooseDate(issuedMatch[1]) : "",
     validUntil: validMatch?.[1] ? isoFromLooseDate(validMatch[1]) : "",
   };
-  if (labeled.issued && labeled.validUntil) return labeled;
+  if (labeled.issued && labeled.validUntil) {
+    const ordered = datesFromPairOrSwapped(labeled.issued, labeled.validUntil);
+    if (ordered) return ordered;
+  }
 
   // Newer charts print a range: "16th November 2026 to 4th January 2027"
   // (sometimes "Valid from … to …" or an en dash).
@@ -480,7 +526,7 @@ export function scrapeCampaignDates(flat: string): {
     ),
   );
   if (validRange?.[1] && validRange[2]) {
-    const pair = datesFromPair(validRange[1], validRange[2]);
+    const pair = datesFromPairOrSwapped(validRange[1], validRange[2]);
     if (pair) return pair;
   }
 
@@ -488,7 +534,18 @@ export function scrapeCampaignDates(flat: string): {
     new RegExp(`(${LOOSE_DATE})\\s*${DATE_RANGE_JOIN}\\s*(${LOOSE_DATE})`, "i"),
   );
   if (bareRange?.[1] && bareRange[2]) {
-    const pair = datesFromPair(bareRange[1], bareRange[2]);
+    const pair = datesFromPairOrSwapped(bareRange[1], bareRange[2]);
+    if (pair) return pair;
+  }
+
+  // Last resort for campaign headers that only print two dates (no "to"):
+  // "Campaign 6 Shelf Life All stores Version 1 16th November 2026 4th January 2027"
+  if (
+    /issued|valid\s*(?:to|until|till|from)|shelf\s*life|campaign\s*\d+/i.test(
+      text.slice(0, 1200),
+    )
+  ) {
+    const pair = firstCampaignDatePair(text.slice(0, 1200));
     if (pair) return pair;
   }
 

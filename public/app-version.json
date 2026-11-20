@@ -1,7 +1,6 @@
 {
-  "version": "2.0.20",
+  "version": "2.0.21",
   "notes": [
-    "Saved charts can be removed from Import",
-    "PDF import reads Issued on / Valid to even when All stores or Version text sits between the labels and dates"
+    "PDF import is more reliable for campaign header dates (commas, glued months, two dates without “to”, and swapped label order)"
   ]
 }

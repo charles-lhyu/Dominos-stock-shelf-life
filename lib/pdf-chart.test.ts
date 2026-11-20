@@ -362,4 +362,40 @@ describe("PDF shelf life parsing", () => {
     assert.equal(result.pack.chart.issued, "2026-11-16");
     assert.equal(result.pack.chart.validUntil, "2027-01-04");
   });
+
+  it("reads header date pairs with commas, glued months, or no to between dates", () => {
+    assert.deepEqual(
+      scrapeCampaignDates(
+        "Issued on Valid to 16th November, 2026 4th January, 2027",
+      ),
+      { issued: "2026-11-16", validUntil: "2027-01-04" },
+    );
+    assert.deepEqual(
+      scrapeCampaignDates(
+        "Issued on Valid to 16thNovember 2026 4thJanuary 2027",
+      ),
+      { issued: "2026-11-16", validUntil: "2027-01-04" },
+    );
+    assert.deepEqual(
+      scrapeCampaignDates(
+        "Campaign 6 Shelf Life All stores Version 1 16th November 2026 4th January 2027 Pepperoni 14 days",
+      ),
+      { issued: "2026-11-16", validUntil: "2027-01-04" },
+    );
+    assert.deepEqual(
+      scrapeCampaignDates(
+        "Valid to Issued on 4th January 2027 16th November 2026",
+      ),
+      { issued: "2026-11-16", validUntil: "2027-01-04" },
+    );
+
+    const result = packFromPdfText(
+      "Campaign 6 Shelf Life All stores Version 1 16th November, 2026 4th January, 2027 Pepperoni 14 days Chorizo 14 days",
+      "campaign-6.pdf",
+    );
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.pack.chart.issued, "2026-11-16");
+    assert.equal(result.pack.chart.validUntil, "2027-01-04");
+  });
 });
