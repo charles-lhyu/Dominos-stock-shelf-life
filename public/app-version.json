@@ -1,6 +1,6 @@
 {
-  "version": "2.0.15",
+  "version": "2.0.16",
   "notes": [
-    "PDF import now requires Issued and Valid until dates, so a new campaign title cannot reuse the previous chart’s dates and product list"
+    "PDF import reads more Issued / Valid until date formats (ordinals, colons, UK numeric dates, and stacked labels)"
   ]
 }

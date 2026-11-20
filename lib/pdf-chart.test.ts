@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { packFromPdfText } from "./pdf-chart";
+import { packFromPdfText, scrapeCampaignDates } from "./pdf-chart";
 import type { ShelfRule } from "./types";
 
 const HEADER =
@@ -208,5 +208,49 @@ describe("PDF shelf life parsing", () => {
     assert.equal(result.pack.chart.issued, "2026-11-18");
     assert.equal(result.pack.chart.validUntil, "2027-01-31");
     assert.ok(result.pack.rules.some((item) => item.name === "Pepperoni"));
+  });
+
+  it("reads ordinals, colons, and UK numeric Issued/Valid until dates", () => {
+    assert.deepEqual(
+      scrapeCampaignDates(
+        "Issued on 7th September 2026. Valid until 17th November 2026.",
+      ),
+      { issued: "2026-09-07", validUntil: "2026-11-17" },
+    );
+    assert.deepEqual(
+      scrapeCampaignDates("Issued: 7 September 2026 Valid until: 17 November 2026"),
+      { issued: "2026-09-07", validUntil: "2026-11-17" },
+    );
+    assert.deepEqual(
+      scrapeCampaignDates("Issued on 07/09/2026. Valid until 17/11/2026."),
+      { issued: "2026-09-07", validUntil: "2026-11-17" },
+    );
+    assert.deepEqual(
+      scrapeCampaignDates("Issue date 18 Nov 2026. Valid until 31 Jan 2027."),
+      { issued: "2026-11-18", validUntil: "2027-01-31" },
+    );
+
+    const ordinals = packFromPdfText(
+      "Campaign 6 shelf life chart. Issued on 7th September 2026. Valid until 17th November 2026. Pepperoni 12 days",
+      "campaign-6.pdf",
+    );
+    assert.equal(ordinals.ok, true);
+    if (!ordinals.ok) return;
+    assert.equal(ordinals.pack.chart.issued, "2026-09-07");
+    assert.equal(ordinals.pack.chart.validUntil, "2026-11-17");
+  });
+
+  it("reads stacked Issued/Valid until labels with both dates after", () => {
+    const text =
+      "Campaign 5 Shelf Life All stores Version 1 Issued on Valid until 7 September 2026 17 November 2026 Pepperoni 12 days";
+    assert.deepEqual(scrapeCampaignDates(text), {
+      issued: "2026-09-07",
+      validUntil: "2026-11-17",
+    });
+    const result = packFromPdfText(text, "campaign-5.pdf");
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.pack.chart.issued, "2026-09-07");
+    assert.equal(result.pack.chart.validUntil, "2026-11-17");
   });
 });

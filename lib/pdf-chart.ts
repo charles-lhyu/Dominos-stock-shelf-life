@@ -305,9 +305,23 @@ function takeSpanForRule(
   return best.index;
 }
 
+/** One calendar date as scraped from chart PDF text. */
+const LOOSE_DATE =
+  String.raw`(?:\d{4}-\d{2}-\d{2}|\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\.?\s+\d{4}|\d{1,2}[./-]\d{1,2}[./-]\d{2,4})`;
+
+function expandYear(yearRaw: string): string {
+  if (yearRaw.length === 4) return yearRaw;
+  const n = Number(yearRaw);
+  if (!Number.isFinite(n)) return "";
+  // Chart years are 2000+. Two-digit years: 00–99 → 2000–2099.
+  return String(2000 + (n % 100)).padStart(4, "0");
+}
+
 function isoFromLooseDate(raw: string): string {
-  const iso = raw.match(/(\d{4})-(\d{2})-(\d{2})/);
+  const trimmed = raw.replace(/\s+/g, " ").trim();
+  const iso = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+
   const months: Record<string, string> = {
     jan: "01",
     january: "01",
@@ -334,11 +348,82 @@ function isoFromLooseDate(raw: string): string {
     dec: "12",
     december: "12",
   };
-  const named = raw.match(/(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})/);
-  if (!named) return "";
-  const month = months[named[2].toLowerCase()];
-  if (!month) return "";
-  return `${named[3]}-${month}-${named[1].padStart(2, "0")}`;
+  // "7 September 2026" / "7th Sep. 2026"
+  const named = trimmed.match(/^(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]+)\.?\s+(\d{4})$/i);
+  if (named) {
+    const month = months[named[2].toLowerCase()];
+    if (!month) return "";
+    return `${named[3]}-${month}-${named[1].padStart(2, "0")}`;
+  }
+
+  // UK-style numeric dates on Domino's charts: DD/MM/YYYY or DD-MM-YY.
+  const numeric = trimmed.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})$/);
+  if (numeric) {
+    const day = numeric[1].padStart(2, "0");
+    const month = numeric[2].padStart(2, "0");
+    const year = expandYear(numeric[3]);
+    const monthN = Number(month);
+    const dayN = Number(day);
+    if (!year || monthN < 1 || monthN > 12 || dayN < 1 || dayN > 31) return "";
+    return `${year}-${month}-${day}`;
+  }
+  return "";
+}
+
+/** Pull Issued + Valid until from flattened PDF text (labels vary a lot). */
+export function scrapeCampaignDates(flat: string): {
+  issued: string;
+  validUntil: string;
+} {
+  const text = flat.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+
+  // PDF text often stacks both labels, then both dates on the next band:
+  // "Issued on Valid until 7 September 2026 17 November 2026"
+  const stacked = text.match(
+    new RegExp(
+      `issued\\s*(?:on\\s*)?[:\\-]?\\s*valid\\s*(?:until|to|thru|through)\\s*[:\\-]?\\s*(${LOOSE_DATE})\\s+(${LOOSE_DATE})`,
+      "i",
+    ),
+  );
+  if (stacked?.[1] && stacked[2]) {
+    const issued = isoFromLooseDate(stacked[1]);
+    const validUntil = isoFromLooseDate(stacked[2]);
+    if (issued && validUntil) return { issued, validUntil };
+  }
+
+  const issuedMatch =
+    text.match(
+      new RegExp(
+        `issued\\s*(?:on\\s*)?[:\\-]?\\s*(${LOOSE_DATE})`,
+        "i",
+      ),
+    ) ??
+    text.match(
+      new RegExp(
+        `(?:issue\\s*date|date\\s*(?:of\\s*)?issue)\\s*[:\\-]?\\s*(${LOOSE_DATE})`,
+        "i",
+      ),
+    ) ??
+    text.match(
+      new RegExp(`(${LOOSE_DATE}).{0,48}valid\\s*(?:until|to|thru|through)`, "i"),
+    );
+  const validMatch =
+    text.match(
+      new RegExp(
+        `valid\\s*(?:until|to|thru|through)\\s*[:\\-]?\\s*(${LOOSE_DATE})`,
+        "i",
+      ),
+    ) ??
+    text.match(
+      new RegExp(
+        `(?:expiry|expires?(?:\\s*on)?|valid\\s*date)\\s*[:\\-]?\\s*(${LOOSE_DATE})`,
+        "i",
+      ),
+    );
+  return {
+    issued: issuedMatch?.[1] ? isoFromLooseDate(issuedMatch[1]) : "",
+    validUntil: validMatch?.[1] ? isoFromLooseDate(validMatch[1]) : "",
+  };
 }
 
 type PdfLine = {
@@ -657,13 +742,6 @@ export function packFromPdfText(text: string, fileName: string): { ok: true; pac
     return { ok: false, error: "Could not read text from that PDF." };
   }
 
-  const validMatch =
-    flat.match(/valid\s*(?:until|to)\s*([0-9]{1,2}\s+[A-Za-z]+\s+[0-9]{4}|\d{4}-\d{2}-\d{2})/i) ??
-    flat.match(/until\s*([0-9]{1,2}\s+[A-Za-z]+\s+[0-9]{4})/i);
-  const issuedMatch =
-    flat.match(/issued\s*(?:on\s*)?([0-9]{1,2}\s+[A-Za-z]+\s+[0-9]{4}|\d{4}-\d{2}-\d{2})/i) ??
-    flat.match(/([0-9]{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+[0-9]{4}).{0,40}valid/i);
-
   const rules: ShelfRule[] = [];
   const used = new Set<string>();
   const haystack = flat.toLowerCase();
@@ -713,8 +791,7 @@ export function packFromPdfText(text: string, fileName: string): { ok: true; pac
 
   const campaign = flat.match(/campaign\s*\d+/i)?.[0];
   const versionMatch = flat.match(/version\s*\d+/i)?.[0];
-  const issued = issuedMatch ? isoFromLooseDate(issuedMatch[1]) : "";
-  const validUntil = validMatch ? isoFromLooseDate(validMatch[1]) : "";
+  const { issued, validUntil } = scrapeCampaignDates(flat);
   // Never borrow the bundled chart's issued/valid-until. Falling back made a
   // "Campaign 6" title keep Campaign 5's campaign key, so Settings looked
   // updated while products stayed the previous chart.
