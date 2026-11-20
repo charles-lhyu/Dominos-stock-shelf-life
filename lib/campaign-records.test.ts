@@ -7,6 +7,7 @@ import {
   emptyCampaignLibrary,
   dropAllStoredDefaults,
   dropAllStoredHidden,
+  dropCampaign,
   dropStoreCampaignPreset,
   dropStoredDefault,
   dropStoredHidden,
@@ -632,6 +633,34 @@ describe("campaign library records", () => {
     const shown = listStoreCampaigns(library, "12345")[0]?.preset.defaults;
     assert.deepEqual(shown?.Pepperoni, { section: "chilled", life: null });
     assert.equal(shown?.Dough, undefined);
+  });
+
+  it("removes one imported chart pack without touching store presets", () => {
+    let library = emptyCampaignLibrary();
+    library = upsertCampaign(
+      library,
+      pack("2026-11-16", "2027-01-04", "Campaign 6"),
+      "campaign-6.pdf",
+      "2026-11-20T00:00:00.000Z",
+    );
+    library = upsertCampaign(
+      library,
+      pack("2026-09-07", "2026-11-17", "Campaign 5"),
+      "campaign-5.pdf",
+      "2026-09-07T00:00:00.000Z",
+    );
+    library = writeStoreSettings(library, "12345", "2026-11-16", "2027-01-04", {
+      hidden: [],
+      preset: {
+        ...preset,
+        defaults: { Pepperoni: { section: "chilled", life: null } },
+      },
+    });
+    const next = dropCampaign(library, "2026-11-16", "2027-01-04");
+    assert.equal(listCampaignSummaries(next).length, 1);
+    assert.equal(listCampaignSummaries(next)[0]?.title, "Campaign 5");
+    assert.ok(readStoreSettings(next, "12345", "2026-11-16", "2027-01-04"));
+    assert.equal(dropCampaign(next, "2026-11-16", "2027-01-04"), next);
   });
 
   it("removes one campaign preset from a store without touching others", () => {

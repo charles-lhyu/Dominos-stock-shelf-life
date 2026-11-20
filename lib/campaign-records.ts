@@ -579,6 +579,21 @@ export function dropStoreCampaignPreset(
   };
 }
 
+/** Remove one imported chart pack from the device library. */
+export function dropCampaign(
+  library: CampaignLibrary,
+  issued: string,
+  validUntil: string,
+): CampaignLibrary {
+  const key = campaignKey(issued, validUntil);
+  if (!key) return library;
+  const next = library.campaigns.filter(
+    (item) => campaignKey(item.issued, item.validUntil) !== key,
+  );
+  if (next.length === library.campaigns.length) return library;
+  return { ...library, campaigns: next };
+}
+
 const EMPTY_SETTINGS: StoreCampaignSettings = {
   hidden: [],
   preset: DEFAULT_ITEM_PRESET,

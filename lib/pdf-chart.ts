@@ -307,7 +307,7 @@ function takeSpanForRule(
 
 /** One calendar date as scraped from chart PDF text. */
 const LOOSE_DATE =
-  String.raw`(?:\d{4}-\d{2}-\d{2}|\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\.?\s+\d{4}|\d{1,2}[./-]\d{1,2}[./-]\d{2,4})`;
+  String.raw`(?:\d{4}-\d{2}-\d{2}|\d{1,2}(?:\s*(?:st|nd|rd|th))?\s+[A-Za-z]+\.?\s+\d{4}|\d{1,2}[./-]\d{1,2}[./-]\d{2,4})`;
 
 function expandYear(yearRaw: string): string {
   if (yearRaw.length === 4) return yearRaw;
@@ -348,8 +348,10 @@ function isoFromLooseDate(raw: string): string {
     dec: "12",
     december: "12",
   };
-  // "7 September 2026" / "7th Sep. 2026"
-  const named = trimmed.match(/^(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]+)\.?\s+(\d{4})$/i);
+  // "7 September 2026" / "7th Sep. 2026" / "16 th November 2026"
+  const named = trimmed.match(
+    /^(\d{1,2})(?:\s*(?:st|nd|rd|th))?\s+([A-Za-z]+)\.?\s+(\d{4})$/i,
+  );
   if (named) {
     const month = months[named[2].toLowerCase()];
     if (!month) return "";
@@ -388,6 +390,22 @@ function datesFromPair(fromRaw: string, untilRaw: string): {
   return { issued, validUntil };
 }
 
+/** Next two parseable dates after `fromIndex` (PDF headers often put junk between labels and dates). */
+function nextTwoDatesAfter(
+  text: string,
+  fromIndex: number,
+): { issued: string; validUntil: string } | null {
+  const slice = text.slice(Math.max(0, fromIndex));
+  const pattern = new RegExp(LOOSE_DATE, "gi");
+  const found: string[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(slice)) && found.length < 2) {
+    if (isoFromLooseDate(match[0])) found.push(match[0]);
+  }
+  if (found.length < 2) return null;
+  return datesFromPair(found[0]!, found[1]!);
+}
+
 /** Pull Issued + Valid until from flattened PDF text (labels vary a lot). */
 export function scrapeCampaignDates(flat: string): {
   issued: string;
@@ -395,28 +413,45 @@ export function scrapeCampaignDates(flat: string): {
 } {
   const text = flat.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
 
-  // PDF text often stacks labels, then both dates on the next band:
-  // "Issued on Valid to 16th November 2026 4th January 2027"
-  // "Issued on Valid from Valid to … …" / "Valid from Valid to … …"
-  const stacked = text.match(
+  // Stacked labels, then dates — often with "All stores Version 1" in between:
+  // "Issued on Valid to All stores Version 1 16th November 2026 4th January 2027"
+  const stackedLabels = text.match(
     new RegExp(
-      `${ISSUED_LABEL}[:\\-]?\\s*(?:valid\\s*from\\s*(?:[/|]\\s*)?)?${VALID_LABEL}[:\\-]?\\s*(${LOOSE_DATE})\\s+(${LOOSE_DATE})`,
+      `${ISSUED_LABEL}[:\\-]?\\s*(?:valid\\s*from\\s*(?:[/|]\\s*)?)?${VALID_LABEL}`,
       "i",
     ),
   );
-  if (stacked?.[1] && stacked[2]) {
-    const pair = datesFromPair(stacked[1], stacked[2]);
+  if (stackedLabels && stackedLabels.index != null) {
+    const pair = nextTwoDatesAfter(
+      text,
+      stackedLabels.index + stackedLabels[0].length,
+    );
     if (pair) return pair;
   }
 
   const fromToLabels = text.match(
     new RegExp(
-      `valid\\s*from\\s*(?:[/|]\\s*)?valid\\s*${VALID_END}[:\\-]?\\s*(${LOOSE_DATE})\\s+(${LOOSE_DATE})`,
+      `valid\\s*from\\s*(?:[/|]\\s*)?valid\\s*${VALID_END}`,
       "i",
     ),
   );
-  if (fromToLabels?.[1] && fromToLabels[2]) {
-    const pair = datesFromPair(fromToLabels[1], fromToLabels[2]);
+  if (fromToLabels && fromToLabels.index != null) {
+    const pair = nextTwoDatesAfter(
+      text,
+      fromToLabels.index + fromToLabels[0].length,
+    );
+    if (pair) return pair;
+  }
+
+  // Dates printed before the stacked labels.
+  const datesThenLabels = text.match(
+    new RegExp(
+      `(${LOOSE_DATE})\\s+(${LOOSE_DATE}).{0,96}${ISSUED_LABEL}.{0,48}${VALID_LABEL}`,
+      "i",
+    ),
+  );
+  if (datesThenLabels?.[1] && datesThenLabels[2]) {
+    const pair = datesFromPair(datesThenLabels[1], datesThenLabels[2]);
     if (pair) return pair;
   }
 
@@ -427,10 +462,9 @@ export function scrapeCampaignDates(flat: string): {
     text.match(
       new RegExp(`(${LOOSE_DATE}).{0,48}valid\\s*${VALID_END}`, "i"),
     );
-  const validMatch =
-    text.match(
-      new RegExp(`${VALID_LABEL}[:\\-]?\\s*(${LOOSE_DATE})`, "i"),
-    );
+  const validMatch = text.match(
+    new RegExp(`${VALID_LABEL}[:\\-]?\\s*(${LOOSE_DATE})`, "i"),
+  );
   const labeled = {
     issued: issuedMatch?.[1] ? isoFromLooseDate(issuedMatch[1]) : "",
     validUntil: validMatch?.[1] ? isoFromLooseDate(validMatch[1]) : "",

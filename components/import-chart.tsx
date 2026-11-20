@@ -62,6 +62,7 @@ import {
   adoptStoreForCampaign,
   clearSavedDefaults,
   clearSavedHidden,
+  forgetCampaign,
   forgetSavedCampaignPreset,
   forgetSavedDefault,
   forgetSavedHidden,
@@ -438,6 +439,11 @@ export function ImportChartButton({
     downloadUrl: string;
   } | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [confirmRemoveChart, setConfirmRemoveChart] = useState<{
+    issued: string;
+    validUntil: string;
+    title: string;
+  } | null>(null);
   const [changelogOpen, setChangelogOpen] = useState(false);
   const [shareAppOpen, setShareAppOpen] = useState(false);
   const [updateConfirmOpen, setUpdateConfirmOpen] = useState(false);
@@ -977,6 +983,24 @@ export function ImportChartButton({
     setUrl("");
     setConfirmReset(false);
     toast.success("Chart cleared.");
+  }
+
+  function removeSavedChart() {
+    const target = confirmRemoveChart;
+    if (!target) return;
+    const wasLoaded =
+      desk.imported &&
+      desk.pack.chart.issued === target.issued &&
+      desk.pack.chart.validUntil === target.validUntil;
+    const removed = forgetCampaign(target.issued, target.validUntil);
+    setConfirmRemoveChart(null);
+    if (!removed) return;
+    if (wasLoaded) {
+      void clearPdfCrops();
+      clearImportedPack();
+      setUrl("");
+    }
+    toast.success("Saved chart removed.");
   }
 
   function stopScan() {
@@ -2957,37 +2981,60 @@ export function ImportChartButton({
                       desk.pack.chart.validUntil === item.validUntil;
                     const issuedLabel = formatShortDate(item.issued);
                     const validLabel = formatShortDate(item.validUntil);
+                    const title = item.title || "Shelf life chart";
                     return (
-                      <button
+                      <div
                         key={`${item.issued}|${item.validUntil}`}
-                        type="button"
-                        aria-pressed={loaded}
-                        aria-label={`${item.title || "Shelf life chart"}, issued ${issuedLabel}, valid until ${validLabel}${loaded ? ", loaded" : ""}`}
-                        disabled={busy}
-                        onClick={() =>
-                          loadCampaignWithPresetOffer(item.issued, item.validUntil)
-                        }
                         className={cn(
-                          "w-full rounded-xl border px-3 py-2.5 text-left",
+                          "flex items-stretch gap-1 rounded-xl border px-1.5 py-1.5",
                           loaded
                             ? "border-sky-400/50 bg-sky-500/15"
-                            : "border-white/10 bg-black/20 hover:border-white/20",
+                            : "border-white/10 bg-black/20",
                         )}
                       >
-                        <span className="flex items-center justify-between gap-2">
-                          <span className="min-w-0 truncate text-sm font-medium text-white">
-                            {item.title || "Shelf life chart"}
-                          </span>
-                          {loaded ? (
-                            <span className="shrink-0 text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-sky-300">
-                              Loaded
+                        <button
+                          type="button"
+                          aria-pressed={loaded}
+                          aria-label={`${title}, issued ${issuedLabel}, valid until ${validLabel}${loaded ? ", loaded" : ""}`}
+                          disabled={busy}
+                          onClick={() =>
+                            loadCampaignWithPresetOffer(
+                              item.issued,
+                              item.validUntil,
+                            )
+                          }
+                          className="min-w-0 flex-1 rounded-lg px-2 py-1.5 text-left hover:bg-white/[0.06]"
+                        >
+                          <span className="flex items-center justify-between gap-2">
+                            <span className="min-w-0 truncate text-sm font-medium text-white">
+                              {title}
                             </span>
-                          ) : null}
-                        </span>
-                        <span className="mt-0.5 block text-xs text-stone-400">
-                          Issued {issuedLabel} · Valid until {validLabel}
-                        </span>
-                      </button>
+                            {loaded ? (
+                              <span className="shrink-0 text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-sky-300">
+                                Loaded
+                              </span>
+                            ) : null}
+                          </span>
+                          <span className="mt-0.5 block text-xs text-stone-400">
+                            Issued {issuedLabel} · Valid until {validLabel}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`Remove saved chart ${title}`}
+                          disabled={busy}
+                          onClick={() =>
+                            setConfirmRemoveChart({
+                              issued: item.issued,
+                              validUntil: item.validUntil,
+                              title,
+                            })
+                          }
+                          className="inline-flex size-11 shrink-0 items-center justify-center self-center rounded-lg text-red-400 hover:bg-red-500/10"
+                        >
+                          <X className="size-4" strokeWidth={2.5} aria-hidden />
+                        </button>
+                      </div>
                     );
                   })}
                 </div>
@@ -6067,6 +6114,47 @@ export function ImportChartButton({
           >
             <RotateCcw className="size-4" />
             Clear chart
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog
+      open={!!confirmRemoveChart}
+      onOpenChange={(next) => {
+        if (!next) setConfirmRemoveChart(null);
+      }}
+    >
+      <DialogContent
+        showCloseButton={false}
+        overlayClassName="z-[60] bg-black/50"
+        className="z-[60] max-w-sm gap-0 overflow-hidden rounded-2xl p-0"
+      >
+        <DialogHeader className="space-y-2 px-4 pt-4 pb-2">
+          <DialogTitle className="font-display text-xl text-white">
+            Remove this saved chart?
+          </DialogTitle>
+          <DialogDescription className="text-sm text-stone-400">
+            {confirmRemoveChart
+              ? `${confirmRemoveChart.title} will be removed from Saved charts on this device. Store presets for other campaigns are kept.`
+              : "This chart will be removed from Saved charts on this device."}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid grid-cols-2 gap-2 border-t border-white/10 p-4">
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 rounded-xl border-white/15 text-white"
+            onClick={() => setConfirmRemoveChart(null)}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            className="h-11 rounded-xl bg-red-500 text-white hover:bg-red-400"
+            onClick={removeSavedChart}
+          >
+            Remove chart
           </Button>
         </div>
       </DialogContent>

@@ -7,6 +7,7 @@ import {
   listStoreCampaigns,
   dropAllStoredDefaults,
   dropAllStoredHidden,
+  dropCampaign,
   dropStoreCampaignPreset,
   dropStoredDefault,
   dropStoredHidden,
@@ -624,6 +625,18 @@ export function forgetSavedCampaignPreset(
   const next = dropStoreCampaignPreset(library, storeId, issued, validUntil);
   if (next === library) return;
   commitLibrary(next);
+}
+
+/**
+ * Remove an imported chart pack from Saved charts.
+ * Returns true when the pack was present (caller can clear the desk if it was loaded).
+ */
+export function forgetCampaign(issued: string, validUntil: string): boolean {
+  hydrateCampaignLibrary();
+  const next = dropCampaign(library, issued, validUntil);
+  if (next === library) return false;
+  commitLibrary(next);
+  return true;
 }
 
 export function subscribeStoredStore(listener: () => void) {

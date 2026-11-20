@@ -1,5 +1,12 @@
 [
   {
+    "version": "2.0.20",
+    "notes": [
+      "Saved charts can be removed from Import",
+      "PDF import reads Issued on / Valid to even when All stores or Version text sits between the labels and dates"
+    ]
+  },
+  {
     "version": "2.0.19",
     "notes": [
       "Stored data Edit can remove a whole campaign preset from a store"
