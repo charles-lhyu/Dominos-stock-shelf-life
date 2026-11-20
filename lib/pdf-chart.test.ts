@@ -188,4 +188,25 @@ describe("PDF shelf life parsing", () => {
     assert.ok(pizza);
     assert.equal(pizza.ambientUse, "15 hours");
   });
+
+  it("rejects a Campaign 6 title without issued/valid-until dates", () => {
+    const text =
+      "Campaign 6 shelf life chart. All stores. Version 1. Pepperoni 12 days Chorizo 12 days";
+    const result = packFromPdfText(text, "campaign-6.pdf");
+    assert.equal(result.ok, false);
+    if (result.ok) return;
+    assert.match(result.error, /Issued \/ Valid until/i);
+  });
+
+  it("keeps Campaign 6 dates instead of borrowing Campaign 5 identity", () => {
+    const text =
+      "Campaign 6 shelf life chart. All stores. Version 2. Issued on 18 November 2026. Valid until 31 January 2027. Pepperoni 14 days Chorizo 14 days";
+    const result = packFromPdfText(text, "campaign-6.pdf");
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.match(result.pack.chart.title, /Campaign 6/i);
+    assert.equal(result.pack.chart.issued, "2026-11-18");
+    assert.equal(result.pack.chart.validUntil, "2027-01-31");
+    assert.ok(result.pack.rules.some((item) => item.name === "Pepperoni"));
+  });
 });

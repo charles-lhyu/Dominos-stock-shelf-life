@@ -715,18 +715,27 @@ export function packFromPdfText(text: string, fileName: string): { ok: true; pac
   const versionMatch = flat.match(/version\s*\d+/i)?.[0];
   const issued = issuedMatch ? isoFromLooseDate(issuedMatch[1]) : "";
   const validUntil = validMatch ? isoFromLooseDate(validMatch[1]) : "";
+  // Never borrow the bundled chart's issued/valid-until. Falling back made a
+  // "Campaign 6" title keep Campaign 5's campaign key, so Settings looked
+  // updated while products stayed the previous chart.
+  if (!issued || !validUntil) {
+    return {
+      ok: false,
+      error:
+        "Could not find Issued / Valid until dates in that PDF. Import needs both dates so it does not reuse the previous campaign.",
+    };
+  }
   return {
     ok: true,
     pack: {
       chart: {
-        // Keep Campaign meta when the PDF text scrape misses a field.
         title: campaign
           ? `${campaign} shelf life chart`
           : BUNDLED_PACK.chart.title || fileName.replace(/\.pdf$/i, ""),
         audience: /all stores/i.test(flat) ? "All stores" : BUNDLED_PACK.chart.audience,
         version: versionMatch ?? BUNDLED_PACK.chart.version,
-        issued: issued || BUNDLED_PACK.chart.issued,
-        validUntil: validUntil || BUNDLED_PACK.chart.validUntil,
+        issued,
+        validUntil,
       },
       sections: BUNDLED_PACK.sections.filter((section) =>
         rules.some((rule) => rule.sectionId === section.id),

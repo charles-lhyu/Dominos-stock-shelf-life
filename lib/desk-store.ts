@@ -155,12 +155,14 @@ export function repairStoredRules(rules: ShelfRule[]): ShelfRule[] {
 function repairChartMeta(pack: ChartPack): ChartPack["chart"] {
   const base = BUNDLED_PACK.chart;
   const chart = pack.chart;
+  // Do not fill issued/valid-until from the bundled chart — those dates are the
+  // campaign identity. Borrowing them made a new title reuse the old campaign.
   return {
     title: chart.title?.trim() || base.title,
     audience: chart.audience?.trim() || base.audience,
     version: chart.version?.trim() || base.version,
-    issued: chart.issued?.trim() || base.issued,
-    validUntil: chart.validUntil?.trim() || base.validUntil,
+    issued: chart.issued?.trim() || "",
+    validUntil: chart.validUntil?.trim() || "",
   };
 }
 
