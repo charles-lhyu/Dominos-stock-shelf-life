@@ -698,6 +698,23 @@ function applyParsedHourCounts(
   }
 }
 
+/**
+ * Only treat a name as a chart row when its life cell is present.
+ * Footnotes / notes that merely mention a product must not re-add it.
+ */
+function hasChartLifeEvidence(
+  window: string,
+  columnLife: ColumnLife | undefined,
+): boolean {
+  if (columnLife?.days || columnLife?.hours) return true;
+  if (/\d+\s*days?/i.test(window)) return true;
+  if (/\d+\s*hours?/i.test(window)) return true;
+  if (/\bdate\s+on\b/i.test(window)) return true;
+  if (/\bbb\s*date\b/i.test(window)) return true;
+  if (/\bn\/a\b/i.test(window)) return true;
+  return false;
+}
+
 async function renderPageCanvas(page: PdfjsPage, scale: number) {
   const viewport = page.getViewport({ scale });
   const canvas = document.createElement("canvas");
@@ -901,6 +918,9 @@ export function packFromPdfText(text: string, fileName: string): { ok: true; pac
     } else {
       applyParsedHourCounts(next, base, window, columnLife);
     }
+
+    // Skip name-only hits (footnotes / notes) so the list matches chart rows.
+    if (!hasChartLifeEvidence(window, columnLife)) continue;
 
     if (!used.has(next.id)) {
       used.add(next.id);

@@ -18,7 +18,7 @@ function prepped(text: string, name: string) {
 describe("PDF shelf life parsing", () => {
   it("does not give pineapple and olives the previous row's 25 days", () => {
     const shared =
-      "Pepperdew Piquante Peppers 25 days Pineapple Olives 10 days Tuna 6 days";
+      "Pepperdew Piquante Peppers Date on pack 25 days N/A Pineapple and Olives Date on pack 10 days N/A Tuna Date on pack 6 days N/A";
     assert.equal(prepped(shared, "Pepperdew Piquante Peppers"), "25 days");
     assert.equal(prepped(shared, "Pineapple"), "10 days");
     assert.equal(prepped(shared, "Olives"), "10 days");
@@ -32,9 +32,29 @@ describe("PDF shelf life parsing", () => {
   });
 
   it("keeps a life that is printed before the name from overwriting the row", () => {
-    const text = "25 days Pineapple Olives 10 days";
+    const text = "25 days Pineapple and Olives Date on pack 10 days N/A";
     assert.equal(prepped(text, "Pineapple"), "10 days");
     assert.equal(prepped(text, "Olives"), "10 days");
+  });
+
+  it("only keeps products that have a shelf-life cell on the PDF, not footnote mentions", () => {
+    const text =
+      "Pepperoni 14 days Chorizo 14 days Notes: see Chinese Style Chicken Bacon Ham Pineapple Olives for older charts.";
+    const result = packFromPdfText(`${HEADER}${text}`, "campaign-6.pdf");
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    const names = result.pack.rules.map((item) => item.name).sort();
+    assert.deepEqual(names, ["Chorizo", "Pepperoni"]);
+    const pepperoni = result.pack.rules.find((item) => item.name === "Pepperoni");
+    assert.equal(pepperoni?.fromDelivery, "14 days");
+  });
+
+  it("drops bare name mentions that have no life cell", () => {
+    const text = "Pepperoni see notes. Chorizo see notes.";
+    const result = packFromPdfText(`${HEADER}${text}`, "campaign-5.pdf");
+    assert.equal(result.ok, false);
+    if (result.ok) return;
+    assert.match(result.error, /No shelf-life products/i);
   });
 
   it("does not give sliced gherkins the previous sauce's 8 days", () => {

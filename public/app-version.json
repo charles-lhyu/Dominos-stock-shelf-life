@@ -1,6 +1,6 @@
 {
-  "version": "2.0.21",
+  "version": "2.0.22",
   "notes": [
-    "PDF import is more reliable for campaign header dates (commas, glued months, two dates without “to”, and swapped label order)"
+    "PDF import only keeps products that have a shelf-life cell on the chart, so footnote mentions no longer leave old items on the list"
   ]
 }
