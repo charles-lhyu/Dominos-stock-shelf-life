@@ -1,6 +1,6 @@
 {
-  "version": "2.0.17",
+  "version": "2.0.18",
   "notes": [
-    "PDF import accepts date ranges such as “16th November 2026 to 4th January 2027” (and Valid from … to …)"
+    "PDF import accepts more date label layouts, including Issued on / Valid to and Valid from / Valid to"
   ]
 }

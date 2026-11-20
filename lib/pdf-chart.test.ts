@@ -284,4 +284,52 @@ describe("PDF shelf life parsing", () => {
     assert.equal(result.pack.chart.validUntil, "2027-01-04");
     assert.ok(result.pack.rules.some((item) => item.name === "Pepperoni"));
   });
+
+  it("reads Issued on / Valid to and related stacked labels", () => {
+    assert.deepEqual(
+      scrapeCampaignDates(
+        "Issued on Valid to 16th November 2026 4th January 2027",
+      ),
+      { issued: "2026-11-16", validUntil: "2027-01-04" },
+    );
+    assert.deepEqual(
+      scrapeCampaignDates(
+        "Issue date Valid to 16th November 2026 4th January 2027",
+      ),
+      { issued: "2026-11-16", validUntil: "2027-01-04" },
+    );
+    assert.deepEqual(
+      scrapeCampaignDates(
+        "Issued on Valid till 16th November 2026 4th January 2027",
+      ),
+      { issued: "2026-11-16", validUntil: "2027-01-04" },
+    );
+    assert.deepEqual(
+      scrapeCampaignDates(
+        "Valid from / Valid to 16th November 2026 4th January 2027",
+      ),
+      { issued: "2026-11-16", validUntil: "2027-01-04" },
+    );
+    assert.deepEqual(
+      scrapeCampaignDates(
+        "Issued on Valid from Valid to 16th November 2026 4th January 2027",
+      ),
+      { issued: "2026-11-16", validUntil: "2027-01-04" },
+    );
+    assert.deepEqual(
+      scrapeCampaignDates(
+        "Issued on 16th November 2026 Valid to 4th January 2027",
+      ),
+      { issued: "2026-11-16", validUntil: "2027-01-04" },
+    );
+
+    const result = packFromPdfText(
+      "Campaign 6 shelf life chart. Issued on Valid to 16th November 2026 4th January 2027. Pepperoni 14 days",
+      "campaign-6.pdf",
+    );
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.pack.chart.issued, "2026-11-16");
+    assert.equal(result.pack.chart.validUntil, "2027-01-04");
+  });
 });

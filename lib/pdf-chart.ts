@@ -371,6 +371,12 @@ function isoFromLooseDate(raw: string): string {
 }
 
 const DATE_RANGE_JOIN = String.raw`(?:to|-|–|—)`;
+/** End-date wording on charts: Valid until / Valid to / Valid till / … */
+const VALID_END = String.raw`(?:until|till|to|thru|through)`;
+/** Start-date wording: Issued on / Issue date / Date of issue */
+const ISSUED_LABEL = String.raw`(?:issued\s*(?:on\s*)?|issue\s*date|date\s*(?:of\s*)?issue)`;
+/** End-date label alone: Valid until / Expiry / … */
+const VALID_LABEL = String.raw`(?:valid\s*${VALID_END}|expiry|expires?(?:\s*on)?|valid\s*date)`;
 
 function datesFromPair(fromRaw: string, untilRaw: string): {
   issued: string;
@@ -389,11 +395,12 @@ export function scrapeCampaignDates(flat: string): {
 } {
   const text = flat.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
 
-  // PDF text often stacks both labels, then both dates on the next band:
-  // "Issued on Valid until 7 September 2026 17 November 2026"
+  // PDF text often stacks labels, then both dates on the next band:
+  // "Issued on Valid to 16th November 2026 4th January 2027"
+  // "Issued on Valid from Valid to … …" / "Valid from Valid to … …"
   const stacked = text.match(
     new RegExp(
-      `issued\\s*(?:on\\s*)?[:\\-]?\\s*valid\\s*(?:until|to|thru|through)\\s*[:\\-]?\\s*(${LOOSE_DATE})\\s+(${LOOSE_DATE})`,
+      `${ISSUED_LABEL}[:\\-]?\\s*(?:valid\\s*from\\s*(?:[/|]\\s*)?)?${VALID_LABEL}[:\\-]?\\s*(${LOOSE_DATE})\\s+(${LOOSE_DATE})`,
       "i",
     ),
   );
@@ -402,34 +409,27 @@ export function scrapeCampaignDates(flat: string): {
     if (pair) return pair;
   }
 
+  const fromToLabels = text.match(
+    new RegExp(
+      `valid\\s*from\\s*(?:[/|]\\s*)?valid\\s*${VALID_END}[:\\-]?\\s*(${LOOSE_DATE})\\s+(${LOOSE_DATE})`,
+      "i",
+    ),
+  );
+  if (fromToLabels?.[1] && fromToLabels[2]) {
+    const pair = datesFromPair(fromToLabels[1], fromToLabels[2]);
+    if (pair) return pair;
+  }
+
   const issuedMatch =
     text.match(
-      new RegExp(
-        `issued\\s*(?:on\\s*)?[:\\-]?\\s*(${LOOSE_DATE})`,
-        "i",
-      ),
+      new RegExp(`${ISSUED_LABEL}[:\\-]?\\s*(${LOOSE_DATE})`, "i"),
     ) ??
     text.match(
-      new RegExp(
-        `(?:issue\\s*date|date\\s*(?:of\\s*)?issue)\\s*[:\\-]?\\s*(${LOOSE_DATE})`,
-        "i",
-      ),
-    ) ??
-    text.match(
-      new RegExp(`(${LOOSE_DATE}).{0,48}valid\\s*(?:until|to|thru|through)`, "i"),
+      new RegExp(`(${LOOSE_DATE}).{0,48}valid\\s*${VALID_END}`, "i"),
     );
   const validMatch =
     text.match(
-      new RegExp(
-        `valid\\s*(?:until|to|thru|through)\\s*[:\\-]?\\s*(${LOOSE_DATE})`,
-        "i",
-      ),
-    ) ??
-    text.match(
-      new RegExp(
-        `(?:expiry|expires?(?:\\s*on)?|valid\\s*date)\\s*[:\\-]?\\s*(${LOOSE_DATE})`,
-        "i",
-      ),
+      new RegExp(`${VALID_LABEL}[:\\-]?\\s*(${LOOSE_DATE})`, "i"),
     );
   const labeled = {
     issued: issuedMatch?.[1] ? isoFromLooseDate(issuedMatch[1]) : "",
