@@ -7,6 +7,7 @@ import {
   emptyCampaignLibrary,
   dropAllStoredDefaults,
   dropAllStoredHidden,
+  dropStoreCampaignPreset,
   dropStoredDefault,
   dropStoredHidden,
   setStoredDefault,
@@ -631,6 +632,41 @@ describe("campaign library records", () => {
     const shown = listStoreCampaigns(library, "12345")[0]?.preset.defaults;
     assert.deepEqual(shown?.Pepperoni, { section: "chilled", life: null });
     assert.equal(shown?.Dough, undefined);
+  });
+
+  it("removes one campaign preset from a store without touching others", () => {
+    let library = emptyCampaignLibrary();
+    library = writeStoreSettings(library, "12345", "2026-09-07", "2026-11-17", {
+      hidden: parseHiddenEntries(["Bacon"]),
+      preset: {
+        ...preset,
+        defaults: { Pepperoni: { section: "chilled", life: null } },
+      },
+    });
+    library = writeStoreSettings(library, "12345", "2026-11-16", "2027-01-04", {
+      hidden: [],
+      preset: {
+        ...preset,
+        defaults: { Ham: { section: "frozen", life: null } },
+      },
+    });
+    library = writeStoreName(library, "12345", "Central");
+    const next = dropStoreCampaignPreset(
+      library,
+      "12345",
+      "2026-09-07",
+      "2026-11-17",
+    );
+    assert.equal(
+      readStoreSettings(next, "12345", "2026-09-07", "2026-11-17"),
+      null,
+    );
+    assert.ok(readStoreSettings(next, "12345", "2026-11-16", "2027-01-04"));
+    assert.equal(readStoreName(next, "12345"), "Central");
+    assert.equal(
+      dropStoreCampaignPreset(next, "12345", "2026-09-07", "2026-11-17"),
+      next,
+    );
   });
 
   it("drops one hidden name or one product default from saved settings", () => {

@@ -1,5 +1,11 @@
 [
   {
+    "version": "2.0.19",
+    "notes": [
+      "Stored data Edit can remove a whole campaign preset from a store"
+    ]
+  },
+  {
     "version": "2.0.18",
     "notes": [
       "PDF import accepts more date label layouts, including Issued on / Valid to and Valid from / Valid to"

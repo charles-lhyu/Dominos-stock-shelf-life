@@ -62,6 +62,7 @@ import {
   adoptStoreForCampaign,
   clearSavedDefaults,
   clearSavedHidden,
+  forgetSavedCampaignPreset,
   forgetSavedDefault,
   forgetSavedHidden,
   getCampaignLibrary,
@@ -243,6 +244,8 @@ type StoredCampaignDraft = {
   validUntil: string;
   title: string;
   onScreen: boolean;
+  /** Marked for removal from this store's stored data. */
+  removed: boolean;
   hidden: HiddenEntry[];
   baselineHidden: HiddenEntry[];
   defaults: Record<string, ProductDefault>;
@@ -292,7 +295,7 @@ type StoredEditDraft = {
 
 type StoredEditChange = {
   id: string;
-  group: "Store" | "Hidden" | "Defaults";
+  group: "Store" | "Presets" | "Hidden" | "Defaults";
   label: string;
   from: string;
   to: string;
@@ -351,6 +354,16 @@ function listStoredEditChanges(draft: StoredEditDraft): StoredEditChange[] {
   }
   const campaignCount = Object.keys(draft.campaigns).length;
   for (const [campKey, campaign] of Object.entries(draft.campaigns)) {
+    if (campaign.removed) {
+      changes.push({
+        id: `preset:${campKey}`,
+        group: "Presets",
+        label: campaign.title || formatShortDate(campaign.validUntil),
+        from: "Saved",
+        to: "Removed",
+      });
+      continue;
+    }
     const suffix =
       campaignCount > 1
         ? ` · ${campaign.title || formatShortDate(campaign.validUntil)}`
@@ -1635,6 +1648,7 @@ export function ImportChartButton({
         validUntil: item.validUntil,
         title: item.title,
         onScreen: !viewingOther && chartOnScreen(item.issued, item.validUntil),
+        removed: false,
         hidden,
         baselineHidden: hidden.map((entry) => ({ ...entry })),
         defaults,
@@ -1677,6 +1691,7 @@ export function ImportChartButton({
       for (const [key, campaign] of Object.entries(draft.campaigns)) {
         campaigns[key] = {
           ...campaign,
+          removed: false,
           hidden: campaign.baselineHidden.map((entry) => ({ ...entry })),
           defaults: copyDefaults(campaign.baselineDefaults),
         };
@@ -1713,6 +1728,14 @@ export function ImportChartButton({
       });
     }
     for (const campaign of Object.values(draft.campaigns)) {
+      if (campaign.removed) {
+        forgetSavedCampaignPreset(
+          draft.storeId,
+          campaign.issued,
+          campaign.validUntil,
+        );
+        continue;
+      }
       const remaining = new Set(campaign.hidden.map((entry) => hiddenEntryKey(entry)));
       for (const entry of campaign.baselineHidden) {
         const key = hiddenEntryKey(entry);
@@ -2073,16 +2096,28 @@ export function ImportChartButton({
     }));
   }
 
-  const storedDisplayRows = (previewStoreId ? previewRows : storedRows).map((item) => {
-    if (!storedDraft) return item;
+  function removeCampaignPreset(issued: string, validUntil: string) {
+    patchStoredCampaign(issued, validUntil, (campaign) => ({
+      ...campaign,
+      removed: true,
+      hidden: [],
+      defaults: {},
+    }));
+  }
+
+  const storedDisplayRows = (previewStoreId ? previewRows : storedRows).flatMap((item) => {
+    if (!storedDraft) return [item];
     const key = campaignKey(item.issued, item.validUntil);
     const campaign = key ? storedDraft.campaigns[key] : undefined;
-    if (!campaign) return item;
-    return {
-      ...item,
-      hidden: campaign.hidden,
-      preset: { ...item.preset, defaults: campaign.defaults },
-    };
+    if (!campaign) return [item];
+    if (campaign.removed) return [];
+    return [
+      {
+        ...item,
+        hidden: campaign.hidden,
+        preset: { ...item.preset, defaults: campaign.defaults },
+      },
+    ];
   });
 
   const storeDisplayRow = storedDisplayRows[0];
@@ -2807,11 +2842,24 @@ export function ImportChartButton({
                           <p className="min-w-0 truncate text-sm font-medium text-white">
                             {item.title}
                           </p>
-                          {onScreen ? (
-                            <span className="shrink-0 text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-sky-300">
-                              On screen
-                            </span>
-                          ) : null}
+                          <div className="flex shrink-0 items-center gap-2">
+                            {onScreen ? (
+                              <span className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-sky-300">
+                                On screen
+                              </span>
+                            ) : null}
+                            {storedEditing ? (
+                              <RemoveMark
+                                label={`Remove preset ${item.title}`}
+                                onClick={() =>
+                                  removeCampaignPreset(
+                                    item.issued,
+                                    item.validUntil,
+                                  )
+                                }
+                              />
+                            ) : null}
+                          </div>
                         </div>
                         <p className="mt-0.5 text-xs text-stone-400">
                           Issued {formatShortDate(item.issued)} · Valid until{" "}
@@ -3537,21 +3585,24 @@ export function ImportChartButton({
                       (item) => item.storeId === allStoredPreviewId,
                     )
                   : [];
-                const previewCampaigns = previewCampaignsRaw.map((item) => {
+                const previewCampaigns = previewCampaignsRaw.flatMap((item) => {
                   if (
                     !storedDraft ||
                     storedDraft.storeId !== allStoredPreviewId
                   ) {
-                    return item;
+                    return [item];
                   }
                   const key = campaignKey(item.issued, item.validUntil);
                   const campaign = key ? storedDraft.campaigns[key] : undefined;
-                  if (!campaign) return item;
-                  return {
-                    ...item,
-                    hidden: campaign.hidden,
-                    preset: { ...item.preset, defaults: campaign.defaults },
-                  };
+                  if (!campaign) return [item];
+                  if (campaign.removed) return [];
+                  return [
+                    {
+                      ...item,
+                      hidden: campaign.hidden,
+                      preset: { ...item.preset, defaults: campaign.defaults },
+                    },
+                  ];
                 });
                 const storeSelectItems = Object.fromEntries(
                   deviceStoreSettings.map((store) => [
@@ -3984,11 +4035,25 @@ export function ImportChartButton({
                                     <p className="min-w-0 truncate text-sm font-medium text-white">
                                       {selectedCampaign.title}
                                     </p>
-                                    {selectedCampaignOnScreen ? (
-                                      <span className="shrink-0 text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-sky-300">
-                                        On screen
-                                      </span>
-                                    ) : null}
+                                    <div className="flex shrink-0 items-center gap-2">
+                                      {selectedCampaignOnScreen ? (
+                                        <span className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-sky-300">
+                                          On screen
+                                        </span>
+                                      ) : null}
+                                      {editingPreview ? (
+                                        <RemoveMark
+                                          label={`Remove preset ${selectedCampaign.title}`}
+                                          onClick={() => {
+                                            removeCampaignPreset(
+                                              selectedCampaign.issued,
+                                              selectedCampaign.validUntil,
+                                            );
+                                            setAllStoredPreviewCampaignKey(null);
+                                          }}
+                                        />
+                                      ) : null}
+                                    </div>
                                   </div>
                                   <p className="mt-0.5 text-xs text-stone-400">
                                     Issued{" "}

@@ -7,6 +7,7 @@ import {
   listStoreCampaigns,
   dropAllStoredDefaults,
   dropAllStoredHidden,
+  dropStoreCampaignPreset,
   dropStoredDefault,
   dropStoredHidden,
   setStoredDefault,
@@ -611,6 +612,18 @@ export function clearSavedHidden(storeId: string, issued: string, validUntil: st
 
 export function clearSavedDefaults(storeId: string, issued: string, validUntil: string) {
   updateSavedCampaign(storeId, issued, validUntil, dropAllStoredDefaults);
+}
+
+/** Remove a whole campaign preset from a store's stored data. */
+export function forgetSavedCampaignPreset(
+  storeId: string,
+  issued: string,
+  validUntil: string,
+) {
+  hydrateCampaignLibrary();
+  const next = dropStoreCampaignPreset(library, storeId, issued, validUntil);
+  if (next === library) return;
+  commitLibrary(next);
 }
 
 export function subscribeStoredStore(listener: () => void) {

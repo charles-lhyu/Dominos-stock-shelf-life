@@ -554,6 +554,31 @@ export function dropAllStoredDefaults(settings: StoreCampaignSettings): StoreCam
   return { ...settings, preset: { ...settings.preset, defaults: {} } };
 }
 
+/** Remove one campaign preset from a store. Leaves store settings and other presets. */
+export function dropStoreCampaignPreset(
+  library: CampaignLibrary,
+  storeId: string,
+  issued: string,
+  validUntil: string,
+): CampaignLibrary {
+  const key = campaignKey(issued, validUntil);
+  if (!storeId || !key) return library;
+  const store = library.stores[storeId];
+  if (!store?.campaigns[key]) return library;
+  const campaigns = { ...store.campaigns };
+  delete campaigns[key];
+  return {
+    ...library,
+    stores: {
+      ...library.stores,
+      [storeId]: {
+        ...store,
+        campaigns,
+      },
+    },
+  };
+}
+
 const EMPTY_SETTINGS: StoreCampaignSettings = {
   hidden: [],
   preset: DEFAULT_ITEM_PRESET,
