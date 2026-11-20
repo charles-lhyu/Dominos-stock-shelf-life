@@ -1,5 +1,11 @@
 [
   {
+    "version": "2.0.17",
+    "notes": [
+      "PDF import accepts date ranges such as “16th November 2026 to 4th January 2027” (and Valid from … to …)"
+    ]
+  },
+  {
     "version": "2.0.16",
     "notes": [
       "PDF import reads more Issued / Valid until date formats (ordinals, colons, UK numeric dates, and stacked labels)"

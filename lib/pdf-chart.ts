@@ -370,6 +370,18 @@ function isoFromLooseDate(raw: string): string {
   return "";
 }
 
+const DATE_RANGE_JOIN = String.raw`(?:to|-|–|—)`;
+
+function datesFromPair(fromRaw: string, untilRaw: string): {
+  issued: string;
+  validUntil: string;
+} | null {
+  const issued = isoFromLooseDate(fromRaw);
+  const validUntil = isoFromLooseDate(untilRaw);
+  if (!issued || !validUntil || issued >= validUntil) return null;
+  return { issued, validUntil };
+}
+
 /** Pull Issued + Valid until from flattened PDF text (labels vary a lot). */
 export function scrapeCampaignDates(flat: string): {
   issued: string;
@@ -386,9 +398,8 @@ export function scrapeCampaignDates(flat: string): {
     ),
   );
   if (stacked?.[1] && stacked[2]) {
-    const issued = isoFromLooseDate(stacked[1]);
-    const validUntil = isoFromLooseDate(stacked[2]);
-    if (issued && validUntil) return { issued, validUntil };
+    const pair = datesFromPair(stacked[1], stacked[2]);
+    if (pair) return pair;
   }
 
   const issuedMatch =
@@ -420,10 +431,34 @@ export function scrapeCampaignDates(flat: string): {
         "i",
       ),
     );
-  return {
+  const labeled = {
     issued: issuedMatch?.[1] ? isoFromLooseDate(issuedMatch[1]) : "",
     validUntil: validMatch?.[1] ? isoFromLooseDate(validMatch[1]) : "",
   };
+  if (labeled.issued && labeled.validUntil) return labeled;
+
+  // Newer charts print a range: "16th November 2026 to 4th January 2027"
+  // (sometimes "Valid from … to …" or an en dash).
+  const validRange = text.match(
+    new RegExp(
+      `valid\\s*(?:from\\s*)?(${LOOSE_DATE})\\s*${DATE_RANGE_JOIN}\\s*(${LOOSE_DATE})`,
+      "i",
+    ),
+  );
+  if (validRange?.[1] && validRange[2]) {
+    const pair = datesFromPair(validRange[1], validRange[2]);
+    if (pair) return pair;
+  }
+
+  const bareRange = text.match(
+    new RegExp(`(${LOOSE_DATE})\\s*${DATE_RANGE_JOIN}\\s*(${LOOSE_DATE})`, "i"),
+  );
+  if (bareRange?.[1] && bareRange[2]) {
+    const pair = datesFromPair(bareRange[1], bareRange[2]);
+    if (pair) return pair;
+  }
+
+  return labeled;
 }
 
 type PdfLine = {

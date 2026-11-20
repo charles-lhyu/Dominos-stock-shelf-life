@@ -253,4 +253,35 @@ describe("PDF shelf life parsing", () => {
     assert.equal(result.pack.chart.issued, "2026-09-07");
     assert.equal(result.pack.chart.validUntil, "2026-11-17");
   });
+
+  it("reads date ranges (to / dash / Valid from … to …)", () => {
+    assert.deepEqual(
+      scrapeCampaignDates("16th November 2026 to 4th January 2027"),
+      { issued: "2026-11-16", validUntil: "2027-01-04" },
+    );
+    assert.deepEqual(
+      scrapeCampaignDates(
+        "Valid from 16th November 2026 to 4th January 2027",
+      ),
+      { issued: "2026-11-16", validUntil: "2027-01-04" },
+    );
+    assert.deepEqual(
+      scrapeCampaignDates("16th November 2026 – 4th January 2027"),
+      { issued: "2026-11-16", validUntil: "2027-01-04" },
+    );
+    assert.deepEqual(
+      scrapeCampaignDates("16th November 2026 - 4th January 2027"),
+      { issued: "2026-11-16", validUntil: "2027-01-04" },
+    );
+
+    const result = packFromPdfText(
+      "Campaign 6 shelf life chart. All stores. 16th November 2026 to 4th January 2027. Pepperoni 14 days Chorizo 14 days",
+      "campaign-6.pdf",
+    );
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.pack.chart.issued, "2026-11-16");
+    assert.equal(result.pack.chart.validUntil, "2027-01-04");
+    assert.ok(result.pack.rules.some((item) => item.name === "Pepperoni"));
+  });
 });
