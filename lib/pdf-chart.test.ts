@@ -235,14 +235,14 @@ describe("PDF shelf life parsing", () => {
     assert.equal(result.ok, true);
     if (!result.ok) return;
     for (const name of ["Pepperoni", "Chorizo", "Nduja Sausage"]) {
-      const rule = result.pack.rules.find(
+      const rule: ShelfRule | undefined = result.pack.rules.find(
         (item) => item.name === name && item.sectionId === "frozen",
       );
       assert.ok(rule, name);
       assert.equal(rule.fromDelivery, "12 days");
       assert.equal(rule.inUse, "12 days");
     }
-    const tandoori = result.pack.rules.find(
+    const tandoori: ShelfRule | undefined = result.pack.rules.find(
       (item) => item.name === "Tandoori Chicken" && item.sectionId === "frozen",
     );
     assert.ok(tandoori);
@@ -256,7 +256,7 @@ describe("PDF shelf life parsing", () => {
     assert.equal(result.ok, true);
     if (!result.ok) return;
     for (const name of ["Ham", "Mushrooms", "Onions"]) {
-      const rule = result.pack.rules.find(
+      const rule: ShelfRule | undefined = result.pack.rules.find(
         (item) => item.name === name && item.sectionId === "chilled",
       );
       assert.ok(rule, name);
