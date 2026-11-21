@@ -56,10 +56,13 @@ function withChartDisplayName(rule: ShelfRule): ShelfRule {
   const bundled = BUNDLED_PACK.rules.find(
     (item) => item.name === next.name && item.sectionId === next.sectionId,
   );
-  if (bundled?.tags?.length) {
-    next = { ...next, tags: [...bundled.tags] };
-  } else if (next.tags?.length) {
-    next = { ...next, tags: undefined };
+  // Bundled twins own the NEW chip. Unknown PDF-discovered products keep theirs.
+  if (bundled) {
+    if (bundled.tags?.length) {
+      next = { ...next, tags: [...bundled.tags] };
+    } else if (next.tags?.length) {
+      next = { ...next, tags: undefined };
+    }
   }
   // Only fill aliases when we renamed a chart label into the clean title.
   if (rename && bundled?.aliases?.length) {

@@ -57,6 +57,28 @@ describe("PDF shelf life parsing", () => {
     assert.match(result.error, /No shelf-life products/i);
   });
 
+  it("discovers brand-new PDF products that are not in the bundled catalog", () => {
+    const text =
+      "Campaign 6 Shelf Life All stores Version 1 Issued on Valid to 16th November 2026 4th January 2027. " +
+      "Chilled (defrosted / frozen before use) Pepperoni 14 days NEW Spicy Honey Sauce 11 days " +
+      "Chilled — ambient before use Galaxy Veg Date on pack 10 days N/A " +
+      "Notes: Chinese Style Chicken see previous chart.";
+    const result = packFromPdfText(text, "campaign-6.pdf");
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    const names = result.pack.rules.map((item) => item.name).sort();
+    assert.ok(names.includes("Pepperoni"));
+    assert.ok(names.includes("Spicy Honey Sauce"));
+    assert.ok(names.includes("Galaxy Veg"));
+    assert.ok(!names.includes("Chinese Style Chicken"));
+    const spicy = result.pack.rules.find((item) => item.name === "Spicy Honey Sauce");
+    assert.deepEqual(spicy?.tags, ["new"]);
+    assert.equal(spicy?.fromDelivery, "11 days");
+    const veg = result.pack.rules.find((item) => item.name === "Galaxy Veg");
+    assert.equal(veg?.unopened, "Date on pack");
+    assert.equal(veg?.prepped, "10 days");
+  });
+
   it("does not give sliced gherkins the previous sauce's 8 days", () => {
     const text =
       "Cheese Sauce Date on pack 8 days 15 hours Sliced Gherkins Date on pack 16 days N/A Sweetcorn Date on pack 11 days N/A";

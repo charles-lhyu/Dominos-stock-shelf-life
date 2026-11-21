@@ -1,7 +1,7 @@
 import { BUNDLED_PACK, parseChartPack } from "./chart-pack";
 import { putPdfCropImage, saveSourcePdf } from "./pdf-crop-images";
 import { splitPreppedAmbientFields } from "./storage-life";
-import type { ChartPack, ShelfRule } from "./types";
+import type { ChartPack, SectionId, ShelfRule, ShelfTag } from "./types";
 
 function pdfWorkerSrc() {
   const base = (process.env.NEXT_PUBLIC_BASE_PATH ?? "").replace(/\/$/, "");
@@ -650,6 +650,12 @@ function applyParsedDayCounts(
 
   if (deliveryN && useN) {
     if (days.length >= 2) {
+      // Spanned delivery+in-use cell: one printed count. Extra counts belong to later rows.
+      if (deliveryN === useN) {
+        next.fromDelivery = `${days[0]} days`;
+        next.inUse = `${days[0]} days`;
+        return;
+      }
       next.fromDelivery = `${days[0]} days`;
       next.inUse = `${days[1]} days`;
       return;
@@ -713,6 +719,294 @@ function hasChartLifeEvidence(
   if (/\bbb\s*date\b/i.test(window)) return true;
   if (/\bn\/a\b/i.test(window)) return true;
   return false;
+}
+
+/** PDF chrome / section headers — never invent these as products. */
+const DISCOVERY_STOP = new Set([
+  "campaign",
+  "shelf",
+  "life",
+  "all",
+  "stores",
+  "store",
+  "version",
+  "issued",
+  "issue",
+  "date",
+  "valid",
+  "until",
+  "till",
+  "thru",
+  "through",
+  "from",
+  "to",
+  "delivery",
+  "use",
+  "unopened",
+  "prepped",
+  "ambient",
+  "category",
+  "product",
+  "products",
+  "frozen",
+  "chilled",
+  "pack",
+  "packaging",
+  "dated",
+  "original",
+  "items",
+  "item",
+  "notes",
+  "note",
+  "see",
+  "follow",
+  "hours",
+  "days",
+  "day",
+  "hour",
+  "new",
+  "other",
+  "before",
+  "after",
+  "the",
+  "and",
+  "or",
+  "of",
+  "on",
+  "in",
+  "a",
+  "an",
+  "defrosted",
+  "makeline",
+  "walk",
+  "column",
+  "row",
+  "inc",
+  "including",
+]);
+
+function slugName(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function displayNameFromFlat(flat: string, start: number, end: number) {
+  return flat
+    .slice(start, end)
+    .replace(/\s+/g, " ")
+    .replace(/\(\s*frozen\s*\)/gi, "")
+    .replace(/\bnew\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isDiscoverableProductName(key: string) {
+  const parts = key.split(" ").filter(Boolean);
+  if (parts.length === 0 || key.length < 3) return false;
+  if (parts.every((part) => DISCOVERY_STOP.has(part))) return false;
+  if (DISCOVERY_STOP.has(parts[0]!)) return false;
+  // Reject pure life / chrome tails.
+  if (/^(date|bb|n\/a|hours?|days?)$/i.test(key)) return false;
+  return true;
+}
+
+function inferSectionId(haystack: string, at: number): SectionId {
+  const before = haystack.slice(Math.max(0, at - 500), at);
+  if (
+    /dated\s+on\s+the\s+original\s+packaging|other\s+items|\bon\s+the\s+pack\b/i.test(
+      before,
+    )
+  ) {
+    return "pack";
+  }
+  if (/ambient\s+items\b/i.test(before)) return "ambient";
+  if (/ambient\s+before\s+use|chilled\s*[—\-]\s*ambient/i.test(before)) {
+    return "ready";
+  }
+  if (/frozen\s+before\s+use|defrosted/i.test(before)) return "frozen";
+  if (/chilled\s+items\b/i.test(before)) return "chilled";
+  return "frozen";
+}
+
+function inventRuleFromLifeWindow(input: {
+  name: string;
+  sectionId: SectionId;
+  window: string;
+  tags?: ShelfTag[];
+  pdfCrop: string;
+}): ShelfRule {
+  const { name, sectionId, window, tags, pdfCrop } = input;
+  const days = dayCountsIn(window);
+  const hours = hourCountsIn(window);
+  const hasDateOn = /\bdate\s+on\b/i.test(window);
+  const hasBb = /\bbb\s*date\b/i.test(window);
+  const id = `${sectionId}:${slugName(name)}`;
+  const base: ShelfRule = {
+    id,
+    sectionId,
+    category: sectionId === "pack" ? "Other" : "Imported",
+    name,
+    aliases: [],
+    sameAs: [],
+    pdfCrop,
+    ...(tags?.length ? { tags: [...tags] } : {}),
+  };
+
+  if (sectionId === "pack" || (hasDateOn && !days[0] && !hours[0])) {
+    return {
+      ...base,
+      unopened: hasBb ? "BB date on pack" : "Date on pack",
+    };
+  }
+
+  if (sectionId === "frozen") {
+    const day = days[0];
+    if (day) {
+      return {
+        ...base,
+        fromDelivery: `${day} days`,
+        inUse: days[1] ? `${days[1]} days` : `${day} days`,
+      };
+    }
+    if (hours[0]) {
+      return {
+        ...base,
+        fromDelivery: `${hours[0]} hours`,
+        inUse: `${hours[0]} hours`,
+      };
+    }
+  }
+
+  const day = days[0];
+  const hour = hours[0];
+  return {
+    ...base,
+    unopened: hasDateOn || hasBb || sectionId !== "frozen" ? "Date on pack" : undefined,
+    prepped: day
+      ? `${day} days`
+      : hour
+        ? `${hour} hours`
+        : hasBb
+          ? "BB date on pack"
+          : undefined,
+    ambientUse: /\bn\/a\b/i.test(window)
+      ? "N/A"
+      : /\bambient\b/i.test(window) && hour
+        ? `${hour} hours`
+        : undefined,
+  };
+}
+
+function isDiscoveryNameWord(word: string) {
+  if (!word || DISCOVERY_STOP.has(word)) return false;
+  if (/^\d+$/.test(word)) return false;
+  return /^[a-z][a-z0-9'&]*$/i.test(word);
+}
+
+/**
+ * Products printed on the PDF with a life cell but missing from the bundled
+ * catalog (new campaign SKUs). Walk backwards from each life cell so we do not
+ * swallow "14 days Chorizo" as a product name.
+ */
+function discoverUnknownChartRules(
+  flat: string,
+  haystack: string,
+  coveredKeys: Set<string>,
+): ShelfRule[] {
+  const found: ShelfRule[] = [];
+  const seen = new Set<string>(coveredKeys);
+  const lifePattern =
+    /(?:date\s+on(?:\s+(?:pack|tray))?|bb\s*date(?:\s+on(?:\s+(?:pack|tray))?)?|\d+\s*days?|\d+\s*hours?|\bn\/a\b)/gi;
+
+  let life: RegExpExecArray | null;
+  while ((life = lifePattern.exec(haystack))) {
+    const lifeStart = life.index ?? 0;
+    let cursor = lifeStart;
+    const before = haystack.slice(0, cursor);
+    const frozen = before.match(/\(\s*frozen\s*\)\s*$/i);
+    if (frozen) cursor -= frozen[0].length;
+
+    const words: { text: string; start: number; end: number }[] = [];
+    let rest = haystack.slice(0, cursor).replace(/\s+$/, "");
+    while (words.length < 7 && rest) {
+      const wordMatch = rest.match(/([a-z][a-z0-9'&]*)\s*$/i);
+      if (!wordMatch || wordMatch.index == null) break;
+      const word = wordMatch[1]!.toLowerCase();
+      if (word === "new" && words.length > 0) {
+        // Stop before NEW; handled as a tag below.
+        rest = rest.slice(0, wordMatch.index);
+        break;
+      }
+      if (!isDiscoveryNameWord(word)) break;
+      const start = wordMatch.index;
+      const end = start + wordMatch[1]!.length;
+      words.unshift({ text: wordMatch[1]!, start, end });
+      rest = rest.slice(0, start).replace(/\s+$/, "");
+    }
+    if (words.length === 0) continue;
+
+    const nameStart = words[0]!.start;
+    const nameEnd = words[words.length - 1]!.end;
+    const prefix = haystack.slice(Math.max(0, nameStart - 6), nameStart);
+    const newMarker = /\bnew\s*$/i.test(prefix);
+    const key = nameKey(words.map((word) => word.text).join(" "));
+    if (!isDiscoverableProductName(key) || seen.has(key)) continue;
+    if (
+      BUNDLED_PACK.rules.some(
+        (rule) =>
+          nameKey(rule.name) === key ||
+          rule.aliases.some((alias) => nameKey(alias) === key),
+      )
+    ) {
+      continue;
+    }
+
+    // Keep the life window on this row — do not bleed into the next product.
+    let windowEnd = lifeStart + life[0]!.length;
+    const trailing = haystack
+      .slice(windowEnd, windowEnd + 48)
+      .match(
+        /^(?:\s*(?:date\s+on(?:\s+(?:pack|tray))?|bb\s*date(?:\s+on(?:\s+(?:pack|tray))?)?|\d+\s*days?|\d+\s*hours?|n\/a))+/i,
+      );
+    if (trailing) windowEnd += trailing[0].length;
+    const window = haystack.slice(lifeStart, windowEnd);
+    if (!hasChartLifeEvidence(window, undefined)) continue;
+
+    const frozenLabel = Boolean(frozen);
+    const inferred = inferSectionId(haystack, nameStart);
+    const sectionId = frozenLabel
+      ? "frozen"
+      : /\bdate\s+on\b|\bbb\s*date\b/i.test(window)
+        ? inferred === "pack" ||
+          inferred === "ambient" ||
+          inferred === "chilled" ||
+          inferred === "ready"
+          ? inferred
+          : "ready"
+        : inferred;
+
+    const display = displayNameFromFlat(flat, nameStart, nameEnd);
+    if (!display || display.length < 3) continue;
+
+    const rule = inventRuleFromLifeWindow({
+      name: display,
+      sectionId,
+      window,
+      tags: newMarker ? ["new"] : undefined,
+      pdfCrop: haystack
+        .slice(newMarker ? Math.max(0, nameStart - 4) : nameStart, windowEnd)
+        .trim(),
+    });
+    if (!rule.fromDelivery && !rule.prepped && !rule.unopened && !rule.inUse) {
+      continue;
+    }
+    seen.add(key);
+    found.push(rule);
+  }
+  return found;
 }
 
 async function renderPageCanvas(page: PdfjsPage, scale: number) {
@@ -911,7 +1205,11 @@ export function packFromPdfText(text: string, fileName: string): { ok: true; pac
     applyParsedDayCounts(next, base, window, columnLife);
 
     // Divided prepped cells: "chilled" → prepped (chilled), "ambient" → ambientUse.
-    if (/\bchilled\b|\bambient\b/i.test(window)) {
+    // Only for rows that already have those fields — do not invent prepped on frozen toppings.
+    if (
+      (base.prepped || base.ambientUse) &&
+      /\bchilled\b|\bambient\b/i.test(window)
+    ) {
       const split = splitPreppedAmbientFields(base.prepped, base.ambientUse, window);
       if (split.prepped) next.prepped = split.prepped;
       if (split.ambientUse) next.ambientUse = split.ambientUse;
@@ -926,6 +1224,19 @@ export function packFromPdfText(text: string, fileName: string): { ok: true; pac
       used.add(next.id);
       rules.push(next);
     }
+  }
+
+  // Brand-new campaign SKUs are not in BUNDLED_PACK — invent rows from PDF life cells.
+  const coveredKeys = new Set(
+    rules.flatMap((rule) => [
+      nameKey(rule.name),
+      ...rule.aliases.map((alias) => nameKey(alias)),
+    ]),
+  );
+  for (const invented of discoverUnknownChartRules(flat, haystack, coveredKeys)) {
+    if (used.has(invented.id)) continue;
+    used.add(invented.id);
+    rules.push(invented);
   }
 
   if (rules.length === 0) {
