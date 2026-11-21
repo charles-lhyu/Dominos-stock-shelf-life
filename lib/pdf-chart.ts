@@ -106,13 +106,31 @@ function hourCountsIn(text: string) {
   return [...text.matchAll(/(\d+)\s*hours?/gi)].map((match) => match[1]);
 }
 
-type ColumnLife = { days?: string; hours?: string };
+type ColumnLife = {
+  days?: string;
+  /** Second day count when From delivery and In use differ (Bacon 10 + 7). */
+  dualDays?: string;
+  hours?: string;
+  /** Character range in haystack that held this group's life counts. */
+  lifeFrom?: number;
+  lifeTo?: number;
+};
+
+function wantsDualDayCounts(span: NameSpan): boolean {
+  return BUNDLED_PACK.rules.some((rule) => {
+    if (nameKey(rule.name) !== span.name) return false;
+    const deliveryN = dayField(rule.fromDelivery);
+    const useN = dayField(rule.inUse);
+    return Boolean(deliveryN && useN && deliveryN !== useN);
+  });
+}
 
 /**
  * Name column then life column: "Pepperdew Pineapple Olives 25 days 10 days 10 days"
  * or "Garlic Butter Pizza Sauce 12 hours 15 hours".
  * Those counts belong one-per-name. The last name's window would otherwise start
  * at the first count and steal the earlier product's life.
+ * Bacon prints two day counts (delivery + in-use); allow days.length > size.
  */
 function columnLifeCounts(spans: NameSpan[], haystack: string) {
   const assigned = new Map<number, ColumnLife>();
@@ -129,16 +147,52 @@ function columnLifeCounts(spans: NameSpan[], haystack: string) {
     if (size >= 2) {
       const from = spans[end].end;
       const nextStart = end + 1 < spans.length ? spans[end + 1].start : haystack.length;
-      const slice = haystack.slice(from, Math.min(nextStart, from + 160));
+      const lifeTo = Math.min(nextStart, from + 220);
+      const slice = haystack.slice(from, lifeTo);
       const days = dayCountsIn(slice);
       const hours = hourCountsIn(slice);
       if (days.length === size) {
         for (let offset = 0; offset < size; offset += 1) {
-          assigned.set(index + offset, { days: days[offset] });
+          assigned.set(index + offset, {
+            days: days[offset],
+            lifeFrom: from,
+            lifeTo,
+          });
+        }
+      } else if (days.length > size) {
+        // Extra counts are dual delivery/in-use cells (Bacon 10 days 7 days).
+        let dayIndex = 0;
+        for (let offset = 0; offset < size; offset += 1) {
+          if (dayIndex >= days.length) break;
+          const span = spans[index + offset]!;
+          const remainingNames = size - offset;
+          const remainingDays = days.length - dayIndex;
+          const takeDual =
+            wantsDualDayCounts(span) && remainingDays > remainingNames;
+          if (takeDual && dayIndex + 1 < days.length) {
+            assigned.set(index + offset, {
+              days: days[dayIndex],
+              dualDays: days[dayIndex + 1],
+              lifeFrom: from,
+              lifeTo,
+            });
+            dayIndex += 2;
+          } else {
+            assigned.set(index + offset, {
+              days: days[dayIndex],
+              lifeFrom: from,
+              lifeTo,
+            });
+            dayIndex += 1;
+          }
         }
       } else if (hours.length === size) {
         for (let offset = 0; offset < size; offset += 1) {
-          assigned.set(index + offset, { hours: hours[offset] });
+          assigned.set(index + offset, {
+            hours: hours[offset],
+            lifeFrom: from,
+            lifeTo,
+          });
         }
       }
     }
@@ -647,8 +701,33 @@ function applyParsedDayCounts(
   const preppedN =
     base.prepped && !/date on|bb date/i.test(base.prepped) ? dayField(base.prepped) : null;
   const columnDay = columnLife?.days;
+  const columnDual = columnLife?.dualDays;
 
   if (deliveryN && useN) {
+    // Name+life columns already picked the right count(s). Prefer those over
+    // lifeWindow, which for the last name in a column still sees every day cell.
+    if (columnDay && columnDual) {
+      next.fromDelivery = `${columnDay} days`;
+      next.inUse = `${columnDual} days`;
+      return;
+    }
+    if (columnDay) {
+      if (deliveryN === useN) {
+        next.fromDelivery = `${columnDay} days`;
+        next.inUse = `${columnDay} days`;
+        return;
+      }
+      if (columnDay === useN && columnDay !== deliveryN) {
+        next.inUse = `${columnDay} days`;
+        return;
+      }
+      if (columnDay === deliveryN && columnDay !== useN) {
+        next.fromDelivery = `${columnDay} days`;
+        return;
+      }
+      next.fromDelivery = `${columnDay} days`;
+      return;
+    }
     if (days.length >= 2) {
       // Spanned delivery+in-use cell: one printed count. Extra counts belong to later rows.
       if (deliveryN === useN) {
@@ -660,7 +739,7 @@ function applyParsedDayCounts(
       next.inUse = `${days[1]} days`;
       return;
     }
-    const only = days[0] ?? columnDay;
+    const only = days[0];
     if (!only) return;
     // Spanned one-cell covering both columns (same day life on the chart).
     if (deliveryN === useN) {
@@ -675,9 +754,6 @@ function applyParsedDayCounts(
     if (only === deliveryN && only !== useN) {
       next.fromDelivery = `${only} days`;
       return;
-    }
-    if (columnDay && columnDay === deliveryN) {
-      next.fromDelivery = `${columnDay} days`;
     }
     return;
   }
@@ -712,7 +788,7 @@ function hasChartLifeEvidence(
   window: string,
   columnLife: ColumnLife | undefined,
 ): boolean {
-  if (columnLife?.days || columnLife?.hours) return true;
+  if (columnLife?.days || columnLife?.dualDays || columnLife?.hours) return true;
   if (/\d+\s*days?/i.test(window)) return true;
   if (/\d+\s*hours?/i.test(window)) return true;
   if (/\bdate\s+on\b/i.test(window)) return true;
@@ -803,14 +879,64 @@ function displayNameFromFlat(flat: string, start: number, end: number) {
     .trim();
 }
 
+/** Catalog labels longest-first — used to reject name-column mega-names. */
+const CATALOG_NAME_KEYS = (() => {
+  const keys = new Set<string>();
+  for (const rule of BUNDLED_PACK.rules) {
+    keys.add(nameKey(rule.name));
+    for (const alias of rule.aliases) keys.add(nameKey(alias));
+  }
+  return [...keys]
+    .filter((key) => key.length >= 3)
+    .sort((a, b) => b.length - a.length || a.localeCompare(b));
+})();
+
+/**
+ * True when `key` is two or more catalog product names stuck together
+ * (e.g. "pepperdew piquante peppers pineapple olives" from a name column).
+ */
+function looksLikeConcatenatedCatalogNames(key: string): boolean {
+  let rest = key.trim();
+  if (!rest) return false;
+  let segments = 0;
+  while (rest) {
+    const hit = CATALOG_NAME_KEYS.find(
+      (name) => rest === name || rest.startsWith(`${name} `),
+    );
+    if (!hit) return false;
+    segments += 1;
+    rest = rest.slice(hit.length).trim();
+  }
+  return segments >= 2;
+}
+
 function isDiscoverableProductName(key: string) {
   const parts = key.split(" ").filter(Boolean);
   if (parts.length === 0 || key.length < 3) return false;
+  // Real new SKUs are short; name-column dumps walk back many tokens.
+  if (parts.length > 4) return false;
   if (parts.every((part) => DISCOVERY_STOP.has(part))) return false;
   if (DISCOVERY_STOP.has(parts[0]!)) return false;
   // Reject pure life / chrome tails.
   if (/^(date|bb|n\/a|hours?|days?)$/i.test(key)) return false;
+  if (looksLikeConcatenatedCatalogNames(key)) return false;
   return true;
+}
+
+function claimedColumnLifeRanges(columnLives: Map<number, ColumnLife>) {
+  const ranges: { from: number; to: number }[] = [];
+  for (const life of columnLives.values()) {
+    if (life.lifeFrom == null || life.lifeTo == null) continue;
+    ranges.push({ from: life.lifeFrom, to: life.lifeTo });
+  }
+  return ranges;
+}
+
+function lifeTokenClaimed(
+  index: number,
+  ranges: { from: number; to: number }[],
+) {
+  return ranges.some((range) => index >= range.from && index < range.to);
 }
 
 function inferSectionId(haystack: string, at: number): SectionId {
@@ -910,11 +1036,14 @@ function isDiscoveryNameWord(word: string) {
  * Products printed on the PDF with a life cell but missing from the bundled
  * catalog (new campaign SKUs). Walk backwards from each life cell so we do not
  * swallow "14 days Chorizo" as a product name.
+ * Skip life tokens already claimed by column-layout catalog rows so we do not
+ * invent mega-names from name+life columns.
  */
 function discoverUnknownChartRules(
   flat: string,
   haystack: string,
   coveredKeys: Set<string>,
+  claimedLifeRanges: { from: number; to: number }[] = [],
 ): ShelfRule[] {
   const found: ShelfRule[] = [];
   const seen = new Set<string>(coveredKeys);
@@ -924,6 +1053,7 @@ function discoverUnknownChartRules(
   let life: RegExpExecArray | null;
   while ((life = lifePattern.exec(haystack))) {
     const lifeStart = life.index ?? 0;
+    if (lifeTokenClaimed(lifeStart, claimedLifeRanges)) continue;
     let cursor = lifeStart;
     const before = haystack.slice(0, cursor);
     const frozen = before.match(/\(\s*frozen\s*\)\s*$/i);
@@ -1233,7 +1363,13 @@ export function packFromPdfText(text: string, fileName: string): { ok: true; pac
       ...rule.aliases.map((alias) => nameKey(alias)),
     ]),
   );
-  for (const invented of discoverUnknownChartRules(flat, haystack, coveredKeys)) {
+  const claimedLifeRanges = claimedColumnLifeRanges(columnLives);
+  for (const invented of discoverUnknownChartRules(
+    flat,
+    haystack,
+    coveredKeys,
+    claimedLifeRanges,
+  )) {
     if (used.has(invented.id)) continue;
     used.add(invented.id);
     rules.push(invented);

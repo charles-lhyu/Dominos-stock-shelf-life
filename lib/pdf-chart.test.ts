@@ -172,6 +172,51 @@ describe("PDF shelf life parsing", () => {
     assert.equal(prepped(columns, "Olives"), "10 days");
   });
 
+  it("keeps frozen name-column rows when Bacon prints two day counts", () => {
+    const text =
+      "Pepperoni Chorizo Nduja Sausage Bacon Tandoori Chicken Chinese Style Chicken " +
+      "12 days 12 days 12 days 10 days 7 days 10 days 9 days";
+    const result = packFromPdfText(`${HEADER}${text}`, "campaign-5.pdf");
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    const frozen = (name: string) =>
+      result.pack.rules.find(
+        (item) => item.name === name && item.sectionId === "frozen",
+      );
+    for (const name of ["Pepperoni", "Chorizo", "Nduja Sausage"]) {
+      const rule = frozen(name);
+      assert.ok(rule, name);
+      assert.equal(rule.fromDelivery, "12 days");
+      assert.equal(rule.inUse, "12 days");
+    }
+    const bacon = frozen("Bacon");
+    assert.ok(bacon);
+    assert.equal(bacon.fromDelivery, "10 days");
+    assert.equal(bacon.inUse, "7 days");
+    const tandoori = frozen("Tandoori Chicken");
+    assert.ok(tandoori);
+    assert.equal(tandoori.fromDelivery, "10 days");
+    const chinese = frozen("Chinese Style Chicken");
+    assert.ok(chinese);
+    assert.equal(chinese.fromDelivery, "9 days");
+    assert.ok(
+      !result.pack.rules.some((item) =>
+        /pepperoni.*chorizo|bacon.*tandoori/i.test(item.name),
+      ),
+      "must not invent a concatenated frozen mega-name",
+    );
+  });
+
+  it("does not invent a mega-name from a chilled name+life column", () => {
+    const text =
+      "Pepperdew Piquante Peppers Pineapple Olives 25 days 10 days 10 days";
+    const result = packFromPdfText(`${HEADER}${text}`, "campaign-5.pdf");
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    const names = result.pack.rules.map((item) => item.name).sort();
+    assert.deepEqual(names, ["Olives", "Pepperdew Piquante Peppers", "Pineapple"]);
+  });
+
   it("still shares one life when names are joined with a slash or and", () => {
     assert.equal(prepped("Pineapple / Olives 9 days", "Pineapple"), "9 days");
     assert.equal(prepped("Pineapple / Olives 9 days", "Olives"), "9 days");

@@ -1,5 +1,11 @@
 [
   {
+    "version": "2.0.24",
+    "notes": [
+      "PDF import again reads classic Campaign 5 name-column layouts (including Bacon’s two day counts) without inventing junk mega-names"
+    ]
+  },
+  {
     "version": "2.0.23",
     "notes": [
       "PDF import now adds new chart products that are not in the previous catalog, as long as they print a shelf-life cell"
