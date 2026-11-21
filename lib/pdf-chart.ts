@@ -111,6 +111,8 @@ type ColumnLife = {
   /** Second day count when From delivery and In use differ (Bacon 10 + 7). */
   dualDays?: string;
   hours?: string;
+  /** Name column followed by Date on pack / BB date / N/A cells (no day digits). */
+  dateOn?: boolean;
   /** Character range in haystack that held this group's life counts. */
   lifeFrom?: number;
   lifeTo?: number;
@@ -125,12 +127,18 @@ function wantsDualDayCounts(span: NameSpan): boolean {
   });
 }
 
+function dateOnMarkersIn(text: string) {
+  return [...text.matchAll(/\b(?:date\s+on(?:\s+(?:pack|tray))?|bb\s*date(?:\s+on(?:\s+(?:pack|tray))?)?|n\/a)\b/gi)];
+}
+
 /**
- * Name column then life column: "Pepperdew Pineapple Olives 25 days 10 days 10 days"
- * or "Garlic Butter Pizza Sauce 12 hours 15 hours".
- * Those counts belong one-per-name. The last name's window would otherwise start
- * at the first count and steal the earlier product's life.
- * Bacon prints two day counts (delivery + in-use); allow days.length > size.
+ * Name column then life column — early 2.0 / 1.4.54 row+column model:
+ * - "Pepperdew Pineapple Olives 25 days 10 days 10 days" → one count per name
+ * - "Garlic Butter Pizza Sauce 12 hours 15 hours" → one hour per name
+ * - "Pepperoni Chorizo Nduja Sausage 12 days" → one shared life (spanned cell
+ *   without slash glue; same as early 2.0 keeping catalog defaults + overlay)
+ * - Bacon dual 10+7 when days.length > size
+ * - "Ham Mushrooms Onions Date on pack …" → every name gets date-on evidence
  */
 function columnLifeCounts(spans: NameSpan[], haystack: string) {
   const assigned = new Map<number, ColumnLife>();
@@ -151,13 +159,12 @@ function columnLifeCounts(spans: NameSpan[], haystack: string) {
       const slice = haystack.slice(from, lifeTo);
       const days = dayCountsIn(slice);
       const hours = hourCountsIn(slice);
+      const dateOns = dateOnMarkersIn(slice);
+      const markRange = { lifeFrom: from, lifeTo };
+
       if (days.length === size) {
         for (let offset = 0; offset < size; offset += 1) {
-          assigned.set(index + offset, {
-            days: days[offset],
-            lifeFrom: from,
-            lifeTo,
-          });
+          assigned.set(index + offset, { days: days[offset], ...markRange });
         }
       } else if (days.length > size) {
         // Extra counts are dual delivery/in-use cells (Bacon 10 days 7 days).
@@ -173,26 +180,34 @@ function columnLifeCounts(spans: NameSpan[], haystack: string) {
             assigned.set(index + offset, {
               days: days[dayIndex],
               dualDays: days[dayIndex + 1],
-              lifeFrom: from,
-              lifeTo,
+              ...markRange,
             });
             dayIndex += 2;
           } else {
             assigned.set(index + offset, {
               days: days[dayIndex],
-              lifeFrom: from,
-              lifeTo,
+              ...markRange,
             });
             dayIndex += 1;
           }
         }
+      } else if (days.length === 1) {
+        // Spanned life cell across a name column without slash glue.
+        for (let offset = 0; offset < size; offset += 1) {
+          assigned.set(index + offset, { days: days[0], ...markRange });
+        }
       } else if (hours.length === size) {
         for (let offset = 0; offset < size; offset += 1) {
-          assigned.set(index + offset, {
-            hours: hours[offset],
-            lifeFrom: from,
-            lifeTo,
-          });
+          assigned.set(index + offset, { hours: hours[offset], ...markRange });
+        }
+      } else if (hours.length === 1) {
+        for (let offset = 0; offset < size; offset += 1) {
+          assigned.set(index + offset, { hours: hours[0], ...markRange });
+        }
+      } else if (dateOns.length > 0) {
+        // Date on pack / N/A column: every name in the band is a chart row.
+        for (let offset = 0; offset < size; offset += 1) {
+          assigned.set(index + offset, { dateOn: true, ...markRange });
         }
       }
     }
@@ -698,8 +713,6 @@ function applyParsedDayCounts(
   const days = dayCountsIn(window);
   const deliveryN = dayField(base.fromDelivery);
   const useN = dayField(base.inUse);
-  const preppedN =
-    base.prepped && !/date on|bb date/i.test(base.prepped) ? dayField(base.prepped) : null;
   const columnDay = columnLife?.days;
   const columnDual = columnLife?.dualDays;
 
@@ -760,7 +773,10 @@ function applyParsedDayCounts(
 
   const dayCount = columnDay ?? days[0];
   if (dayCount && deliveryN) next.fromDelivery = `${dayCount} days`;
-  if (dayCount && preppedN) next.prepped = `${dayCount} days`;
+  // Column/PDF day counts win even when the bundled catalog used hours.
+  if (dayCount && base.prepped && !/date on|bb date/i.test(base.prepped)) {
+    next.prepped = `${dayCount} days`;
+  }
 }
 
 function applyParsedHourCounts(
@@ -781,20 +797,45 @@ function applyParsedHourCounts(
 }
 
 /**
- * Only treat a name as a chart row when its life cell is present.
- * Footnotes / notes that merely mention a product must not re-add it.
+ * Life cell present for this name (row window or name-column assignment).
  */
 function hasChartLifeEvidence(
   window: string,
   columnLife: ColumnLife | undefined,
 ): boolean {
-  if (columnLife?.days || columnLife?.dualDays || columnLife?.hours) return true;
+  if (
+    columnLife?.days ||
+    columnLife?.dualDays ||
+    columnLife?.hours ||
+    columnLife?.dateOn
+  ) {
+    return true;
+  }
   if (/\d+\s*days?/i.test(window)) return true;
   if (/\d+\s*hours?/i.test(window)) return true;
   if (/\bdate\s+on\b/i.test(window)) return true;
   if (/\bbb\s*date\b/i.test(window)) return true;
   if (/\bn\/a\b/i.test(window)) return true;
   return false;
+}
+
+/**
+ * Footnote / notes band — early 2.0 kept every catalog mention; 2.0.22 dropped
+ * all names without a life cell. Prefer early membership except here, so
+ * "Notes: see Pepperoni …" does not re-add products.
+ */
+function inNotesRegion(haystack: string, at: number): boolean {
+  const before = haystack.slice(Math.max(0, at - 140), at);
+  if (/\bnotes?\s*:/i.test(before)) return true;
+  if (/\bsee\s+(?:previous|older|the\s+previous|the\s+older)\b/i.test(before)) {
+    return true;
+  }
+  if (/\bfor\s+older\s+charts?\b/i.test(before)) return true;
+  return false;
+}
+
+function bundledCampaignNumber() {
+  return BUNDLED_PACK.chart.title.match(/campaign\s*(\d+)/i)?.[1] ?? "";
 }
 
 /** PDF chrome / section headers — never invent these as products. */
@@ -1347,8 +1388,12 @@ export function packFromPdfText(text: string, fileName: string): { ok: true; pac
       applyParsedHourCounts(next, base, window, columnLife);
     }
 
-    // Skip name-only hits (footnotes / notes) so the list matches chart rows.
-    if (!hasChartLifeEvidence(window, columnLife)) continue;
+    // Early 2.0 kept every catalog name found on the sheet. Skip only footnote
+    // mentions that have no life cell (notes / "see older charts").
+    const span = spans[spanIndex]!;
+    if (!hasChartLifeEvidence(window, columnLife)) {
+      if (inNotesRegion(haystack, span.start)) continue;
+    }
 
     if (!used.has(next.id)) {
       used.add(next.id);
@@ -1383,11 +1428,22 @@ export function packFromPdfText(text: string, fileName: string): { ok: true; pac
   }
 
   const campaign = flat.match(/campaign\s*\d+/i)?.[0];
+  const campaignNum = flat.match(/campaign\s*(\d+)/i)?.[1] ?? "";
   const versionMatch = flat.match(/version\s*\d+/i)?.[0];
-  const { issued, validUntil } = scrapeCampaignDates(flat);
-  // Never borrow the bundled chart's issued/valid-until. Falling back made a
-  // "Campaign 6" title keep Campaign 5's campaign key, so Settings looked
-  // updated while products stayed the previous chart.
+  const scraped = scrapeCampaignDates(flat);
+  let issued = scraped.issued;
+  let validUntil = scraped.validUntil;
+  // Early 2.0 fell back to bundled Campaign 5 dates when the header scrape
+  // missed. Keep that for the bundled campaign only — never for Campaign 6+.
+  const bundledNum = bundledCampaignNumber();
+  if (
+    (!issued || !validUntil) &&
+    bundledNum &&
+    campaignNum === bundledNum
+  ) {
+    issued = issued || BUNDLED_PACK.chart.issued;
+    validUntil = validUntil || BUNDLED_PACK.chart.validUntil;
+  }
   if (!issued || !validUntil) {
     return {
       ok: false,

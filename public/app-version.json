@@ -1,6 +1,6 @@
 {
-  "version": "2.0.24",
+  "version": "2.0.25",
   "notes": [
-    "PDF import again reads classic Campaign 5 name-column layouts (including Bacon’s two day counts) without inventing junk mega-names"
+    "PDF import restores early 2.0 line/row/column reading so Campaign 5 loads again: shared name-column lives, Date on pack columns, catalog names kept (except footnotes), and Campaign 5 date fallback"
   ]
 }

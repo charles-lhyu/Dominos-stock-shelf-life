@@ -49,12 +49,24 @@ describe("PDF shelf life parsing", () => {
     assert.equal(pepperoni?.fromDelivery, "14 days");
   });
 
-  it("drops bare name mentions that have no life cell", () => {
-    const text = "Pepperoni see notes. Chorizo see notes.";
+  it("keeps catalog names on the sheet body even without a printed life cell", () => {
+    // Early 2.0 membership: name on the chart keeps bundled defaults.
+    const text = "Pepperoni Chorizo listed on the makeline board.";
     const result = packFromPdfText(`${HEADER}${text}`, "campaign-5.pdf");
-    assert.equal(result.ok, false);
-    if (result.ok) return;
-    assert.match(result.error, /No shelf-life products/i);
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    const names = result.pack.rules.map((item) => item.name).sort();
+    assert.deepEqual(names, ["Chorizo", "Pepperoni"]);
+  });
+
+  it("still drops footnote-only catalog mentions after Notes:", () => {
+    const text =
+      "Pepperoni 14 days Notes: see Chorizo Bacon Ham for older charts.";
+    const result = packFromPdfText(`${HEADER}${text}`, "campaign-5.pdf");
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    const names = result.pack.rules.map((item) => item.name).sort();
+    assert.deepEqual(names, ["Pepperoni"]);
   });
 
   it("discovers brand-new PDF products that are not in the bundled catalog", () => {
@@ -215,6 +227,58 @@ describe("PDF shelf life parsing", () => {
     if (!result.ok) return;
     const names = result.pack.rules.map((item) => item.name).sort();
     assert.deepEqual(names, ["Olives", "Pepperdew Piquante Peppers", "Pineapple"]);
+  });
+
+  it("shares one life across a name column when the cell is spanned without slashes", () => {
+    const text = "Pepperoni Chorizo Nduja Sausage 12 days Tandoori Chicken 10 days";
+    const result = packFromPdfText(`${HEADER}${text}`, "campaign-5.pdf");
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    for (const name of ["Pepperoni", "Chorizo", "Nduja Sausage"]) {
+      const rule = result.pack.rules.find(
+        (item) => item.name === name && item.sectionId === "frozen",
+      );
+      assert.ok(rule, name);
+      assert.equal(rule.fromDelivery, "12 days");
+      assert.equal(rule.inUse, "12 days");
+    }
+    const tandoori = result.pack.rules.find(
+      (item) => item.name === "Tandoori Chicken" && item.sectionId === "frozen",
+    );
+    assert.ok(tandoori);
+    assert.equal(tandoori.fromDelivery, "10 days");
+  });
+
+  it("keeps every name in a Date on pack column, not only the last", () => {
+    const text =
+      "Ham Mushrooms Onions Date on pack Date on pack Date on pack 6 days 5 days 5 days";
+    const result = packFromPdfText(`${HEADER}${text}`, "campaign-5.pdf");
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    for (const name of ["Ham", "Mushrooms", "Onions"]) {
+      const rule = result.pack.rules.find(
+        (item) => item.name === name && item.sectionId === "chilled",
+      );
+      assert.ok(rule, name);
+    }
+    assert.equal(
+      result.pack.rules.find((item) => item.name === "Ham")?.prepped,
+      "6 days",
+    );
+    assert.equal(
+      result.pack.rules.find((item) => item.name === "Mushrooms")?.prepped,
+      "5 days",
+    );
+  });
+
+  it("loads Campaign 5 when header dates are missing by using the bundled chart dates", () => {
+    const text =
+      "Campaign 5 shelf life chart. All stores. Version 1. Pepperoni 12 days Chorizo 12 days";
+    const result = packFromPdfText(text, "campaign-5.pdf");
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.pack.chart.issued, "2026-09-07");
+    assert.equal(result.pack.chart.validUntil, "2026-11-17");
   });
 
   it("still shares one life when names are joined with a slash or and", () => {
