@@ -998,6 +998,44 @@ function inferSectionId(haystack: string, at: number): SectionId {
   return "frozen";
 }
 
+/**
+ * PDF-discovered products use the same category chips as the chart catalog.
+ * Never invent a separate "Imported" heading — the whole list comes from import.
+ */
+export function categoryForDiscoveredProduct(
+  sectionId: SectionId,
+  name: string,
+): string {
+  const key = nameKey(name);
+  if (/\bsauce\b|\bdrizzle\b|\bpesto\b|\bhoney\b|\bbbq\b/i.test(key)) {
+    return "Sauces";
+  }
+  if (/\bcheese\b|\bmozzarella\b/i.test(key)) return "Cheese";
+  if (/\bcookie\b|\bdessert\b|\bice cream\b/i.test(key)) return "Desserts";
+  if (/\bdough\b/i.test(key)) return "Dough";
+  if (/\bbase\b|\bshell\b|\bwrap\b/i.test(key)) return "Bases";
+  if (
+    /\bwings\b|\bfries\b|\bwedges\b|\bstripper\b|\bkicker\b|\btender\b|\bbites?\b|\bmac\b/i.test(
+      key,
+    )
+  ) {
+    return "Sides";
+  }
+  switch (sectionId) {
+    case "pack":
+      return "Other";
+    case "ambient":
+      return "Sauces";
+    case "ready":
+      return "Toppings";
+    case "chilled":
+      return "Toppings";
+    case "frozen":
+    default:
+      return "Toppings";
+  }
+}
+
 function inventRuleFromLifeWindow(input: {
   name: string;
   sectionId: SectionId;
@@ -1014,7 +1052,7 @@ function inventRuleFromLifeWindow(input: {
   const base: ShelfRule = {
     id,
     sectionId,
-    category: sectionId === "pack" ? "Other" : "Imported",
+    category: categoryForDiscoveredProduct(sectionId, name),
     name,
     aliases: [],
     sameAs: [],

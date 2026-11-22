@@ -207,4 +207,32 @@ describe("stored chart repair", () => {
       true,
     );
   });
+
+  it("folds old Imported category rows into normal chart groups", () => {
+    const spicy: ShelfRule = {
+      id: "frozen:spicy-honey-sauce",
+      sectionId: "frozen",
+      category: "Imported",
+      name: "Spicy Honey Sauce",
+      aliases: [],
+      sameAs: [],
+      fromDelivery: "11 days",
+      inUse: "11 days",
+      tags: ["new"],
+    };
+    const veg: ShelfRule = {
+      id: "ready:galaxy-veg",
+      sectionId: "ready",
+      category: "Imported",
+      name: "Galaxy Veg",
+      aliases: [],
+      sameAs: [],
+      unopened: "Date on pack",
+      prepped: "10 days",
+    };
+    const repaired = repairStoredRules([spicy, veg]);
+    assert.equal(repaired[0]?.category, "Sauces");
+    assert.equal(repaired[1]?.category, "Toppings");
+    assert.ok(!repaired.some((item) => item.category === "Imported"));
+  });
 });

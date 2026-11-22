@@ -86,9 +86,13 @@ describe("PDF shelf life parsing", () => {
     const spicy = result.pack.rules.find((item) => item.name === "Spicy Honey Sauce");
     assert.deepEqual(spicy?.tags, ["new"]);
     assert.equal(spicy?.fromDelivery, "11 days");
+    assert.equal(spicy?.category, "Sauces");
+    assert.notEqual(spicy?.category, "Imported");
     const veg = result.pack.rules.find((item) => item.name === "Galaxy Veg");
     assert.equal(veg?.unopened, "Date on pack");
     assert.equal(veg?.prepped, "10 days");
+    assert.equal(veg?.category, "Toppings");
+    assert.ok(!result.pack.rules.some((item) => item.category === "Imported"));
   });
 
   it("does not give sliced gherkins the previous sauce's 8 days", () => {

@@ -1,6 +1,7 @@
 import { BUNDLED_PACK, EMPTY_PACK, parseChartPack } from "./chart-pack";
 import { CHART_PRODUCT_RENAMES } from "./chart-name-migrate";
 import { toIsoDate } from "./dates";
+import { categoryForDiscoveredProduct } from "./pdf-chart";
 import type { ChartPack, ShelfRule } from "./types";
 
 const STORAGE_KEY = "shelf-life-desk-v1";
@@ -34,8 +35,19 @@ function withChartCategory(rule: ShelfRule): ShelfRule {
   const bundled = BUNDLED_PACK.rules.find(
     (item) => item.name === rule.name && item.sectionId === rule.sectionId,
   );
-  if (!bundled || bundled.category === rule.category) return rule;
-  return { ...rule, category: bundled.category };
+  if (bundled) {
+    if (bundled.category === rule.category) return rule;
+    return { ...rule, category: bundled.category };
+  }
+  // Older imports stamped unknown PDF rows as "Imported". Fold them into the
+  // normal chart category chips — the list is already from file import only.
+  if (rule.category === "Imported") {
+    return {
+      ...rule,
+      category: categoryForDiscoveredProduct(rule.sectionId, rule.name),
+    };
+  }
+  return rule;
 }
 
 function withChartDisplayName(rule: ShelfRule): ShelfRule {

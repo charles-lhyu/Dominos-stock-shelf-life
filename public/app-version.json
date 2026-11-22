@@ -1,6 +1,6 @@
 {
-  "version": "2.0.25",
+  "version": "2.0.26",
   "notes": [
-    "PDF import restores early 2.0 line/row/column reading so Campaign 5 loads again: shared name-column lives, Date on pack columns, catalog names kept (except footnotes), and Campaign 5 date fallback"
+    "PDF products no longer get a separate Imported category — new chart rows use the normal Toppings / Sauces / Other groups"
   ]
 }
