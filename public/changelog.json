@@ -1,5 +1,11 @@
 [
   {
+    "version": "2.0.28",
+    "notes": [
+      "PDF import reads Campaign 6 table layouts correctly: shared life cells across rows, Issued date, NEW items (Sage and Onion Turkey, BBQ Pulled Pork, etc.), and pack lists — without turning notes into products"
+    ]
+  },
+  {
     "version": "2.0.27",
     "notes": [
       "PDF import no longer turns footnote sentences into product names, and short catalog labels no longer chop longer titles (e.g. Chicken from a new glazed chicken row)"

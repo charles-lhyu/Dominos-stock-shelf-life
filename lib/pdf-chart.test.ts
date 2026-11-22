@@ -97,6 +97,77 @@ describe("PDF shelf life parsing", () => {
     assert.deepEqual(spicy?.tags, ["new"]);
   });
 
+  it("reads Campaign 6 table rows with vertically merged life cells", () => {
+    const text = [
+      "CAMPAIGN 6 SHELF LIFE CHART",
+      "ALL STORES",
+      "Version 1 - Campaign Dates, 16th November 2026 to 4th January 2027",
+      "Issued: 4th November 2026",
+      "CHILLED (DEFROSTED / FROZEN BEFORE USE)",
+      "Pepperoni",
+      "Chorizo 12 days",
+      "Nduja Sausage",
+      "Tandoori Chicken 10 days",
+      "Bacon (FROZEN) 10 days 7 days You will be notified by Supply Chain if you are due to receive Frozen Bacon",
+      "Toppings NEW Sage and Onion Turkey 7 days",
+      "NEW BBQ Pulled Pork 10 days",
+      "Beef",
+      "Chicken 9 days",
+      "Hot Dog Slices",
+      "Meatballs",
+      "Sausage 6 days",
+      "Sides Chicken Wings 9 days Chicken Wings Prepped Life - Remaining life of Wings",
+      "Potato Wedges 7 days",
+      "Bacon Date on pack 6 days",
+      "Ham",
+      "Toppings Green Chillies",
+      "Mushrooms",
+      "Onions Date on pack 48 hours",
+      "Peppers",
+      "Sauces NEW Cranberry Drizzle Date on pack 35 days Keep ambient",
+      "OTHER ITEMS - THE FOLLOWING ITEMS LISTED BELOW ARE DATED ON THE ORIGINAL PACKAGING",
+      "Franks Hot Sauce, Butter Whirl, Coleslaw, Salt Sachets",
+      "Always follow the shelf life and storage information as provided by DPG",
+      "# Classification: Internal Make sure the top of the make-line is stocked with no more than 2 hours worth of product",
+    ].join("\n");
+    const result = packFromPdfText(text, "campaign-6.pdf");
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.pack.chart.issued, "2026-11-04");
+    assert.equal(result.pack.chart.validUntil, "2027-01-04");
+    const frozen = (name: string) =>
+      result.pack.rules.find((item) => item.name === name && item.sectionId === "frozen");
+    assert.equal(frozen("Pepperoni")?.fromDelivery, "12 days");
+    assert.equal(frozen("Nduja Sausage")?.fromDelivery, "12 days");
+    assert.equal(frozen("Beef")?.fromDelivery, "9 days");
+    assert.equal(frozen("Sausage")?.fromDelivery, "6 days");
+    assert.equal(frozen("Chicken Wings")?.fromDelivery, "9 days");
+    assert.equal(frozen("Potato Wedges")?.fromDelivery, "7 days");
+    const turkey = frozen("Sage and Onion Turkey");
+    assert.ok(turkey);
+    assert.equal(turkey.fromDelivery, "7 days");
+    assert.deepEqual(turkey.tags, ["new"]);
+    assert.ok(frozen("BBQ Pulled Pork"));
+    const ham = result.pack.rules.find(
+      (item) => item.name === "Ham" && item.sectionId === "chilled",
+    );
+    assert.equal(ham?.prepped, "6 days");
+    const chillies = result.pack.rules.find(
+      (item) => item.name === "Green Chillies" && item.sectionId === "chilled",
+    );
+    assert.equal(chillies?.prepped, "48 hours");
+    assert.ok(
+      result.pack.rules.some(
+        (item) => item.name === "Franks Hot Sauce" && item.sectionId === "pack",
+      ),
+    );
+    assert.ok(
+      !result.pack.rules.some((item) =>
+        /additional info|make-line|no more than|^onion turkey$/i.test(item.name),
+      ),
+    );
+  });
+
   it("discovers brand-new PDF products that are not in the bundled catalog", () => {
     const text =
       "Campaign 6 Shelf Life All stores Version 1 Issued on Valid to 16th November 2026 4th January 2027. " +

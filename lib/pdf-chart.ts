@@ -60,34 +60,58 @@ function matchLabelsForRules(): MatchLabel[] {
 }
 
 /**
- * True when a short catalog label (e.g. "Chicken") is only the tail of a longer
- * printed title ("Spicy Honey Glazed Chicken") — that chops the real name.
- * Separate products in a name column ("Beef Chicken") stay valid because the
- * preceding token is itself a catalog product.
+ * True when a short catalog label is embedded in a longer printed title
+ * ("onion" inside "sage and onion turkey", "bbq" inside "bbq pulled pork",
+ * "chicken" at the end of "spicy honey glazed chicken").
  */
-function isChoppedTailMatch(haystack: string, start: number): boolean {
+function isEmbeddedInLongerTitle(
+  haystack: string,
+  start: number,
+  end: number,
+): boolean {
   const before = haystack.slice(Math.max(0, start - 48), start);
   const lead = before.match(
     /([a-z][a-z0-9'&]*(?:\s+[a-z][a-z0-9'&]*){0,3})\s*$/i,
   );
-  if (!lead?.[1]) return false;
-  const leadKey = nameKey(lead[1]);
-  const leadParts = leadKey.split(" ").filter(Boolean);
-  if (leadParts.length === 0) return false;
-  const last = leadParts[leadParts.length - 1]!;
-  if (DISCOVERY_STOP.has(last) || DISCOVERY_PROSE.has(last)) return false;
-  // Preceding run is already a catalog product (or ends with one) → new row.
+  if (lead?.[1]) {
+    const leadKey = nameKey(lead[1]);
+    const leadParts = leadKey.split(" ").filter(Boolean);
+    const wholeIsCatalog = CATALOG_NAME_KEYS.some(
+      (key) => leadKey === key || leadKey.endsWith(` ${key}`),
+    );
+    const withoutJoin = leadParts.filter((part) => part !== "and" && part !== "&");
+    const joinIsCatalogPair =
+      withoutJoin.length > 0 &&
+      CATALOG_NAME_KEYS.some(
+        (key) =>
+          withoutJoin.join(" ") === key ||
+          withoutJoin[withoutJoin.length - 1] === key,
+      );
+    // "pineapple and" before olives — two catalog products, not a chop.
+    if (!wholeIsCatalog && !joinIsCatalogPair) {
+      const titleWord = withoutJoin.some(
+        (part) => !DISCOVERY_STOP.has(part) && !DISCOVERY_PROSE.has(part),
+      );
+      // "sage and" before onion — longer unknown title.
+      if (titleWord) return true;
+    }
+  }
+
+  const after = haystack.slice(end).replace(/^\s+/, "");
+  if (!after || /^[\d/]/.test(after)) return false;
+  const nextWord = after.match(/^([a-z][a-z0-9'&]*)/i)?.[1]?.toLowerCase();
+  if (!nextWord) return false;
+  if (DISCOVERY_STOP.has(nextWord) || DISCOVERY_PROSE.has(nextWord)) return false;
+  if (/^(days?|hours?|date|bb|n\/a|new)$/i.test(nextWord)) return false;
+  // Next token starts another catalog product (name column) — not a chop.
   if (
     CATALOG_NAME_KEYS.some(
-      (key) =>
-        leadKey === key ||
-        leadKey.endsWith(` ${key}`) ||
-        key.endsWith(` ${leadKey}`) ||
-        key === last,
+      (key) => after === key || after.startsWith(`${key} `) || key.startsWith(`${nextWord} `) || key === nextWord,
     )
   ) {
     return false;
   }
+  // "bbq" followed by "pulled" — head of a longer unknown title.
   return true;
 }
 
@@ -109,8 +133,8 @@ function findNameSpans(haystack: string): NameSpan[] {
         if (pattern.lastIndex === match.index) pattern.lastIndex += 1;
         continue;
       }
-      // Single-word labels must not steal the tail of a longer unknown title.
-      if (singleWord && isChoppedTailMatch(haystack, start)) {
+      // Single-word labels must not steal the head/tail of a longer title.
+      if (singleWord && isEmbeddedInLongerTitle(haystack, start, end)) {
         if (pattern.lastIndex === match.index) pattern.lastIndex += 1;
         continue;
       }
@@ -386,12 +410,183 @@ function mergeContinuationLines(text: string): string {
   return merged.join("\n");
 }
 
+/** Category column labels printed beside product names on Campaign chart PDFs. */
+const TABLE_CATEGORY_LEAD =
+  /^(?:toppings|sides|sauces|cheese|bases|desserts|dough|cornmeal)\s+/i;
+
+const TABLE_CHROME_LINE =
+  /^(?:category(?:\s+product)?|product|from\s+delivery|in\s+use|unopened|prepped|additional\s+info|campaign\s+\d+|all\s+stores|version\s*\d+|chilled|ambient|other\s+items|store\s+all\s+items)\b/i;
+
+function stripTableCategoryLead(line: string) {
+  return line.replace(TABLE_CATEGORY_LEAD, "").trim();
+}
+
+function lineHasChartLife(line: string) {
+  return /(\d+\s*(?:hours?|days?)|\bn\/a\b|date\s+on|bb\s*date)/i.test(line);
+}
+
+function lineProductCore(line: string) {
+  const core = stripTableCategoryLead(line);
+  if (!core || TABLE_CHROME_LINE.test(core)) return "";
+  return core;
+}
+
+function lineHasProductName(line: string) {
+  const core = lineProductCore(line);
+  if (!core) return false;
+  return findNameSpans(core.toLowerCase()).length > 0;
+}
+
+function lineStartsNewCategoryBand(line: string) {
+  return TABLE_CATEGORY_LEAD.test(line.trim());
+}
+
+function extractLifeSuffix(line: string) {
+  const core = stripTableCategoryLead(line);
+  const match = core.match(
+    /\b(?:date\s+on(?:\s+(?:pack|tray))?|bb\s*date(?:\s+on(?:\s+(?:pack|tray))?)?|\d+\s*days?|\d+\s*hours?|\bn\/a\b).*$/i,
+  );
+  return match?.[0]?.trim() ?? "";
+}
+
+function extractNameHeading(line: string) {
+  const core = stripTableCategoryLead(line);
+  const life = extractLifeSuffix(core);
+  if (!life) return core.trim();
+  const at = core.toLowerCase().lastIndexOf(life.toLowerCase());
+  if (at <= 0) return core.replace(life, "").trim();
+  return core.slice(0, at).trim();
+}
+
+function firstProductRuleOnLine(line: string): ShelfRule | undefined {
+  const core = lineProductCore(line);
+  if (!core) return undefined;
+  const spans = findNameSpans(core.toLowerCase());
+  if (spans.length === 0) return undefined;
+  const first = spans.sort((a, b) => a.start - b.start)[0]!;
+  return BUNDLED_PACK.rules.find((rule) => nameKey(rule.name) === first.name);
+}
+
+/** Printed life token comparable to bundled delivery / prepped day or hour fields. */
+function lifeTokenKey(life: string): string {
+  const days = life.match(/(\d+)\s*days?/i)?.[1];
+  if (days) return `d:${days}`;
+  const hours = life.match(/(\d+)\s*hours?/i)?.[1];
+  if (hours) return `h:${hours}`;
+  if (/date\s+on/i.test(life)) return "date-on";
+  if (/bb\s*date/i.test(life)) return "bb";
+  if (/\bn\/a\b/i.test(life)) return "n/a";
+  return life.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function bundledLifeKeys(rule: ShelfRule): Set<string> {
+  const keys = new Set<string>();
+  for (const value of [rule.fromDelivery, rule.inUse, rule.prepped, rule.unopened]) {
+    if (!value) continue;
+    keys.add(lifeTokenKey(value));
+  }
+  return keys;
+}
+
+function nameOnlySharesLife(line: string, life: string): boolean {
+  const rule = firstProductRuleOnLine(line);
+  // Unknown / NEW rows never steal neighbours via coalesce.
+  if (!rule) return false;
+  const keys = bundledLifeKeys(rule);
+  const day = life.match(/(\d+)\s*days?/i)?.[1];
+  const hour = life.match(/(\d+)\s*hours?/i)?.[1];
+  if (day && keys.has(`d:${day}`)) return true;
+  if (hour && keys.has(`h:${hour}`)) return true;
+  // Pure date-on / bb cell with no numeric count — share with date-on neighbours.
+  if (!day && !hour && (/date\s+on/i.test(life) || /bb\s*date/i.test(life))) {
+    return (
+      keys.has("date-on") ||
+      keys.has("bb") ||
+      [...keys].some((key) => key.startsWith("d:") || key.startsWith("h:"))
+    );
+  }
+  return false;
+}
+
+/**
+ * Campaign PDFs print vertically merged life cells: several product rows share
+ * one "12 days" printed on a single line. Join those names with "/" so the
+ * existing glue + life-window logic shares the count.
+ */
+function coalesceSpannedProductLines(text: string): string {
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (lines.length <= 1) return text;
+
+  type Group = { start: number; end: number; text: string };
+  const groups: Group[] = [];
+  const covered = new Set<number>();
+
+  for (let index = 0; index < lines.length; index += 1) {
+    if (covered.has(index)) continue;
+    const line = lines[index]!;
+    if (!lineHasProductName(line) || !lineHasChartLife(line)) continue;
+    const life = extractLifeSuffix(line);
+    if (!life) continue;
+
+    let start = index;
+    for (let back = index - 1; back >= 0; back -= 1) {
+      const prev = lines[back]!;
+      if (!lineHasProductName(prev) || lineHasChartLife(prev)) break;
+      if (!nameOnlySharesLife(prev, life)) break;
+      start = back;
+    }
+    let end = index;
+    for (let ahead = index + 1; ahead < lines.length; ahead += 1) {
+      const next = lines[ahead]!;
+      if (!lineHasProductName(next) || lineHasChartLife(next)) break;
+      if (!nameOnlySharesLife(next, life)) break;
+      end = ahead;
+    }
+
+    if (end === start) continue;
+
+    const names: string[] = [];
+    for (let at = start; at <= end; at += 1) {
+      const heading = extractNameHeading(lines[at]!);
+      if (heading) names.push(heading);
+      covered.add(at);
+    }
+    if (names.length < 2) {
+      for (let at = start; at <= end; at += 1) covered.delete(at);
+      continue;
+    }
+    groups.push({ start, end, text: `${names.join(" / ")} ${life}` });
+  }
+
+  const out: string[] = [];
+  let cursor = 0;
+  const ordered = [...groups].sort((a, b) => a.start - b.start);
+  for (const group of ordered) {
+    while (cursor < group.start) {
+      out.push(lines[cursor]!);
+      cursor += 1;
+    }
+    out.push(group.text);
+    cursor = group.end + 1;
+  }
+  while (cursor < lines.length) {
+    out.push(lines[cursor]!);
+    cursor += 1;
+  }
+  return out.join("\n");
+}
+
 function spanScoreForRule(span: NameSpan, rule: ShelfRule): number {
   const display = nameKey(rule.name);
   if (span.name !== display) return -1;
   const aliasKeys = new Set(rule.aliases.map(nameKey));
-  if (aliasKeys.has(span.matched)) return 100 + span.matched.length;
-  if (span.matched === display) return 50;
+  // Longer labels win: "bacon frozen" > "bacon", "chicken wings" > "wings".
+  if (span.matched === display || aliasKeys.has(span.matched)) {
+    return 100 + span.matched.length;
+  }
   return -1;
 }
 
@@ -564,6 +759,25 @@ export function scrapeCampaignDates(flat: string): {
   validUntil: string;
 } {
   const text = normalizePdfDateText(flat);
+
+  // Campaign 6-style header: "Issued: 4th November 2026" plus
+  // "Campaign Dates, 16th November 2026 to 4th January 2027".
+  const issuedAlone = text.match(
+    new RegExp(`issued\\s*:\\s*(${LOOSE_DATE})`, "i"),
+  );
+  const campaignRange = text.match(
+    new RegExp(
+      `campaign\\s*dates?\\s*,?\\s*(${LOOSE_DATE})\\s*(?:to|and|-|–|—)\\s*(${LOOSE_DATE})`,
+      "i",
+    ),
+  );
+  if (issuedAlone?.[1] && campaignRange?.[2]) {
+    const issued = isoFromLooseDate(issuedAlone[1]);
+    const validUntil = isoFromLooseDate(campaignRange[2]);
+    if (issued && validUntil && issued < validUntil) {
+      return { issued, validUntil };
+    }
+  }
 
   // Stacked labels, then dates — often with "All stores Version 1" in between:
   // "Issued on Valid to All stores Version 1 16th November 2026 4th January 2027"
@@ -1028,6 +1242,39 @@ const DISCOVERY_STOP = new Set([
   "row",
   "inc",
   "including",
+  "additional",
+  "info",
+  "classification",
+  "internal",
+  "worth",
+  "specifications",
+  "always",
+  "externally",
+  "verified",
+  "confirmed",
+  "suppliers",
+  "includes",
+  "tray",
+  "remaining",
+  "updated",
+  "applies",
+  "return",
+  "wrapped",
+  "sanitised",
+  "sanitized",
+  "lidded",
+  "container",
+  "keep",
+  "kept",
+  "stored",
+  "clean",
+  "toppings",
+  "sides",
+  "sauces",
+  "desserts",
+  "bases",
+  "dough",
+  "category",
 ]);
 
 function slugName(value: string) {
@@ -1315,6 +1562,14 @@ function discoverUnknownChartRules(
         rest = rest.slice(0, wordMatch.index);
         break;
       }
+      // Allow "and" / "&" inside titles (Sage and Onion Turkey).
+      if ((word === "and" || word === "&") && words.length > 0) {
+        const start = wordMatch.index;
+        const end = start + wordMatch[1]!.length;
+        words.unshift({ text: wordMatch[1]!, start, end });
+        rest = rest.slice(0, start).replace(/\s+$/, "");
+        continue;
+      }
       if (!isDiscoveryNameWord(word)) break;
       if (DISCOVERY_PROSE.has(word)) break;
       const start = wordMatch.index;
@@ -1382,6 +1637,49 @@ function discoverUnknownChartRules(
     }
     seen.add(key);
     found.push(rule);
+  }
+  return found;
+}
+
+/**
+ * Pack-section comma lists: "Franks Hot Sauce, Butter Whirl, Coleslaw, …"
+ * under "dated on the original packaging".
+ */
+function discoverPackDatedListRules(
+  haystack: string,
+  coveredKeys: Set<string>,
+): ShelfRule[] {
+  const block = haystack.match(
+    /other\s+items[\s\S]{0,120}?original\s+packaging\s*([\s\S]{10,900}?)(?=always\s+follow|opened,\s*prepped|#\s*classification|$)/i,
+  );
+  if (!block?.[1]) return [];
+  const chunk = block[1];
+  const found: ShelfRule[] = [];
+  const seen = new Set<string>(coveredKeys);
+
+  for (const rule of BUNDLED_PACK.rules) {
+    if (rule.sectionId !== "pack") continue;
+    const labels = [rule.name, ...rule.aliases]
+      .map((label) => nameKey(label))
+      .filter((key) => key.length >= 3)
+      .sort((a, b) => b.length - a.length);
+    const hit = labels.find((key) => {
+      const pattern = new RegExp(
+        `(?:^|[^a-z0-9])${key.split(" ").map(escapeRegExp).join("[^a-z0-9]+")}(?![a-z0-9])`,
+        "i",
+      );
+      return pattern.test(chunk);
+    });
+    if (!hit || seen.has(nameKey(rule.name))) continue;
+    seen.add(nameKey(rule.name));
+    found.push({
+      ...rule,
+      aliases: [...rule.aliases],
+      sameAs: [...rule.sameAs],
+      also: rule.also ? { ...rule.also } : undefined,
+      unopened: rule.unopened || "Date on pack",
+      pdfCrop: chunk.slice(0, 160).trim(),
+    });
   }
   return found;
 }
@@ -1550,7 +1848,7 @@ export function packFromPdfText(text: string, fileName: string): { ok: true; pac
     }
   }
 
-  const banded = mergeContinuationLines(text);
+  const banded = coalesceSpannedProductLines(mergeContinuationLines(text));
   const flat = banded.replace(/\s+/g, " ").trim();
   if (flat.length < 40) {
     return { ok: false, error: "Could not read text from that PDF." };
@@ -1626,6 +1924,14 @@ export function packFromPdfText(text: string, fileName: string): { ok: true; pac
     if (used.has(invented.id)) continue;
     used.add(invented.id);
     rules.push(invented);
+    coveredKeys.add(nameKey(invented.name));
+  }
+
+  // "Other items … dated on the original packaging" comma lists.
+  for (const packItem of discoverPackDatedListRules(haystack, coveredKeys)) {
+    if (used.has(packItem.id)) continue;
+    used.add(packItem.id);
+    rules.push(packItem);
   }
 
   if (rules.length === 0) {
