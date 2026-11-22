@@ -1,5 +1,11 @@
 [
   {
+    "version": "2.0.30",
+    "notes": [
+      "PDF import uses the chart Category column for new items (Toppings / Sauces / Sides) instead of guessing from the product name — re-import the chart to refresh categories"
+    ]
+  },
+  {
     "version": "2.0.29",
     "notes": [
       "PDF-discovered meat toppings like BBQ Pulled Pork stay under Toppings — BBQ / honey in the name no longer files them as Sauces"

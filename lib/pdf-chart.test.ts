@@ -175,8 +175,9 @@ describe("PDF shelf life parsing", () => {
   it("discovers brand-new PDF products that are not in the bundled catalog", () => {
     const text =
       "Campaign 6 Shelf Life All stores Version 1 Issued on Valid to 16th November 2026 4th January 2027. " +
-      "Chilled (defrosted / frozen before use) Pepperoni 14 days NEW Spicy Honey Sauce 11 days " +
-      "Chilled — ambient before use Galaxy Veg Date on pack 10 days N/A " +
+      "Chilled (defrosted / frozen before use) Pepperoni 14 days " +
+      "Sauces NEW Spicy Honey Sauce 11 days " +
+      "Chilled — ambient before use Toppings Galaxy Veg Date on pack 10 days N/A " +
       "Notes: Chinese Style Chicken see previous chart.";
     const result = packFromPdfText(text, "campaign-6.pdf");
     assert.equal(result.ok, true);
@@ -196,6 +197,22 @@ describe("PDF shelf life parsing", () => {
     assert.equal(veg?.prepped, "10 days");
     assert.equal(veg?.category, "Toppings");
     assert.ok(!result.pack.rules.some((item) => item.category === "Imported"));
+  });
+
+  it("uses the chart Category column, not the product name, for discovered rows", () => {
+    const text =
+      "CAMPAIGN 6 SHELF LIFE CHART Issued: 4th November 2026 " +
+      "Campaign Dates, 16th November 2026 to 4th January 2027 " +
+      "CHILLED (DEFROSTED / FROZEN BEFORE USE) " +
+      "Toppings NEW BBQ Pulled Pork 10 days " +
+      "AMBIENT ITEMS Sauces NEW Cranberry Drizzle Date on pack 35 days Keep ambient";
+    const result = packFromPdfText(text, "category-column.pdf");
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    const pork = result.pack.rules.find((item) => item.name === "BBQ Pulled Pork");
+    const drizzle = result.pack.rules.find((item) => item.name === "Cranberry Drizzle");
+    assert.equal(pork?.category, "Toppings");
+    assert.equal(drizzle?.category, "Sauces");
   });
 
   it("does not give sliced gherkins the previous sauce's 8 days", () => {

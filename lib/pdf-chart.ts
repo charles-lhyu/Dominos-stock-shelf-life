@@ -1409,38 +1409,79 @@ function inferSectionId(haystack: string, at: number): SectionId {
   return "frozen";
 }
 
+/** Category column values printed on the Campaign shelf-life chart. */
+const CHART_TABLE_CATEGORY_BY_KEY: Record<string, string> = {
+  toppings: "Toppings",
+  sides: "Sides",
+  desserts: "Desserts",
+  sauces: "Sauces",
+  dough: "Dough",
+  bases: "Bases",
+  cheese: "Cheese",
+  cornmeal: "Cornmeal",
+};
+
 /**
- * PDF-discovered products use the same category chips as the chart catalog.
- * Never invent a separate "Imported" heading — the whole list comes from import.
+ * True when `key` at [start,end) is the chart Category column cell, not a word
+ * inside a product name (e.g. "Goats Cheese", "Double Decadence bases").
+ */
+function isChartTableCategoryCell(
+  haystack: string,
+  start: number,
+  end: number,
+  key: string,
+): boolean {
+  const before = haystack.slice(Math.max(0, start - 32), start);
+  const afterWord = haystack.slice(end).match(/^\s*([a-z0-9'-]+)/i)?.[1] ?? "";
+  if (key === "bases" && /\bdecadence\s+$/i.test(before)) return false;
+  if (key === "cheese") {
+    if (
+      /\b(mozzarella|goats?|plant|based|liquid|hot|string|dip)\s+$/i.test(before)
+    ) {
+      return false;
+    }
+    if (/^(alternative|string|sauce|dip)$/i.test(afterWord)) return false;
+  }
+  // Mid-prose ("stored in a clean…") is not the Category column.
+  if (/\b(in|a|an|the|and|or|of|to|for|with|from|by)\s+$/i.test(before)) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Read the chart Category column: the nearest Category cell before this product
+ * (vertically merged cells print once, then apply to following rows).
+ */
+export function categoryFromTableColumn(
+  haystack: string,
+  at: number,
+): string | undefined {
+  const slice = haystack.slice(0, Math.max(0, at));
+  const pattern =
+    /\b(toppings|sides|desserts|sauces|dough|bases|cheese|cornmeal)\b/gi;
+  let match: RegExpExecArray | null;
+  let last: string | undefined;
+  while ((match = pattern.exec(slice))) {
+    const key = match[1]!.toLowerCase();
+    const start = match.index;
+    const end = start + match[0].length;
+    if (!isChartTableCategoryCell(haystack, start, end, key)) continue;
+    last = CHART_TABLE_CATEGORY_BY_KEY[key];
+  }
+  return last;
+}
+
+/**
+ * Fallback only when the PDF Category column was not found for this row.
+ * Never guess from the product name — use the table Category cell instead.
  */
 export function categoryForDiscoveredProduct(
   sectionId: SectionId,
-  name: string,
+  _name?: string,
+  tableCategory?: string,
 ): string {
-  const key = nameKey(name);
-  if (/\bcheese\b|\bmozzarella\b/i.test(key)) return "Cheese";
-  if (/\bcookie\b|\bdessert\b|\bice cream\b/i.test(key)) return "Desserts";
-  if (/\bdough\b/i.test(key)) return "Dough";
-  if (/\bbase\b|\bshell\b|\bwrap\b/i.test(key)) return "Bases";
-  if (
-    /\bwings\b|\bfries\b|\bwedges\b|\bstripper\b|\bkicker\b|\btender\b|\bbites?\b|\bmac\b/i.test(
-      key,
-    )
-  ) {
-    return "Sides";
-  }
-  // Meat / protein toppings win over sauce keywords like BBQ or honey in the title
-  // (e.g. BBQ Pulled Pork, Spicy Honey Glazed Chicken → Toppings).
-  if (
-    /\bpork\b|\bturkey\b|\bchicken\b|\bbeef\b|\bham\b|\bbacon\b|\bsausage\b|\bpepperoni\b|\bchorizo\b|\bnduja\b|\bmeatball\b|\bhot\s*dog\b/i.test(
-      key,
-    )
-  ) {
-    return "Toppings";
-  }
-  if (/\bsauce\b|\bdrizzle\b|\bpesto\b|\bhoney\b|\bbbq\b/i.test(key)) {
-    return "Sauces";
-  }
+  if (tableCategory) return tableCategory;
   switch (sectionId) {
     case "pack":
       return "Other";
@@ -1462,8 +1503,10 @@ function inventRuleFromLifeWindow(input: {
   window: string;
   tags?: ShelfTag[];
   pdfCrop: string;
+  /** Chart Category column value when present in the PDF text. */
+  tableCategory?: string;
 }): ShelfRule {
-  const { name, sectionId, window, tags, pdfCrop } = input;
+  const { name, sectionId, window, tags, pdfCrop, tableCategory } = input;
   const days = dayCountsIn(window);
   const hours = hourCountsIn(window);
   const hasDateOn = /\bdate\s+on\b/i.test(window);
@@ -1472,7 +1515,7 @@ function inventRuleFromLifeWindow(input: {
   const base: ShelfRule = {
     id,
     sectionId,
-    category: categoryForDiscoveredProduct(sectionId, name),
+    category: categoryForDiscoveredProduct(sectionId, name, tableCategory),
     name,
     aliases: [],
     sameAs: [],
@@ -1637,6 +1680,7 @@ function discoverUnknownChartRules(
       sectionId,
       window,
       tags: newMarker ? ["new"] : undefined,
+      tableCategory: categoryFromTableColumn(haystack, nameStart),
       pdfCrop: haystack
         .slice(newMarker ? Math.max(0, nameStart - 4) : nameStart, windowEnd)
         .trim(),

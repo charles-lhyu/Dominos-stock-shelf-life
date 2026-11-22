@@ -210,14 +210,14 @@ describe("stored chart repair", () => {
 
   it("folds old Imported category rows into normal chart groups", () => {
     const spicy: ShelfRule = {
-      id: "frozen:spicy-honey-sauce",
-      sectionId: "frozen",
+      id: "ambient:spicy-honey-sauce",
+      sectionId: "ambient",
       category: "Imported",
       name: "Spicy Honey Sauce",
       aliases: [],
       sameAs: [],
-      fromDelivery: "11 days",
-      inUse: "11 days",
+      unopened: "Date on pack",
+      prepped: "11 days",
       tags: ["new"],
     };
     const veg: ShelfRule = {
@@ -231,16 +231,17 @@ describe("stored chart repair", () => {
       prepped: "10 days",
     };
     const repaired = repairStoredRules([spicy, veg]);
+    // Without the PDF Category column, Imported rows only get a section default.
     assert.equal(repaired[0]?.category, "Sauces");
     assert.equal(repaired[1]?.category, "Toppings");
     assert.ok(!repaired.some((item) => item.category === "Imported"));
   });
 
-  it("moves BBQ Pulled Pork from Sauces to Toppings on load", () => {
+  it("keeps the PDF Category column on discovered rows instead of renaming from the product name", () => {
     const saved: ShelfRule = {
       id: "frozen:bbq-pulled-pork",
       sectionId: "frozen",
-      category: "Sauces",
+      category: "Toppings",
       name: "BBQ Pulled Pork",
       aliases: [],
       sameAs: [],
