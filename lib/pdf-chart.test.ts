@@ -49,14 +49,12 @@ describe("PDF shelf life parsing", () => {
     assert.equal(pepperoni?.fromDelivery, "14 days");
   });
 
-  it("keeps catalog names on the sheet body even without a printed life cell", () => {
-    // Early 2.0 membership: name on the chart keeps bundled defaults.
+  it("drops bare name mentions that have no life cell", () => {
     const text = "Pepperoni Chorizo listed on the makeline board.";
     const result = packFromPdfText(`${HEADER}${text}`, "campaign-5.pdf");
-    assert.equal(result.ok, true);
-    if (!result.ok) return;
-    const names = result.pack.rules.map((item) => item.name).sort();
-    assert.deepEqual(names, ["Chorizo", "Pepperoni"]);
+    assert.equal(result.ok, false);
+    if (result.ok) return;
+    assert.match(result.error, /No shelf-life products/i);
   });
 
   it("still drops footnote-only catalog mentions after Notes:", () => {
@@ -67,6 +65,36 @@ describe("PDF shelf life parsing", () => {
     if (!result.ok) return;
     const names = result.pack.rules.map((item) => item.name).sort();
     assert.deepEqual(names, ["Pepperoni"]);
+  });
+
+  it("does not invent product names from footnote hour / packaging sentences", () => {
+    const text =
+      "Pepperoni 14 days. Stock the top of the make-line with no more than 2 hours of product. " +
+      "Opened prepped dates must not go past the use-by date on the original packaging Date on pack.";
+    const result = packFromPdfText(`${HEADER}${text}`, "campaign-5.pdf");
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    const names = result.pack.rules.map((item) => item.name);
+    assert.deepEqual(names, ["Pepperoni"]);
+    assert.ok(!names.some((name) => /more than|make|packaging|opened/i.test(name)));
+  });
+
+  it("does not chop a longer new title down to a short catalog tail like Chicken", () => {
+    const text =
+      "Campaign 6 Shelf Life All stores Version 1 Issued on Valid to 16th November 2026 4th January 2027. " +
+      "Chilled (defrosted / frozen before use) NEW Spicy Honey Glazed Chicken 11 days Pepperoni 14 days";
+    const result = packFromPdfText(text, "campaign-6.pdf");
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    const names = result.pack.rules.map((item) => item.name).sort();
+    assert.ok(names.includes("Pepperoni"));
+    assert.ok(names.includes("Spicy Honey Glazed Chicken"));
+    assert.ok(!names.includes("Chicken"));
+    const spicy = result.pack.rules.find(
+      (item) => item.name === "Spicy Honey Glazed Chicken",
+    );
+    assert.equal(spicy?.fromDelivery, "11 days");
+    assert.deepEqual(spicy?.tags, ["new"]);
   });
 
   it("discovers brand-new PDF products that are not in the bundled catalog", () => {

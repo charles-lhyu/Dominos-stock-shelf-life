@@ -59,6 +59,38 @@ function matchLabelsForRules(): MatchLabel[] {
   return labels.sort((a, b) => nameKey(b.label).length - nameKey(a.label).length);
 }
 
+/**
+ * True when a short catalog label (e.g. "Chicken") is only the tail of a longer
+ * printed title ("Spicy Honey Glazed Chicken") — that chops the real name.
+ * Separate products in a name column ("Beef Chicken") stay valid because the
+ * preceding token is itself a catalog product.
+ */
+function isChoppedTailMatch(haystack: string, start: number): boolean {
+  const before = haystack.slice(Math.max(0, start - 48), start);
+  const lead = before.match(
+    /([a-z][a-z0-9'&]*(?:\s+[a-z][a-z0-9'&]*){0,3})\s*$/i,
+  );
+  if (!lead?.[1]) return false;
+  const leadKey = nameKey(lead[1]);
+  const leadParts = leadKey.split(" ").filter(Boolean);
+  if (leadParts.length === 0) return false;
+  const last = leadParts[leadParts.length - 1]!;
+  if (DISCOVERY_STOP.has(last) || DISCOVERY_PROSE.has(last)) return false;
+  // Preceding run is already a catalog product (or ends with one) → new row.
+  if (
+    CATALOG_NAME_KEYS.some(
+      (key) =>
+        leadKey === key ||
+        leadKey.endsWith(` ${key}`) ||
+        key.endsWith(` ${leadKey}`) ||
+        key === last,
+    )
+  ) {
+    return false;
+  }
+  return true;
+}
+
 function findNameSpans(haystack: string): NameSpan[] {
   const spans: NameSpan[] = [];
   const overlaps = (start: number, end: number) =>
@@ -67,14 +99,22 @@ function findNameSpans(haystack: string): NameSpan[] {
   for (const { display, label } of matchLabelsForRules()) {
     const matched = nameKey(label);
     const pattern = namePattern(label);
+    const singleWord = matched.split(" ").length === 1;
     let match: RegExpExecArray | null;
     while ((match = pattern.exec(haystack))) {
       const atStart = match.index === 0 && /^[a-z0-9]/.test(match[0]);
       const start = match.index + (atStart ? 0 : 1);
       const end = match.index + match[0].length;
-      if (end > start && !overlaps(start, end)) {
-        spans.push({ name: display, matched, start, end });
+      if (end <= start || overlaps(start, end)) {
+        if (pattern.lastIndex === match.index) pattern.lastIndex += 1;
+        continue;
       }
+      // Single-word labels must not steal the tail of a longer unknown title.
+      if (singleWord && isChoppedTailMatch(haystack, start)) {
+        if (pattern.lastIndex === match.index) pattern.lastIndex += 1;
+        continue;
+      }
+      spans.push({ name: display, matched, start, end });
       if (pattern.lastIndex === match.index) pattern.lastIndex += 1;
     }
   }
@@ -231,7 +271,7 @@ function lifeWindow(spans: NameSpan[], index: number, haystack: string) {
     groupEnd += 1;
   }
   const from = spans[groupEnd].end;
-  const nextStart = groupEnd + 1 < spans.length ? spans[groupEnd + 1].start : haystack.length;
+  const nextStart = nextChartSpanStart(spans, groupEnd, haystack);
   return haystack.slice(from, Math.min(nextStart, from + 160));
 }
 
@@ -245,7 +285,7 @@ function rowCrop(spans: NameSpan[], index: number, haystack: string) {
     groupEnd += 1;
   }
   const from = spans[groupEnd].end;
-  const nextStart = groupEnd + 1 < spans.length ? spans[groupEnd + 1].start : haystack.length;
+  const nextStart = nextChartSpanStart(spans, groupEnd, haystack);
   const end = Math.min(nextStart, from + 160);
   return haystack.slice(spans[index]!.start, end).trim();
 }
@@ -820,9 +860,7 @@ function hasChartLifeEvidence(
 }
 
 /**
- * Footnote / notes band — early 2.0 kept every catalog mention; 2.0.22 dropped
- * all names without a life cell. Prefer early membership except here, so
- * "Notes: see Pepperoni …" does not re-add products.
+ * Explicit Notes: / see-older band — catalog mentions here are not chart rows.
  */
 function inNotesRegion(haystack: string, at: number): boolean {
   const before = haystack.slice(Math.max(0, at - 140), at);
@@ -833,6 +871,96 @@ function inNotesRegion(haystack: string, at: number): boolean {
   if (/\bfor\s+older\s+charts?\b/i.test(before)) return true;
   return false;
 }
+
+/**
+ * Footnote prose that embeds life tokens ("2 hours", "Date on pack") — discovery
+ * must not invent product titles from these sentences.
+ */
+function inFootnoteProse(haystack: string, at: number): boolean {
+  if (inNotesRegion(haystack, at)) return true;
+  const before = haystack.slice(Math.max(0, at - 220), at);
+  if (/\bfollow\s+the\s+shelf\s+life\b/i.test(before)) return true;
+  if (/\bprovided\s+by\b/i.test(before)) return true;
+  if (/\bmake[-\s]?line\b/i.test(before)) return true;
+  if (/\bno\s+more\s+than\b/i.test(before)) return true;
+  if (/\boriginal\s+packaging\b/i.test(before)) return true;
+  if (/\buse[-\s]?by\b|\bbest[-\s]?before\b/i.test(before)) return true;
+  return false;
+}
+
+/** Next catalog span that is not inside a Notes: band (notes must not clip lives). */
+function nextChartSpanStart(
+  spans: NameSpan[],
+  index: number,
+  haystack: string,
+): number {
+  for (let i = index + 1; i < spans.length; i += 1) {
+    if (inNotesRegion(haystack, spans[i]!.start)) continue;
+    return spans[i]!.start;
+  }
+  return haystack.length;
+}
+
+/** Words that belong in sentences, not product titles. */
+const DISCOVERY_PROSE = new Set([
+  "than",
+  "more",
+  "with",
+  "from",
+  "by",
+  "provided",
+  "follow",
+  "stock",
+  "must",
+  "past",
+  "opened",
+  "information",
+  "storage",
+  "make",
+  "line",
+  "notified",
+  "supply",
+  "chain",
+  "will",
+  "be",
+  "you",
+  "no",
+  "not",
+  "top",
+  "when",
+  "that",
+  "this",
+  "these",
+  "those",
+  "into",
+  "onto",
+  "only",
+  "also",
+  "please",
+  "ensure",
+  "should",
+  "cannot",
+  "can",
+  "may",
+  "any",
+  "each",
+  "per",
+  "once",
+  "have",
+  "has",
+  "had",
+  "are",
+  "was",
+  "were",
+  "been",
+  "being",
+  "their",
+  "there",
+  "here",
+  "your",
+  "our",
+  "its",
+]);
 
 function bundledCampaignNumber() {
   return BUNDLED_PACK.chart.title.match(/campaign\s*(\d+)/i)?.[1] ?? "";
@@ -958,10 +1086,46 @@ function isDiscoverableProductName(key: string) {
   if (parts.length > 4) return false;
   if (parts.every((part) => DISCOVERY_STOP.has(part))) return false;
   if (DISCOVERY_STOP.has(parts[0]!)) return false;
+  // Footnote sentences ("no more than 2 hours") must not become product titles.
+  if (parts.some((part) => DISCOVERY_PROSE.has(part))) return false;
   // Reject pure life / chrome tails.
   if (/^(date|bb|n\/a|hours?|days?)$/i.test(key)) return false;
   if (looksLikeConcatenatedCatalogNames(key)) return false;
   return true;
+}
+
+const LIFE_TOKEN =
+  /(?:date\s+on(?:\s+(?:pack|tray))?|bb\s*date(?:\s+on(?:\s+(?:pack|tray))?)?|\d+\s*days?|\d+\s*hours?|\bn\/a\b)/i;
+
+/**
+ * Claim only the immediate life cell(s) after a kept catalog name so discovery
+ * can still invent later new SKUs on the same sheet.
+ */
+function spanLifeRange(
+  spans: NameSpan[],
+  index: number,
+  haystack: string,
+): { from: number; to: number } {
+  let groupEnd = index;
+  while (
+    groupEnd + 1 < spans.length &&
+    isGlue(haystack.slice(spans[groupEnd]!.end, spans[groupEnd + 1]!.start))
+  ) {
+    groupEnd += 1;
+  }
+  const from = spans[groupEnd]!.end;
+  const nextStart = nextChartSpanStart(spans, groupEnd, haystack);
+  const slice = haystack.slice(from, Math.min(nextStart, from + 160));
+  const first = slice.match(LIFE_TOKEN);
+  if (!first || first.index == null) return { from, to: from };
+  let end = from + first.index + first[0].length;
+  const trailing = haystack
+    .slice(end, Math.min(nextStart, end + 48))
+    .match(
+      /^(?:\s*(?:date\s+on(?:\s+(?:pack|tray))?|bb\s*date(?:\s+on(?:\s+(?:pack|tray))?)?|\d+\s*days?|\d+\s*hours?|n\/a))+/i,
+    );
+  if (trailing) end += trailing[0].length;
+  return { from, to: end };
 }
 
 function claimedColumnLifeRanges(columnLives: Map<number, ColumnLife>) {
@@ -1133,6 +1297,8 @@ function discoverUnknownChartRules(
   while ((life = lifePattern.exec(haystack))) {
     const lifeStart = life.index ?? 0;
     if (lifeTokenClaimed(lifeStart, claimedLifeRanges)) continue;
+    // Never invent from footnote / notes sentences (e.g. "no more than 2 hours").
+    if (inFootnoteProse(haystack, lifeStart)) continue;
     let cursor = lifeStart;
     const before = haystack.slice(0, cursor);
     const frozen = before.match(/\(\s*frozen\s*\)\s*$/i);
@@ -1150,6 +1316,7 @@ function discoverUnknownChartRules(
         break;
       }
       if (!isDiscoveryNameWord(word)) break;
+      if (DISCOVERY_PROSE.has(word)) break;
       const start = wordMatch.index;
       const end = start + wordMatch[1]!.length;
       words.unshift({ text: wordMatch[1]!, start, end });
@@ -1159,6 +1326,7 @@ function discoverUnknownChartRules(
 
     const nameStart = words[0]!.start;
     const nameEnd = words[words.length - 1]!.end;
+    if (inFootnoteProse(haystack, nameStart)) continue;
     const prefix = haystack.slice(Math.max(0, nameStart - 6), nameStart);
     const newMarker = /\bnew\s*$/i.test(prefix);
     const key = nameKey(words.map((word) => word.text).join(" "));
@@ -1395,12 +1563,16 @@ export function packFromPdfText(text: string, fileName: string): { ok: true; pac
   const usedSpans = new Set<number>();
   const columnLives = columnLifeCounts(spans, haystack);
   const lifeWindows = resolveSplitLifeWindows(spans, haystack);
+  const claimedLifeRanges = claimedColumnLifeRanges(columnLives);
 
   for (const base of BUNDLED_PACK.rules) {
     const needle = nameKey(base.name);
     if (needle.length < 3) continue;
     const spanIndex = takeSpanForRule(spans, base, usedSpans);
     if (spanIndex == null) continue;
+    const span = spans[spanIndex]!;
+    // Footnote mentions must not become chart rows even if a life token sits nearby.
+    if (inNotesRegion(haystack, span.start)) continue;
     const window = lifeWindows[spanIndex] ?? lifeWindow(spans, spanIndex, haystack);
     const columnLife = columnLives.get(spanIndex);
     const next: ShelfRule = {
@@ -1426,12 +1598,11 @@ export function packFromPdfText(text: string, fileName: string): { ok: true; pac
       applyParsedHourCounts(next, base, window, columnLife);
     }
 
-    // Early 2.0 kept every catalog name found on the sheet. Skip only footnote
-    // mentions that have no life cell (notes / "see older charts").
-    const span = spans[spanIndex]!;
-    if (!hasChartLifeEvidence(window, columnLife)) {
-      if (inNotesRegion(haystack, span.start)) continue;
-    }
+    // Only keep names that have a life cell (row or name-column). Bare mentions chop
+    // longer titles and re-add footnote products.
+    if (!hasChartLifeEvidence(window, columnLife)) continue;
+
+    claimedLifeRanges.push(spanLifeRange(spans, spanIndex, haystack));
 
     if (!used.has(next.id)) {
       used.add(next.id);
@@ -1446,7 +1617,6 @@ export function packFromPdfText(text: string, fileName: string): { ok: true; pac
       ...rule.aliases.map((alias) => nameKey(alias)),
     ]),
   );
-  const claimedLifeRanges = claimedColumnLifeRanges(columnLives);
   for (const invented of discoverUnknownChartRules(
     flat,
     haystack,

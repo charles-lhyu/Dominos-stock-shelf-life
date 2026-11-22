@@ -1,5 +1,11 @@
 [
   {
+    "version": "2.0.27",
+    "notes": [
+      "PDF import no longer turns footnote sentences into product names, and short catalog labels no longer chop longer titles (e.g. Chicken from a new glazed chicken row)"
+    ]
+  },
+  {
     "version": "2.0.26",
     "notes": [
       "PDF products no longer get a separate Imported category — new chart rows use the normal Toppings / Sauces / Other groups"
