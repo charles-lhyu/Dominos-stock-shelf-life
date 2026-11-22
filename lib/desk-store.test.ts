@@ -235,4 +235,21 @@ describe("stored chart repair", () => {
     assert.equal(repaired[1]?.category, "Toppings");
     assert.ok(!repaired.some((item) => item.category === "Imported"));
   });
+
+  it("moves BBQ Pulled Pork from Sauces to Toppings on load", () => {
+    const saved: ShelfRule = {
+      id: "frozen:bbq-pulled-pork",
+      sectionId: "frozen",
+      category: "Sauces",
+      name: "BBQ Pulled Pork",
+      aliases: [],
+      sameAs: [],
+      fromDelivery: "10 days",
+      inUse: "10 days",
+      tags: ["new"],
+    };
+    const [repaired] = repairStoredRules([saved]);
+    assert.equal(repaired?.category, "Toppings");
+    assert.equal(repaired?.fromDelivery, "10 days");
+  });
 });

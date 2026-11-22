@@ -39,15 +39,11 @@ function withChartCategory(rule: ShelfRule): ShelfRule {
     if (bundled.category === rule.category) return rule;
     return { ...rule, category: bundled.category };
   }
-  // Older imports stamped unknown PDF rows as "Imported". Fold them into the
-  // normal chart category chips — the list is already from file import only.
-  if (rule.category === "Imported") {
-    return {
-      ...rule,
-      category: categoryForDiscoveredProduct(rule.sectionId, rule.name),
-    };
-  }
-  return rule;
+  // PDF-discovered rows (including older "Imported" stamps) re-infer from the
+  // product name so BBQ Pulled Pork etc. land under Toppings, not Sauces.
+  const inferred = categoryForDiscoveredProduct(rule.sectionId, rule.name);
+  if (rule.category === inferred) return rule;
+  return { ...rule, category: inferred };
 }
 
 function withChartDisplayName(rule: ShelfRule): ShelfRule {

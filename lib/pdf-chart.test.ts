@@ -147,7 +147,11 @@ describe("PDF shelf life parsing", () => {
     assert.ok(turkey);
     assert.equal(turkey.fromDelivery, "7 days");
     assert.deepEqual(turkey.tags, ["new"]);
-    assert.ok(frozen("BBQ Pulled Pork"));
+    const pulledPork = frozen("BBQ Pulled Pork");
+    assert.ok(pulledPork);
+    assert.equal(pulledPork.category, "Toppings");
+    assert.deepEqual(pulledPork.tags, ["new"]);
+    assert.equal(turkey.category, "Toppings");
     const ham = result.pack.rules.find(
       (item) => item.name === "Ham" && item.sectionId === "chilled",
     );

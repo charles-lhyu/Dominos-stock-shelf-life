@@ -1418,9 +1418,6 @@ export function categoryForDiscoveredProduct(
   name: string,
 ): string {
   const key = nameKey(name);
-  if (/\bsauce\b|\bdrizzle\b|\bpesto\b|\bhoney\b|\bbbq\b/i.test(key)) {
-    return "Sauces";
-  }
   if (/\bcheese\b|\bmozzarella\b/i.test(key)) return "Cheese";
   if (/\bcookie\b|\bdessert\b|\bice cream\b/i.test(key)) return "Desserts";
   if (/\bdough\b/i.test(key)) return "Dough";
@@ -1431,6 +1428,18 @@ export function categoryForDiscoveredProduct(
     )
   ) {
     return "Sides";
+  }
+  // Meat / protein toppings win over sauce keywords like BBQ or honey in the title
+  // (e.g. BBQ Pulled Pork, Spicy Honey Glazed Chicken → Toppings).
+  if (
+    /\bpork\b|\bturkey\b|\bchicken\b|\bbeef\b|\bham\b|\bbacon\b|\bsausage\b|\bpepperoni\b|\bchorizo\b|\bnduja\b|\bmeatball\b|\bhot\s*dog\b/i.test(
+      key,
+    )
+  ) {
+    return "Toppings";
+  }
+  if (/\bsauce\b|\bdrizzle\b|\bpesto\b|\bhoney\b|\bbbq\b/i.test(key)) {
+    return "Sauces";
   }
   switch (sectionId) {
     case "pack":

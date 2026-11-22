@@ -1,6 +1,6 @@
 {
-  "version": "2.0.28",
+  "version": "2.0.29",
   "notes": [
-    "PDF import reads Campaign 6 table layouts correctly: shared life cells across rows, Issued date, NEW items (Sage and Onion Turkey, BBQ Pulled Pork, etc.), and pack lists — without turning notes into products"
+    "PDF-discovered meat toppings like BBQ Pulled Pork stay under Toppings — BBQ / honey in the name no longer files them as Sauces"
   ]
 }
